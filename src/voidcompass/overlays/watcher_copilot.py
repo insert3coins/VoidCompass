@@ -567,7 +567,17 @@ def planet_lines(body, materials=(), forecast=(), ground="", sites=(), mining_lo
     if marked:
         # Not sites: "we have saved two rigs here".
         # "rigs 1, 3" was read as three rigs.
-        numbered = " and ".join(f"rig {slot}" for slot in marked)
+        from voidcompass.overlays.rig_tracker import rig_commodity
+
+        def described(slot):
+            rig = rigs.get(slot, rigs.get(str(slot))) if isinstance(rigs, dict) else None
+            if not isinstance(rig, dict):
+                return f"rig {slot}"
+            what = rig_commodity(rig)
+            tonnes = sum(int(value or 0) for value in (rig.get("tonnes") or {}).values())
+            extra = ", ".join(part for part in (what, f"{tonnes} tonnes refined" if tonnes else "") if part)
+            return f"rig {slot}" + (f" ({extra})" if extra else "")
+        numbered = " and ".join(described(slot) for slot in marked)
         lines.append(f"Rigs you marked as deployed here (not sites): {len(marked)} rig{'' if len(marked) == 1 else 's'}, "
                      f"{numbered}")
     if elsewhere:

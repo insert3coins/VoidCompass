@@ -458,10 +458,11 @@ def planet_page(body="", materials=None, target=None, sampling=None, gravity=Non
     return _page("planet", "ON THE SURFACE", *blocks, tone="red" if heavy else "hud")
 
 
-def rhino_page(rig_model, holds=(), signals=0, spacing_m=78.0, warn_m=3500.0, contents=()):
+def rhino_page(rig_model, holds=(), signals=0, spacing_m=78.0, warn_m=3500.0, contents=(), surface=None):
     if not rig_model:
         return None
     from voidcompass.overlays.rig_tracker import rig_advice
+    from voidcompass.overlays.surface_map import rig_words
     advice = rig_advice(rig_model.get("slots"), spacing_m, warn_m)
     slots = rig_model.get("slots") or ()
     order = list(rig_model.get("order") or ())
@@ -478,10 +479,22 @@ def rhino_page(rig_model, holds=(), signals=0, spacing_m=78.0, warn_m=3500.0, co
     blocks = []
     for row in advice["too_far"]:
         blocks.append(note(f"RIG {row['slot']} {row['distance'] / 1000:.1f} KM AWAY · LOST AT 5 KM", "red"))
+    words = rig_words(surface) if surface else None
+    if (surface or {}).get("tracing"):
+        blocks.append(note("TRACING THE DEPOSIT · DRIVE BACK TO THE START", "green"))
     if advice["ready"]:
-        blocks.append(note(f"COLLECT RIG {', '.join(str(slot) for slot in advice['ready'])}: IT'S HAD TWO MINUTES", "accent"))
+        blocks.append(note(f"COLLECT RIG {', '.join(str(slot) for slot in advice['ready'])}: IT'S HAD ITS TIME", "accent"))
+    elif words and words[1] != "red":
+        blocks.append(note(words[0], words[1]))
     elif advice["too_close"] is not None and tracked < 6:
         blocks.append(note(f"TOO CLOSE TO RIG {advice['too_close']} FOR ANOTHER · {spacing_m:.0f} M APART", "yellow"))
+    circle = (surface or {}).get("circle")
+    if circle and circle.get("room") is not None and circle["room"] < 0:
+        blocks.append(note(f"OUTSIDE THE PLANNING CIRCLE BY {_metres(-circle['room'])}", "red"))
+    group = next(iter((surface or {}).get("groups") or ()), None)
+    if group:
+        rate = f" · ~{group['cr_per_h'] / 1e6:.1f}M CR/H" if group.get("cr_per_h") else ""
+        blocks.append(note(f"BEST PATCH · {group['rigs']} RIGS{rate} · {_metres(group['distance'])}", "yellow"))
     blocks.insert(0, {"type": "dials", "items": dials})
     hold_bars = [(row["name"], f"{row['used']} / {row['capacity']} T", row["used"] / row["capacity"] if row.get("capacity") else 0,
                   "red" if row.get("free") == 0 else "green") for row in holds or () if row.get("capacity")]

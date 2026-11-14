@@ -251,9 +251,14 @@ class DashboardHudPagesMixin:
             contents = self._hud_hold_contents(("IN THE RHINO", inventory if self._rig_in_rhino() else []), ("IN THE SHIP", kept))
         else:
             contents = self._hud_hold_contents(("IN THE SHIP", inventory))
+        try:
+            surface = self._surface_map_model() if place else None
+        except Exception:
+            logging.debug("HUD Rhino page: map model skipped", exc_info=True)
+            surface = None
         return hud_pages.rhino_page(self._rig_model(), self._rig_holds(),
                                     self._surface_mining_signals(place[1]) if place else 0,
-                                    rig_spacing_m(self.config), rig_warn_m(self.config), contents)
+                                    rig_spacing_m(self.config), rig_warn_m(self.config), contents, surface=surface)
 
     def _hud_page_mining(self):
         from voidcompass.overlays.cargo_hud import build_cargo_model

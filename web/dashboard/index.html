@@ -37,6 +37,7 @@
   <link rel="stylesheet" href="bgs.css">
   <link rel="stylesheet" href="trading.css">
   <link rel="stylesheet" href="mining.css">
+  <link rel="stylesheet" href="rhino.css">
   <link rel="stylesheet" href="expeditions.css">
   <link rel="stylesheet" href="planetary.css">
   <link rel="stylesheet" href="setup.css">
@@ -49,8 +50,10 @@
   <script type="module" src="/assets/aster-companion.js"></script>
   <script type="module" src="/assets/crew-companion.js"></script>
   <script defer src="/assets/music-visualizers.js"></script>
+  <script defer src="/assets/rhino-draw.js"></script>
   <script type="module" src="boot-scene.js"></script>
   <link rel="stylesheet" href="/assets/cursor.css">
+  <link rel="stylesheet" href="/assets/skins/deck-skins.css">
 </head>
 <body>
   <div id="boot" class="boot">
@@ -180,58 +183,31 @@
   </div>
 
   <div id="app" class="app" aria-hidden="true">
+    <!-- The Focused Log: the window small, the log first. Where you are,
+         what to do next and the latest word from the crew, what's under way,
+         then the feed filling the rest. Fits without scrolling. -->
     <section id="flight-log-shell" class="flight-log-shell" aria-hidden="true">
-      <header class="flightlog-topbar">
+      <header class="fl-top">
         <div class="flightlog-mark" aria-hidden="true"><i></i><i></i><i></i></div>
-        <div class="flightlog-brand"><small>VOID COMPASS // EXPLORATION CONSOLE</small><h1>Focused Log</h1></div>
-        <div class="flightlog-connection"><b id="flightlog-source" data-source="cached">LOCAL LINK CACHED</b><span id="flightlog-evidence">Waiting for local journal activity</span></div>
-        <button type="button" class="flightlog-restore" data-command="set_flight_log_mode" data-enabled="false">← RESTORE DASHBOARD</button>
+        <div class="fl-where"><b id="flightlog-system">NO SYSTEM DATA</b><span id="flightlog-state">WAITING FOR LIVE JOURNAL</span></div>
+        <div class="fl-who"><span>CMDR <b id="flightlog-commander">UNKNOWN</b></span><span>SHIP <b id="flightlog-ship">—</b></span><span>SESSION <b id="flightlog-session-time">00:00:00</b></span></div>
+        <b id="flightlog-source" class="fl-link" data-source="cached">CACHED</b>
+        <button type="button" class="flightlog-popout" data-flightlog-popout title="The Focused Log in a window of its own, and the deck back to the Dashboard">⧉ POP OUT</button>
+        <button type="button" class="flightlog-restore" data-command="set_flight_log_mode" data-enabled="false" title="Back to the full deck">← DASHBOARD</button>
       </header>
-      <main class="flightlog-main">
-        <section class="flightlog-stage" aria-labelledby="flightlog-system">
-          <div class="flightlog-stage-copy">
-            <p class="flightlog-kicker"><span>01 / ACTIVE THEATRE</span><b id="flightlog-survey-badge">TOTAL UNKNOWN</b></p>
-            <h2 id="flightlog-system">NO SYSTEM DATA</h2>
-            <p id="flightlog-state" class="flightlog-location">WAITING FOR LIVE JOURNAL</p>
-            <div class="flightlog-identity"><span>CMDR <b id="flightlog-commander">UNKNOWN COMMANDER</b></span><span>SHIP <b id="flightlog-ship">SHIP UNKNOWN</b></span><span>SESSION <b id="flightlog-session-time">00:00:00</b></span></div>
-          </div>
-          <div class="flightlog-directive">
-            <div class="flightlog-section-label"><span>FIELD DIRECTIVE</span><b id="flightlog-directive-confidence">FIELD INTELLIGENCE</b></div>
-            <h3 id="flightlog-directive">AWAITING JOURNAL-BACKED OBJECTIVE</h3>
-            <p id="flightlog-directive-detail">The field directive will appear when exploration evidence is available.</p>
-            <div class="flightlog-directive-actions"><div id="flightlog-directive-tags" class="decision-tags"></div><button type="button" id="flightlog-directive-primary" class="primary" hidden>OPEN SYSTEM SURVEY</button></div>
-            <blockquote id="flightlog-watcher" class="flightlog-watcher" hidden><span id="flightlog-watcher-text"></span><cite>THE WATCHER <b id="flightlog-watcher-when"></b></cite></blockquote>
-          </div>
+      <main class="fl-main">
+        <section class="fl-next flightlog-directive" aria-label="What to do next">
+          <div class="fl-next-line"><small>NEXT</small><h2 id="flightlog-directive">AWAITING THE JOURNAL</h2><button type="button" id="flightlog-directive-primary" class="primary" hidden>OPEN</button></div>
+          <p id="flightlog-directive-detail"></p>
+          <div id="flightlog-directive-tags" class="decision-tags"></div>
+          <blockquote id="flightlog-watcher" class="flightlog-watcher" hidden><span id="flightlog-watcher-text"></span><cite><b id="flightlog-watcher-name">THE WATCHER</b><b id="flightlog-watcher-when"></b></cite></blockquote>
         </section>
-
-        <section class="flightlog-instruments" aria-label="Current exploration instruments">
-          <article class="flightlog-panel flightlog-survey-panel">
-            <div class="flightlog-section-label"><span>02 / SYSTEM SURVEY</span><b>JOURNAL EVIDENCE</b></div>
-            <div class="flightlog-survey-main"><div id="flightlog-survey-gauge" class="flightlog-survey-gauge" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="System survey total not yet confirmed" data-known="false"><i><strong id="flightlog-survey-percent">—</strong><small>FSS</small></i></div><div><strong id="flightlog-survey">0 / ?</strong><span>SCANNED / CONFIRMED</span><p id="flightlog-survey-detail">AWAITING SCAN TOTAL</p></div></div>
-            <div class="flightlog-work"><div><small id="flightlog-work-label-0">FSS UNKNOWN</small><b id="flightlog-work-value-0">?</b></div><div><small id="flightlog-work-label-1">DSS LEFT</small><b id="flightlog-work-value-1">0</b></div><div><small id="flightlog-work-label-2">BIO LEFT</small><b id="flightlog-work-value-2">0</b></div></div>
-          </article>
-          <article class="flightlog-panel flightlog-route-panel">
-            <div class="flightlog-section-label"><span>03 / NEXT LEG</span><b id="flightlog-route-source">NO PLOTTED LEG</b></div>
-            <strong id="flightlog-route">NO ACTIVE ROUTE</strong>
-            <p id="flightlog-route-detail">PLOT IN ELITE OR WAYPOINTS</p>
-            <div class="flightlog-pair"><span>FINAL DESTINATION <b id="flightlog-route-final">—</b></span><span>DISTANCE <b id="flightlog-route-distance">—</b></span></div>
-          </article>
-          <article class="flightlog-panel flightlog-value-panel">
-            <div class="flightlog-section-label"><span>04 / UNSOLD FIELD DATA</span><b>PROFILE ESTIMATE</b></div>
-            <strong id="flightlog-value">0 CR</strong>
-            <p id="flightlog-value-detail">0 CR CARTOGRAPHY · 0 CR BIOLOGY</p>
-            <div class="flightlog-session-grid"><span>SESSION JUMPS <b id="flightlog-jumps">0</b></span><span>DISTANCE FLOWN <b id="flightlog-distance">0 LY</b></span><span>TIME FLOWN <b id="flightlog-flown">—</b></span><span>EARNED <b id="flightlog-earned">0 CR</b></span><span>FIRST DISCOVERED <b id="flightlog-firsts">0</b></span><span>RARE WORLDS <b id="flightlog-rare">0</b></span></div>
-          </article>
-        </section>
-
-        <section class="flightlog-lower">
-          <section class="flightlog-events" aria-labelledby="flightlog-events-heading">
-            <header class="flightlog-events-heading"><div><small>05 / ROLLING JOURNAL FEED</small><h3 id="flightlog-events-heading">Recent field events</h3></div><b id="flightlog-event-count">0 SHOWN / 0 RECENT</b></header>
-            <div class="flightlog-event-tools"><div class="flightlog-filters" role="group" aria-label="Filter recent field events"><button type="button" data-flightlog-filter="ALL" aria-pressed="true" class="active">ALL</button><button type="button" data-flightlog-filter="DISCOVERY" aria-pressed="false">DISCOVERY</button><button type="button" data-flightlog-filter="NAVIGATION" aria-pressed="false">NAVIGATION</button><button type="button" data-flightlog-filter="ALERTS" aria-pressed="false">ALERTS</button><button type="button" data-flightlog-filter="OPERATIONS" aria-pressed="false">OPERATIONS</button></div><label class="flightlog-search"><span>FIND</span><input id="flightlog-search" type="search" placeholder="Search recent events" autocomplete="off" aria-label="Search recent field events"></label></div>
-            <div id="flightlog-event-list" class="flightlog-event-list" role="feed" aria-label="Recent curated field events"></div>
-            <footer id="flightlog-event-limit">Recent curated events only · not a permanent flight archive.</footer>
-          </section>
-          <aside class="flightlog-priority-panel" aria-labelledby="flightlog-priority-heading"><div class="flightlog-section-label"><span>06 / FIELD PRIORITIES</span><b>UP TO 4</b></div><h3 id="flightlog-priority-heading">What still matters</h3><p>Current survey and route priorities, separate from the rolling event feed.</p><ol id="flightlog-priorities"><li class="flightlog-priorities-empty">No additional field priorities are pending.</li></ol></aside>
+        <section id="flightlog-strip" class="fl-strip" aria-label="What's under way"></section>
+        <ol id="flightlog-priorities" class="fl-todo" aria-label="Still to do"></ol>
+        <section class="fl-feed flightlog-events" aria-label="Recent events">
+          <div class="flightlog-event-tools"><b id="flightlog-event-count" class="fl-count">0</b><div class="flightlog-filters" role="group" aria-label="Filter recent field events"><button type="button" data-flightlog-filter="ALL" aria-pressed="true" class="active">ALL</button><button type="button" data-flightlog-filter="DISCOVERY" aria-pressed="false">DISCOVERY</button><button type="button" data-flightlog-filter="NAVIGATION" aria-pressed="false">NAVIGATION</button><button type="button" data-flightlog-filter="ALERTS" aria-pressed="false">ALERTS</button><button type="button" data-flightlog-filter="OPERATIONS" aria-pressed="false">OPERATIONS</button></div><label class="flightlog-search"><span>FIND</span><input id="flightlog-search" type="search" placeholder="Search recent events" autocomplete="off" aria-label="Search recent field events"></label></div>
+          <div id="flightlog-event-list" class="flightlog-event-list" role="feed" aria-label="Recent events"></div>
+          <footer id="flightlog-event-limit" class="fl-limit">Recent events only · not a permanent flight archive.</footer>
         </section>
       </main>
     </section>
@@ -258,20 +234,21 @@
         <button class="nav-item" data-page="colonisation" aria-label="Colonisation" title="Colonisation"><i>⬢</i><span>Colonisation</span><b>10</b></button>
         <button class="nav-item" data-page="mining" aria-label="Mining Command" title="Mining Command"><i>◆</i><span>Mining Command</span><b>11</b></button>
         <button class="nav-item" data-page="powerplay" aria-label="Powerplay" title="Powerplay"><i>⚑</i><span>Powerplay</span><b>12</b></button>
-        <button class="nav-item" data-page="trading" aria-label="Trading" title="Trading: routes, markets and your profits"><i>⇄</i><span>Trading</span><b>13</b></button>
+        <button class="nav-item" data-page="rhino" aria-label="Rhino Mining" title="Rhino Mining: the map, your rigs and deposits, the survey and the rig plan"><i>◆</i><span>Rhino Mining</span><b>13</b></button>
+        <button class="nav-item" data-page="trading" aria-label="Trading" title="Trading: routes, markets and your profits"><i>⇄</i><span>Trading</span><b>14</b></button>
         <p>COCKPIT</p>
-        <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>14</b></button>
-        <button class="nav-item" data-page="games" aria-label="Games" title="Games: something to play while the FSD charges"><i>◆</i><span>Games</span><b>15</b></button>
-        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>16</b></button>
-        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>17</b></button>
-        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>18</b></button>
-        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>19</b></button>
-        <button class="nav-item" data-page="wrapped" aria-label="Void Wrapped" title="Void Wrapped: your year in Elite, told as a story"><i>✺</i><span>Void Wrapped</span><b>20</b></button>
-        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>21</b></button>
+        <button class="nav-item" data-page="constellation" aria-label="Constellation" title="Your constellation: your journey drawn in the stars"><i>✧</i><span>Constellation</span><b>15</b></button>
+        <button class="nav-item" data-page="games" aria-label="Games" title="Games: something to play while the FSD charges"><i>◆</i><span>Games</span><b>16</b></button>
+        <button class="nav-item" data-page="music" aria-label="Music" title="Music"><i>♪</i><span>Music</span><b>17</b></button>
+        <button class="nav-item" data-page="postcards" aria-label="Postcards" title="Postcards: every postcard you've kept as a picture"><i>✉</i><span>Postcards</span><b>18</b></button>
+        <button class="nav-item" data-page="screenshots" aria-label="Screenshots" title="Screenshots: every picture in your screenshot folder"><i>▣</i><span>Screenshots</span><b>19</b></button>
+        <button class="nav-item" data-page="capsules" aria-label="Time Capsules" title="Time Capsules: notes left for systems, and On this day"><i>⧗</i><span>Time Capsules</span><b>20</b></button>
+        <button class="nav-item" data-page="wrapped" aria-label="Void Wrapped" title="Void Wrapped: your year in Elite, told as a story"><i>✺</i><span>Void Wrapped</span><b>21</b></button>
+        <button class="nav-item" data-page="watcher" aria-label="The Watcher" title="The Watcher: what it has said, and what it remembers of you"><i>◉</i><span>The Watcher</span><b>22</b></button>
         <p>APPLICATION</p>
-        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>22</b></button>
-        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>23</b></button>
-        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>24</b></button>
+        <button class="nav-item" data-page="about" aria-label="About" title="About"><i>ⓘ</i><span>About</span><b>23</b></button>
+        <button class="nav-item" data-page="overlay-studio" aria-label="Overlay Studio" title="Overlay Studio"><i>▦</i><span>Overlay Studio</span><b>24</b></button>
+        <button class="nav-item" data-page="settings" aria-label="Settings" title="Settings"><i>≡</i><span>Settings</span><b>25</b></button>
       </nav>
 
       <footer class="rail-footer">
@@ -310,26 +287,31 @@
             <div class="overview-heading"><p><i class="overview-live-indicator" aria-hidden="true"></i> THE WHOLE SHIP // LIVE OPERATIONS <b id="overview-link-state">JOURNAL STANDBY</b></p><h2>Ship's bridge <small id="bridge-activity-label" class="bridge-activity-label"></small></h2><span id="overview-subtitle">Journal-backed field intelligence</span></div>
             <div class="title-actions overview-actions">
               <button class="ghost" id="customise-deck">DECK OPTIONS</button>
-              <button class="ghost" data-command="set_flight_log_mode" data-enabled="true">FOCUSED LOG</button>
+              <button class="ghost" data-command="set_flight_log_mode" data-enabled="true" title="Shrink the deck to the Focused Log">FOCUSED LOG</button>
+              <button class="ghost" data-flightlog-popout title="The Focused Log in a window of its own, beside the deck">⧉ LOG</button>
               <button class="ghost" data-command="open" data-target="explore">FULL SURVEY</button>
               <button class="primary" data-page="map">OPEN GALACTIC ATLAS</button>
             </div>
           </header>
 
           <section id="deck-customiser" class="deck-customiser" hidden>
-            <header><div><small>PROFILE-AWARE LAYOUT</small><strong>Explorer Decision Deck</strong></div><button id="close-deck-customiser" class="ghost">CLOSE</button></header>
+            <header><div><small>PROFILE-AWARE LAYOUT</small><strong>The Dashboard's panels</strong></div><button id="close-deck-customiser" class="ghost">CLOSE</button></header>
             <div class="deck-customiser-body">
               <label>EXPLORATION DOCTRINE<select id="exploration-doctrine"></select></label>
-              <div><small>OPTIONAL MODULES</small><div id="deck-module-controls" class="deck-module-controls"></div></div>
+              <div><small>PANELS · SHOWN, LANE AND ORDER</small><div id="deck-module-controls" class="deck-module-controls"></div></div>
             </div>
-            <footer><span>Current Survey and Explorer Decision remain visible; use Arrange Panels for placement.</span><button id="save-deck-layout" class="primary">SAVE TO THIS PROFILE</button></footer>
+            <footer><span>Two lanes: the wide one on the left, the narrow one on the right. Each panel's lane and place are yours; panels with nothing in them stay out of the way.</span><button id="save-deck-layout" class="primary">SAVE TO THIS PROFILE</button></footer>
           </section>
 
-          <section id="overview-modules" class="overview-modules">
+          <!-- Two lanes, each a plain stack: panels that come and go never leave a hole.
+               Deck Options says which panel goes in which lane, and in what order. -->
+          <section id="overview-modules" class="overview-modules bridge-lanes">
+            <div class="bridge-lane" data-lane="main"></div>
+            <div class="bridge-lane" data-lane="side"></div>
             <!-- What's under way, led by what you're doing now; each panel only when it has something in it. -->
-            <section class="bridge-activity core-module" id="bridge-activity" data-layout-panel="ship-activity" aria-label="What's under way" hidden></section>
+            <section class="bridge-activity core-module" id="bridge-activity" data-deck-module="activity" aria-label="What's under way" hidden></section>
 
-            <article class="card survey-card accent-card core-module" data-layout-panel="current-system-survey">
+            <article class="card survey-card accent-card core-module" data-deck-module="system">
               <header><span>01 / CURRENT SYSTEM</span><b id="survey-badge">AWAITING</b></header>
               <div class="survey-command">
                 <div id="survey-orbital" class="survey-orbital" role="progressbar" aria-label="Current system survey" aria-valuemin="0" aria-valuemax="100" aria-valuetext="System body total unknown"><i class="survey-world" aria-hidden="true"></i><em id="survey-percent">0%</em></div>
@@ -339,7 +321,7 @@
                 <div><small>DISCOVERED</small><strong id="survey-count">0 / ?</strong></div>
                 <div><small>BIOLOGICAL</small><strong id="survey-bio">0 SIGNALS</strong></div>
                 <div><small>VALUABLE</small><strong id="survey-valuable">0 BODIES</strong></div>
-                <div><small>REGION</small><strong id="survey-region">UNKNOWN</strong></div>
+                <div><small>OPEN WORK</small><strong id="metric-work">AWAITING SURVEY</strong><span id="metric-work-detail">FSS / DSS / BIO UNKNOWN</span></div>
               </div>
               <section class="survey-body-deck" aria-label="Discovered worlds in the current system">
                 <div class="survey-body-heading"><span>DISCOVERED WORLDS</span><b id="survey-body-total">0 BODY RECORDS</b></div>
@@ -362,12 +344,6 @@
               <button id="auto-copy" class="wide-button route-auto-copy" data-command="set_auto_copy" data-enabled="true" aria-pressed="false" title="As you arrive in a system, your next saved waypoint goes on the clipboard, ready to paste into the galaxy map">AUTO-COPY NEXT WAYPOINT ON ARRIVAL · OFF</button>
             </article>
 
-            <section class="telemetry-strip core-module">
-            <article><i class="fuel-icon"></i><div><small>FUEL INTEGRITY</small><strong id="metric-fuel">—</strong><span id="metric-fuel-detail">AWAITING LOADOUT</span></div></article>
-            <article><i class="data-icon"></i><div><small>DATA ABOARD</small><strong id="metric-data">0 CR</strong><span id="metric-data-detail">NO UNSOLD RECORDS</span></div></article>
-            <article><i class="work-icon"></i><div><small>SURVEY WORK</small><strong id="metric-work">AWAITING SURVEY</strong><span id="metric-work-detail">FSS / DSS / BIO UNKNOWN</span></div></article>
-            <article><i class="signal-icon"></i><div><small>SOURCE HEALTH</small><strong id="metric-health">CACHED</strong><span id="metric-health-detail">WAITING FOR GAME</span></div></article>
-            </section>
 
             <article class="card session-card" data-deck-module="session">
               <header><span>SESSION PULSE</span><b id="session-pulse-badge">LIVE SESSION</b></header>
@@ -515,6 +491,11 @@
           <div id="mission-workspace" class="workspace-shell loading-panel">Opening your expeditions…</div>
         </section>
 
+
+        <section class="page specialist-page" data-page-name="rhino">
+          <header class="page-title"><div><p>SURFACE OPERATIONS</p><h2>Rhino Mining</h2><span>The ground round you, your rigs and deposits, the survey, the rig plan and where to land</span></div><div class="title-actions"><button data-page="mining">MINING</button><button data-page="overview">COMMAND DECK</button></div></header>
+          <div id="rhino-workspace" class="workspace-shell loading-panel">Opening the Rhino…</div>
+        </section>
 
         <section class="page specialist-page" data-page-name="mining">
           <header class="page-title"><div><p>RESOURCE OPERATIONS</p><h2>Mining</h2><span>Asteroids and the Rhino: the live run, finding rings and ground, selling the haul, and your record</span></div><div class="title-actions"><button data-page="overview">COMMAND DECK</button></div></header>
@@ -823,7 +804,7 @@
                   </section>
                   <section data-studio-settings="rhino_map_hud">
                     <h4>RHINO MAP</h4>
-                    <p class="studio-option-note">The ground round you while you work the Rhino: your trail, your rigs with their spacing rings, the next spot clear for a rig, where you've refined, and the ship. It shows on its own when there's ground to map, and stays while your rigs are out.</p>
+                    <p class="studio-option-note">The ground round you while you work the Rhino: your trail, your rigs with their spacing rings (amber when you're only just clear), the deposits you've marked in the order to drive them, a traced rig plan, the planning circle and the ship. It shows on its own when there's ground to map, and stays while your rigs are out. The Rhino page on the deck has the same map, bigger.</p>
                     <label class="studio-field"><span>Size</span><select id="studio-rhino-map-size" data-studio-setting="rhino_map_size"><option value="180">180 PX</option><option value="240">240 PX</option><option value="320">320 PX</option></select></label>
                     <label class="studio-field"><span>Shows<small>And whenever your rigs are out on the planet</small></span><select id="studio-rhino-map-show" data-studio-setting="rhino_map_show"><option value="rhino">In the Rhino</option><option value="srv">In any SRV or on foot</option></select></label>
                     <label class="studio-field"><span>Faces<small>Which way is up</small></span><select id="studio-rhino-map-up" data-studio-setting="rhino_map_up"><option value="heading">Where you're heading</option><option value="north">North</option></select></label>
@@ -850,10 +831,16 @@
                   </section>
                   <section data-studio-settings="rig_tracker_hud">
                     <h4>RIG TRACKER</h4>
+                    <p class="studio-option-note">Everything for the Rhino in one box: a dial for each rig, then each part below on or off. Its value figures come from what your own collected rigs gave, so they show once you've worked a few.</p>
+                    <label class="studio-switch"><span><b>Guide</b><small>The step you're on in working a mining location, its key, and what comes next. It moves on by itself.</small></span><input type="checkbox" data-overlay-option="rig_tracker_guide"><i></i></label>
+                    <label class="studio-switch"><span><b>Mineral deposit</b><small>The marked deposit you're nearest: its mineral, rigs, density, amount and worth.</small></span><input type="checkbox" data-overlay-option="rig_tracker_deposit"><i></i></label>
+                    <label class="studio-switch"><span><b>Targets</b><small>The nearest marked deposits (the dials have your rigs), which way and how far, and what each commodity here is worth.</small></span><input type="checkbox" data-overlay-option="rig_tracker_targets"><i></i></label>
+                    <label class="studio-switch"><span><b>Status</b><small>What's here is likely worth, the drive through it, what a rig gives, the rig radar's word and the best patches.</small></span><input type="checkbox" data-overlay-option="rig_tracker_status"><i></i></label>
                     <label class="studio-switch"><span><b>Cargo holds</b><small>How full the Rhino's hold and your ship's are, under the dials.</small></span><input type="checkbox" data-overlay-option="rig_tracker_show_holds"><i></i></label>
                     <label class="studio-field"><span>Counts as HERE within<small>10 to 200 m. A rig closer than this reads HERE, here and on the Mining page.</small></span><div><input id="studio-rig-here" type="number" min="10" max="200" step="5" data-studio-setting="rig_tracker_here_m"><b>M</b></div></label>
                     <label class="studio-field"><span>Rig spacing<small>20 to 300 m. The ring round each rig on the Rhino map: red when you're too close to put down another</small></span><div><input id="studio-rig-spacing" type="number" min="20" max="300" step="1" data-studio-setting="rig_tracker_spacing_m"><b>M</b></div></label>
                     <label class="studio-field"><span>Warn when a rig is this far<small>The game destroys a rig 5 km behind you. 0 turns the warning off</small></span><div><input id="studio-rig-warn" type="number" min="0" max="4900" step="100" data-studio-setting="rig_tracker_warn_m"><b>M</b></div></label>
+                    <label class="studio-field"><span>Rig lands behind you<small>0 to 20 m. A rig drops behind the Rhino's cockpit, not under it; 0 marks it where you sit</small></span><div><input id="studio-rig-drop" type="number" min="0" max="20" step="1" data-studio-setting="rig_tracker_drop_m"><b>M</b></div></label>
                   </section>
                   <section data-studio-settings="galnet_ticker_hud">
                     <h4>GALNET TICKER</h4>
@@ -889,6 +876,8 @@
               </div>
             </aside>
           </div>
+
+          <section id="studio-groups" class="card studio-groups" aria-label="Overlay groups"></section>
 
           <section class="card studio-global" aria-label="All overlays">
             <header><span>ALL OVERLAYS</span><b>SAVED FOR THIS COMMANDER</b></header>

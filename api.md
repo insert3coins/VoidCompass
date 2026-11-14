@@ -1371,11 +1371,24 @@ The mining rigs you've set down for Rhino mining, as the Rig Tracker overlay sho
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/v1/rigs` | The rigs on the planet you're on (`slot`, `distance_m`, `bearing`, `relative` to where you face, `here`, `at`), the order to collect them in, any rigs left on other planets, and `holds`: how full the Rhino's hold and the ship's are (`used`, `capacity`, `free`) |
+| GET | `/api/v1/rigs` | The rigs on the planet you're on (`slot`, `distance_m`, `bearing`, `relative` to where you face, `here`, `at`, `commodity` it's working, `tonnes` refined from it), the order to collect them in, any rigs left on other planets, and `holds`: how full the Rhino's hold and the ship's are (`used`, `capacity`, `free`), and `aboard`: back in the ship after a Rhino run, its summary (`minutes`, `refined_t`, `taken` by commodity, rigs still `out`, the `site`, what's `next`), else null |
 | POST | `/api/v1/rigs/{n}` | Rig `n` (1 to 6) where you stand: deployed, or collected if it was already down (`"done": "placed"` or `"collected"`) |
 | POST | `/api/v1/rigs/clear` | Forget the rigs on this planet: `{"confirmed": true}` |
 
-Marking a rig needs you on a planet's surface; anywhere else it answers 409.
+Marking a rig needs you on a planet's surface; anywhere else it answers 409. A rig is marked where it lands, a few metres behind the Rhino's cockpit (Overlay Studio › Rig Tracker sets how far), and a refined tonne counts for the nearest rig within 250 m.
+
+### Rhino mining
+
+The rest of the Rhino tools, the same as their keys and the Rhino page's buttons.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/v1/rhino` | Where you are with it: `facts` (the survey's `percent` swept and next stop, the rig `plan` with its next pin, the best `patch`, your marked `deposits` and the next to drive to, the planning `circle`'s room left, the `signal` number), `rig_spot` (RIG OK HERE, or where the next rig can go) `deposits` at the mining location you're at, within 8 km (`commodity`, `rigs`, `amount`, `density`, `depleted`, with `regrowth` (where a worked-out one is: worked out N days ago, recheck due, mark off in N days) and `due` when it's worth a look, `distance`, `bearing`, `n` in driving order, `value` in credits), the best `patches` (five rigs' worth or more together: `rigs`, `credits`, `cr_per_h`) and the `value` of the lot (`credits`, `unpriced`, `route_m`, `per_rig`: what your collected rigs gave). Values need a few of your rigs worked first; until then they're null. `site` is the saved mining location you're at (`id`, `name`, `signal`, `deposits`, `tonnes` your rigs took by commodity, `updated`), or null |
+| POST | `/api/v1/rhino/deposit` | Mark a deposit where you stand; its commodity comes from what's refined round it |
+| POST | `/api/v1/rhino/mined-out` | The marked deposit you're on (within 100 m) is worked out |
+| POST | `/api/v1/rhino/trace` | Start tracing a deposit's edge, or close the trace where you are: up to six rig pins are worked out inside it |
+| POST | `/api/v1/rhino/circle` | The 4.5 km planning circle round where you stand, or clear it when you're by its centre |
+| POST | `/api/v1/rhino/save` | Save the mining location you're at (its signal, centre, survey, the deposits inside it, rig plans and tonnes taken), or bring the saved one up to date. Leaving a planet with a survey or marked deposits saves it too |
 
 **Example: rig keys on a Stream Deck** (PowerShell, one per key)
 
@@ -1797,6 +1810,8 @@ Every cockpit overlay can be listed, read, switched on or off, moved and faded, 
 | POST | `/api/v1/overlays/hide-all` | Hide every overlay (each keeps its own on/off setting) |
 | POST | `/api/v1/overlays/show-all` | Bring them back |
 | POST | `/api/v1/overlays/notify` | Pop up a cockpit notification: `{"title": "CARRIER", "message": "Jump in 15 minutes", "severity": "warn", "seconds": 10}` |
+| GET | `/api/v1/overlays/groups` | Your overlay groups (made in Overlay Studio): each one's `id`, `name`, `mode` (`only` or `add`), `activity`, `members`, whether it's `on` and whether the activity switched it on (`auto`), and what you're doing now (`activity`) |
+| POST | `/api/v1/overlays/groups/{group}/toggle` | Switch a group: `{"on": true}` or `{"on": false}`, or send nothing to flip it. An "only" group hides every other overlay while it's on |
 
 The overlay ids are:
 

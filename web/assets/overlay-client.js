@@ -231,6 +231,7 @@
           if (pendingState && pendingState.revision <= record.revision) pendingState = null;
           snapshot = record.snapshot;
           if (!record.applied) {
+            wearSkin(snapshot?.skin);
             await options.render(snapshot);
             record.applied = true;
           }
@@ -374,5 +375,20 @@
     }
   });
 
-  global.VoidCompassOverlay = Object.freeze({applyTheme, startPolling, fitToWindow, designHeight});
+  // A skin theme's look (5.8.1): its fonts, case and corners, from
+  // web/assets/skins/overlay-skins.css, loaded the first time one is worn.
+  function wearSkin(skin) {
+    const name = /^[a-z]+$/.test(String(skin || "")) ? String(skin) : "";
+    const root = global.document.documentElement;
+    if ((root.dataset.skin || "") === name) return;
+    if (name && !global.document.getElementById("vc-skins")) {
+      const link = global.document.createElement("link");
+      link.id = "vc-skins"; link.rel = "stylesheet"; link.href = "/assets/skins/overlay-skins.css";
+      global.document.head.appendChild(link);
+    }
+    if (name) root.dataset.skin = name;
+    else delete root.dataset.skin;
+  }
+
+  global.VoidCompassOverlay = Object.freeze({applyTheme, startPolling, fitToWindow, designHeight, wearSkin});
 })(window);

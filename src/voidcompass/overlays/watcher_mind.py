@@ -1103,6 +1103,14 @@ class WatcherMind:
             self._converse_after = now + max(CONVERSE_FLOOR_S, len(row["text"].split()) * CONVERSE_READ_S)
         return thought
 
+    def crew_next(self):
+        """The crew's next queued line, if it's due: asked every heartbeat while
+        lines wait, so a reply follows the line before it rather than the next
+        idle thought (half a minute later)."""
+        if self._session_start is None or not self._crew_queue:
+            return None
+        return self._crew_queue_due(self.clock())
+
     def _crew_chime_due(self, now):
         """The crewmate's line, once the one on watch has had its say."""
         queued = self._crew_queue_due(now)

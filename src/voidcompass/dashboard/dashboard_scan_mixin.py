@@ -961,12 +961,25 @@ class DashboardScanMixin:
             survey = self._survey_tick()
             if survey and survey[0] and getattr(self, "rig_tracker_hud", None) is not None:
                 self._rig_update_overlay()
-        if (moved or on_planet_changed or vehicle_state_changed) and getattr(self, "rhino_map_hud", None) is not None:
+            self._rig_trace_tick()
+        if (moved or on_planet_changed or vehicle_state_changed) and (
+                getattr(self, "rhino_map_hud", None) is not None or getattr(self, "rig_tracker_hud", None) is not None):
             # The Rhino map follows you as you drive (5.5.17).
             self._update_rhino_map()
+        if moved or on_planet_changed or vehicle_state_changed:
+            # The Rhino page follows you too, and changes with you into the ship and out.
+            self._rhino_page_refresh(now=on_planet_changed or vehicle_state_changed)
+        # Overlay groups tied to what you're doing follow it (5.8.1).
+        self._overlay_groups_watch(force=vehicle_state_changed or on_planet_changed)
         if moved and self.on_planet:
             # Rigs left too far behind are lost at 5 km: say so in time.
             self._rig_range_watch()
+            # 5.8.1: far from the survey, you're at another mining location.
+            self._rhino_location_watch()
+            # A deposit or site the Rhino page sent you to clears as you arrive.
+            self._rhino_target_watch()
+            # Near a worked-out deposit that's due a look: say so.
+            self._deposit_due_watch()
         if vehicle_state_changed:
             # Cargo.json can remain on its final SRV snapshot after DockSRV.
             # Select the hold from verified Status state immediately, then ask

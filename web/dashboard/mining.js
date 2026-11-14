@@ -346,77 +346,6 @@ function asteroidLive(data, esc) {
 }
 
 // -- LIVE: the Rhino --------------------------------------------------------------------
-function rigsPanel(data, esc) {
-  const rigs = data.rigs || {};
-  const rows = (rigs.rigs || []).slice().sort((a, b) => n(a.slot) - n(b.slot));
-  const where = esc(rigs.body || data.where?.body || "this planet");
-  if (!rows.length) {
-    return panel(`RIGS ON ${where.toUpperCase()}`, `${empty("No rigs marked here. Press the rig key (Ctrl+Alt+1 for rig 1, up to 6) as you deploy each one, and again as you collect it.")}
-      ${(rigs.elsewhere || []).length ? `<p class="mn-dim">Rigs left elsewhere: ${(rigs.elsewhere || []).map((row) => `${esc(row.body)} (#${row.rigs.join(", #")})`).join(" · ")}</p>` : ""}`);
-  }
-  const list = rows.map((row) => `<li class="${row.here ? "here" : row.next ? "nearest" : ""}"><b>#${row.slot}</b>
-      <i class="mn-arrow" style="transform:rotate(${n(row.relative).toFixed(0)}deg)" aria-hidden="true">${ARROW}</i>
-      <span>${row.here ? "HERE" : distance(row.distance_m)}</span><small>down ${since(row.age_s)}</small></li>`).join("");
-  const order = (rigs.collect_order || []).length > 1 ? `<p class="mn-order">COLLECT ▸ ${(rigs.collect_order || []).map((slot) => `#${slot}`).join(" → ")}</p>` : "";
-  return panel(`RIGS ON ${where.toUpperCase()}`, `<ul class="mn-rigs">${list}</ul>${order}<div class="mn-actions">${confirmButton("rigs", "FORGET THE RIGS HERE", "forget_rigs", {}, esc)}</div>`,
-    {note: `${rows.length} out · arrows point from where you face`});
-}
-
-// The Rhino survey (5.7.6, after EDSMT): how much of the area your scanner
-// has reached, the next sweep stop, the best patch and the next rig spot.
-function surveyPanel(data, esc) {
-  const facts = data.survey || {};
-  const survey = facts.survey;
-  const way = (row) => `${distance(row.distance)} ${esc(row.compass || "")}`;
-  const parts = [];
-  if (survey) {
-    parts.push(`<div class="mn-tiles">
-      ${tile("COVERED", `${Math.round(n(survey.percent))}%`, survey.edge ? `of ${distance(survey.radius_m)} round the centre` : "edge not marked yet")}
-      ${tile("SWEEP STOPS", `${whole(survey.swept)} / ${whole(survey.stops)}`, "swept / to sweep")}
-    </div>`);
-    parts.push(survey.next ? `<p class="mn-sub">Next sweep stop: <b>${way(survey.next)}</b></p>` : `<p class="mn-sub"><b>Every sweep stop covered.</b></p>`);
-  } else {
-    parts.push(empty("Mark a survey's centre where you stand (Ctrl+Alt+7), drive out and mark its edge (Ctrl+Alt+8). This then follows how much of the area your scanner has reached (2 km round you) and where to drive next."));
-  }
-  if (facts.patch) {
-    const kinds = (facts.patch.materials || []).length ? ` · ${(facts.patch.materials || []).map(esc).join(", ")}` : "";
-    parts.push(`<p class="mn-sub">Best patch: <b>${whole(facts.patch.pulses)} pulses</b> · ${n(facts.patch.distance) < 40 ? "here" : way(facts.patch)}${kinds}</p>`);
-  } else {
-    parts.push(empty("The best patch shows once the Rhino has refined in one place a few times. Only pulses where you stood count; Elite gives no deposit positions."));
-  }
-  if (facts.rig_spot) parts.push(`<p class="mn-sub">Next rig in the pattern: <b>${n(facts.rig_spot.distance) < 10 ? "here" : way(facts.rig_spot)}</b>${facts.rig_spot.far ? ` <em class="mn-warn">far from your other rigs</em>` : ""}</p>`);
-  const buttons = `<button type="button" data-mine-op="survey_centre">MARK CENTRE HERE</button>${survey ? `<button type="button" data-mine-op="survey_edge">MARK EDGE HERE</button>${confirmButton("survey", "CLEAR THE SURVEY", "survey_clear", {}, esc)}` : ""}`;
-  return panel("RHINO SURVEY", `${parts.join("")}<div class="mn-actions">${buttons}</div>`, {note: "keys in Settings › Hotkeys"});
-}
-
-function groundPanel(data, esc) {
-  const ground = data.ground;
-  if (!ground) return panel("THIS GROUND", empty("Scan the planet you're on (FSS, or the surface scanner) to see what its ground tends to hold."));
-  const rows = (ground.expected_materials || []).slice().sort((a, b) => n(b.pct) - n(a.pct)).slice(0, 10);
-  const list = rows.map((row) => `<li><span>${esc(row.material)}</span><i><b style="width:${Math.min(100, n(row.pct)).toFixed(1)}%"></b></i><strong>${percent(row.pct, 0)}</strong><small>${row.median ? `${cr(row.median)} a t` : ""}</small></li>`).join("");
-  return panel("THIS GROUND", `<p class="mn-sub"><b>${esc(ground.ground_label)}</b>${known(ground.gravity) ? ` · ${n(ground.gravity).toFixed(2)} g` : ""}</p>
-    <ul class="mn-ground">${list}</ul>
-    <p class="mn-dim">How often each turns up at a mining site on this kind of ground, and its usual price${n(ground.ground_sample) ? `, from ${whole(ground.ground_sample)} sites` : ""}: EDIntel's ground mining table, as EDRhinoSpotter shows it. A guide, not a promise.</p>`);
-}
-
-// Every landable body in the system, best Rhino ground first (5.5.17).
-function prospectsPanel(data, esc) {
-  const rows = data.system_grounds || [];
-  if (!rows.length) return panel("RHINO PROSPECTS IN THIS SYSTEM", empty("Scan the system's landable bodies to see which ground is worth the Rhino."));
-  const list = rows.map((row) => `<li><b>${esc(row.short || row.body)}</b><span>${esc(row.ground)}${row.mining_count ? ` · <em>${row.mining_count} MINING SITES</em>` : ""}</span>
-    <small>${(row.materials || []).map((item) => `${esc(item.material)} ${percent(item.pct, 0)}`).join(" · ")}</small><strong>${cr(row.expected)} a t</strong></li>`).join("");
-  return panel("RHINO PROSPECTS IN THIS SYSTEM", `<ul class="mn-list mn-prospects">${list}</ul>
-    <p class="mn-dim">Bodies with mining sites found come first, then by what their best material is likely worth a tonne (how often it turns up × its median price).</p>`);
-}
-
-function sitesPanel(data, esc) {
-  const sites = data.sites || [];
-  const body = sites.length
-    ? `<ul class="mn-list">${sites.map((row) => `<li><b>${esc(row.name || `Site ${row.location ?? ""}`)}</b><span>${esc((row.materials || []).join(", ") || "Materials not noted")}</span><em>${row.depleted ? "DEPLETED" : esc(row.estimate || row.amount || "")}</em></li>`).join("")}</ul>`
-    : empty("No sites saved on this planet.");
-  return panel("YOUR SITES HERE", `${body}<div class="mn-actions"><button type="button" data-page="planet-materials">OPEN MATERIALS &amp; SITES</button></div>`);
-}
-
 function rhinoLive(data, esc) {
   const session = data.session || {};
   const holds = (data.holds || []).map((hold) => holdBar(hold, esc)).join("");
@@ -427,11 +356,11 @@ function rhinoLive(data, esc) {
     ${data.srv_fuel ? tile("FUEL", known(data.srv_fuel.percent) ? `${Math.round(n(data.srv_fuel.percent))}%` : known(data.srv_fuel.tonnes) ? `${n(data.srv_fuel.tonnes).toFixed(2)} t` : "—",
       known(data.srv_fuel.percent) ? (n(data.srv_fuel.percent) <= 25 ? "low: head for the ship" : "in the Rhino's tank") : "learning the tank's size") : ""}
   </div>`;
-  return `<div class="mn-grid">${rigsPanel(data, esc)}${panel("HOLDS", `${holds || empty("Waiting for your cargo.")}${tiles}`)}</div>
-    <div class="mn-grid">${surveyPanel(data, esc)}</div>
-    <div class="mn-grid">${groundPanel(data, esc)}${yieldPanel(data, esc)}</div>
-    <div class="mn-grid">${prospectsPanel(data, esc)}</div>
-    <div class="mn-grid">${sitesPanel(data, esc)}${planPanel(data, esc)}</div>`;
+  // The rigs, deposits, survey, rig plan and prospects are the Rhino page's.
+  const across = panel("RHINO MINING", `<p class="mn-sub">Your rigs, marked deposits, the survey, the rig plan and the planning circle are on the Rhino page, round a big map of the ground.</p>
+    <div class="mn-actions"><button type="button" class="primary" data-page="rhino">OPEN THE RHINO PAGE</button></div>`);
+  return `<div class="mn-grid">${across}${panel("HOLDS", `${holds || empty("Waiting for your cargo.")}${tiles}`)}</div>
+    <div class="mn-grid">${yieldPanel(data, esc)}${planPanel(data, esc)}</div>`;
 }
 
 function standby(data, esc) {
@@ -439,7 +368,7 @@ function standby(data, esc) {
   const lastRun = history[0];
   const lastText = lastRun ? `<p class="mn-sub">Last run: <b>${esc(lastRun.system || "somewhere")}</b> · ${tonnes(lastRun.refined)} in ${clock(lastRun.duration)}${lastRun.tons_per_hour ? ` · ${n(lastRun.tons_per_hour).toFixed(1)} t an hour` : ""} · ${ago(n(lastRun.ended || lastRun.started) / 1000)}</p>` : "";
   const how = `<div class="mn-how"><div><b>IN A RING</b><span>Prospect a rock and this page reads it: what's in it, whether it beats your minimum, how fast you're filling up.</span></div>
-    <div><b>IN THE RHINO</b><span>Deploy the Rhino and this page follows your rigs, both holds and what the ground tends to hold.</span></div></div>`;
+    <div><b>IN THE RHINO</b><span>Deploy the Rhino and this page follows the run and both holds; the Rhino page has the map, your rigs and deposits.</span></div></div>`;
   return `${panel("NO RUN GOING", `${lastText}${how}`, {wide: true})}<div class="mn-grid">${planPanel(data, esc)}${shipPanel(data, esc)}</div>`;
 }
 

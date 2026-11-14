@@ -276,6 +276,8 @@ class HeartbeatHUD:
             self._next_idle_thought = now + 30
             if self.mind.tick(self._context()):
                 changed = True
+        elif getattr(self.mind, "crew_next", None) and self.mind.crew_next():
+            changed = True
         # A thought's second beat, when it is due.
         if self.mind.follow_up():
             changed = True

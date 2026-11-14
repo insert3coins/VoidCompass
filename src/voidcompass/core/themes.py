@@ -90,6 +90,41 @@ BUILTIN_THEMES = {
 }
 
 
+def _skinned(bg, panel, line, text, muted, accent, orange, green, yellow, red):
+    """A skin's palette in our slots, from its own panel and line colours."""
+    return {
+        "bg": bg, "panel": panel, "panel_alt": _lerp(panel, line, 0.25), "panel_raised": _lerp(panel, line, 0.45),
+        "header": _lerp(bg, panel, 0.5), "input": _lerp(bg, panel, 0.7), "inset": _lerp(bg, panel, 0.8),
+        "border": line, "border_soft": _lerp(bg, line, 0.6), "selection": _lerp(bg, accent, 0.20),
+        "accent": accent, "orange": orange, "text": text, "muted": muted, "dim": _lerp(bg, muted, 0.6),
+        "green": green, "yellow": yellow, "red": red,
+    }
+
+
+# Skins (5.8.1): a palette and a whole look besides, its own fonts, case and
+# corner shapes (web/assets/skins/). Theme name -> skin id.
+SKIN_THEMES = {
+    "Cockpit HUD": ("cockpit", _skinned("#000000", "#120a02", "#5a3000", "#ffa040", "#c8732a", "#ff7a00", "#ffa040", "#3fc8f4", "#ffc400", "#ff3b30")),
+    "Starliner": ("starliner", _skinned("#000000", "#120e1a", "#2a2238", "#f4e9da", "#b9a6c6", "#ff9933", "#ffcc99", "#99dd99", "#ffb000", "#ff6666")),
+    "Station Blue": ("station", _skinned("#050b14", "#0b1726", "#22405f", "#d8e6f2", "#8fa3b8", "#6fd3ff", "#ffb020", "#7fe0b0", "#ffb020", "#ff6b5e")),
+    "Imperial Gold": ("imperial", _skinned("#12080f", "#22101c", "#4a2440", "#f3e6c8", "#c2a98a", "#d4af37", "#f0c14b", "#b8d88a", "#f0c14b", "#ff6f7f")),
+    "Crystal": ("crystal", _skinned("#0f0c1c", "#1a1630", "#3a3260", "#ece7f6", "#a79fc4", "#b7a3e6", "#7fd1c4", "#7fd1c4", "#f2c46d", "#ff8fa3")),
+    "Ember": ("ember", _skinned("#120806", "#22100b", "#4e2216", "#e8c9a0", "#b8957a", "#e0a040", "#ffc24b", "#c8d27a", "#ffc24b", "#ff7a5c")),
+    "Umbral": ("umbral", _skinned("#060409", "#140b20", "#2f1d4a", "#d6d3dd", "#9c95aa", "#a57be6", "#cdbdf2", "#8fd6a8", "#f0b44c", "#ff6b7d")),
+    "Obsidian Red": ("obsidian", _skinned("#000000", "#0a0a0b", "#2a2d33", "#c9ced6", "#8b919b", "#e8e8e8", "#ff4255", "#9fd4c0", "#ffb000", "#ff5a6a")),
+    "Verdigris": ("verdigris", _skinned("#06110d", "#0d1e18", "#22453a", "#e2efe6", "#93b3a5", "#e6cf6a", "#5fb596", "#8edba8", "#e6cf6a", "#ff8c7a")),
+    "Ochre Squadron": ("ochre", _skinned("#0b0f14", "#141a22", "#2a3442", "#f2ebdd", "#a9a08a", "#f28c28", "#f2c94c", "#8fd08a", "#f2c94c", "#f05a4e")),
+    "Midnight": ("midnight", _skinned("#121417", "#1c1f24", "#2e333b", "#e6e8eb", "#9aa3ae", "#4f8cff", "#f5b94a", "#3dd68c", "#f5b94a", "#ff6b6b")),
+}
+BUILTIN_THEMES.update({name: palette for name, (_skin, palette) in SKIN_THEMES.items()})
+
+
+def theme_skin(theme_name):
+    """The skin a theme carries ("" for a palette-only theme, custom ones included)."""
+    entry = SKIN_THEMES.get(str(theme_name or ""))
+    return entry[0] if entry else ""
+
+
 def normalize_theme(colors, base=None):
     """Return a full valid palette: unknown/invalid slots fall back to `base`
     (default: the Void Cyan builtin)."""

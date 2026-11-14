@@ -91,30 +91,30 @@
   grid-auto-flow: row;
   align-items: stretch;
 }
-.overview-page .overview-modules > .card {
+.overview-page .overview-modules .bridge-lane > .card {
   border-color: var(--bridge-line);
   background:
     linear-gradient(160deg, color-mix(in srgb, var(--panel-raised) 22%, transparent), transparent 52%),
     var(--bridge-surface);
   box-shadow: inset 0 1px color-mix(in srgb, var(--text) 4%, transparent), 0 8px 28px rgba(0, 0, 0, .12);
 }
-.overview-page .overview-modules > .card::after {
+.overview-page .overview-modules .bridge-lane > .card::after {
   width: 11px;
   height: 11px;
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
 }
-.overview-page .overview-modules > .card > header {
+.overview-page .overview-modules .bridge-lane > .card > header {
   min-height: 31px;
   padding-inline: 14px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, var(--header)), var(--header) 78%);
   border-bottom-color: var(--bridge-line);
 }
-.overview-page .overview-modules > .card > header > span {
+.overview-page .overview-modules .bridge-lane > .card > header > span {
   color: var(--orange);
   font-size: 9px;
   letter-spacing: .13em;
 }
-.overview-page .overview-modules > .card > header > b {
+.overview-page .overview-modules .bridge-lane > .card > header > b {
   border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border-soft));
   background: color-mix(in srgb, var(--accent) 6%, var(--inset));
   color: var(--muted);
@@ -316,7 +316,7 @@
 }
 
 /* 03 — cartography instrument. The arc uses the same percentage as the bar. */
-.overview-page .overview-modules > .survey-card { grid-column: span 7; display: flex; flex-direction: column; }
+.overview-page .overview-modules .bridge-lane > .survey-card { grid-column: span 7; display: flex; flex-direction: column; }
 .overview-page .overview-modules.route-hidden > .survey-card { grid-column: span 12; }
 .overview-page .survey-card[data-survey-state="complete"] { --survey-tone: var(--green); }
 .overview-page .survey-card:not([data-survey-state="complete"]) { --survey-tone: var(--accent); }
@@ -445,7 +445,7 @@
 .overview-page .survey-footer button { min-height: 26px; margin-left: auto; font-size: 8px; }
 
 /* 04 — a jump corridor, never a claim that the decorative scope has coordinates. */
-.overview-page .overview-modules > .route-card { grid-column: span 5; display: flex; flex-direction: column; }
+.overview-page .overview-modules .bridge-lane > .route-card { grid-column: span 5; display: flex; flex-direction: column; }
 .overview-page .route-card { --route-tone: var(--dim); }
 .overview-page .route-card.has-route { --route-tone: var(--orange); }
 .overview-page .route-target {
@@ -530,7 +530,7 @@
 }
 
 /* Continuously visible instrumentation, followed by supporting dossiers. */
-.overview-page .overview-modules > .telemetry-strip {
+.overview-page .overview-modules .bridge-lane > .telemetry-strip {
   grid-column: span 12;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1px;
@@ -552,9 +552,9 @@
 .overview-page .telemetry-strip strong { color: var(--text); font-size: 14px; }
 .overview-page .telemetry-strip span { font-size: 9px; }
 
-.overview-page .overview-modules > .session-card,
-.overview-page .overview-modules > .priority-card,
-.overview-page .overview-modules > .codex-hunt-card { grid-column: span 4; min-height: 252px; }
+.overview-page .overview-modules .bridge-lane > .session-card,
+.overview-page .overview-modules .bridge-lane > .priority-card,
+.overview-page .overview-modules .bridge-lane > .codex-hunt-card { grid-column: span 4; min-height: 252px; }
 .overview-page .session-pulse-grid { margin: 12px; border-color: var(--bridge-line); background: var(--bridge-line); }
 .overview-page .session-pulse-grid > div { padding: 9px 10px; background: color-mix(in srgb, var(--inset) 79%, var(--panel)); }
 .overview-page .session-pulse-grid small { color: var(--dim); font-size: 9px; }
@@ -575,7 +575,7 @@
 .overview-page .codex-candidates { margin-inline: 13px; }
 .overview-page .codex-actions { margin-inline: 13px; }
 .overview-page .codex-actions button { min-width: 0; font-size: 8px; }
-.overview-page .overview-modules > .feed-card { grid-column: span 12; }
+.overview-page .overview-modules .bridge-lane > .feed-card { grid-column: span 12; }
 .overview-page .feed-card > header { border-top: 1px solid color-mix(in srgb, var(--green) 44%, var(--border)); }
 .overview-page .feed-filters { gap: 5px; padding: 7px 11px; border-color: var(--bridge-line); }
 .overview-page .feed-filters button { min-height: 24px; padding: 3px 9px; border: 1px solid transparent; font-size: 9px; }
@@ -590,20 +590,20 @@
 @keyframes bridge-beacon { 50% { opacity: .58; box-shadow: 0 0 0 5px color-mix(in srgb, var(--green) 5%, transparent), 0 0 17px var(--green); } }
 
 @media (max-width: 1250px) {
-  .overview-page .overview-modules > .survey-card,
-  .overview-page .overview-modules > .route-card { grid-column: span 6; }
+  .overview-page .overview-modules .bridge-lane > .survey-card,
+  .overview-page .overview-modules .bridge-lane > .route-card { grid-column: span 6; }
   .overview-page .overview-modules.route-hidden > .survey-card { grid-column: span 12; }
-  .overview-page .overview-modules > .session-card,
-  .overview-page .overview-modules > .priority-card { grid-column: span 6; }
-  .overview-page .overview-modules > .codex-hunt-card { grid-column: span 12; }
+  .overview-page .overview-modules .bridge-lane > .session-card,
+  .overview-page .overview-modules .bridge-lane > .priority-card { grid-column: span 6; }
+  .overview-page .overview-modules .bridge-lane > .codex-hunt-card { grid-column: span 12; }
   .overview-page .overview-actions { flex-wrap: wrap; }
 }
 
 @media (max-width: 1180px) {
   .overview-page .overview-masthead { min-height: 0; flex-wrap: wrap; }
   .overview-page .overview-actions { flex: 1 1 420px; justify-content: flex-end; }
-  .overview-page .overview-modules > .survey-card,
-  .overview-page .overview-modules > .route-card { grid-column: span 6; }
+  .overview-page .overview-modules .bridge-lane > .survey-card,
+  .overview-page .overview-modules .bridge-lane > .route-card { grid-column: span 6; }
   .overview-page .overview-modules.route-hidden > .survey-card { grid-column: span 12; }
 }
 
@@ -613,8 +613,8 @@
   .overview-page .overview-heading h2 { font-size: 27px; }
   .overview-page .overview-actions { flex: 1 1 370px; }
   .overview-page .overview-actions button { min-height: 29px; padding-inline: 7px; font-size: 8px; }
-  .overview-page .overview-modules > .survey-card,
-  .overview-page .overview-modules > .route-card { grid-column: span 6; }
+  .overview-page .overview-modules .bridge-lane > .survey-card,
+  .overview-page .overview-modules .bridge-lane > .route-card { grid-column: span 6; }
   .overview-page .overview-modules.route-hidden > .survey-card { grid-column: span 12; }
   .overview-page .decision-body { grid-template-columns: 56px minmax(0, 1fr) auto; gap: 11px; padding: 8px 13px; }
   .overview-page .decision-lens { width: 54px; height: 54px; }
@@ -635,11 +635,11 @@
 }
 
 @media (max-width: 930px) {
-  .overview-page .overview-modules > .survey-card,
-  .overview-page .overview-modules > .route-card,
-  .overview-page .overview-modules > .session-card,
-  .overview-page .overview-modules > .priority-card,
-  .overview-page .overview-modules > .codex-hunt-card { grid-column: span 12; }
+  .overview-page .overview-modules .bridge-lane > .survey-card,
+  .overview-page .overview-modules .bridge-lane > .route-card,
+  .overview-page .overview-modules .bridge-lane > .session-card,
+  .overview-page .overview-modules .bridge-lane > .priority-card,
+  .overview-page .overview-modules .bridge-lane > .codex-hunt-card { grid-column: span 12; }
   .overview-page .overview-actions { justify-content: flex-start; }
   .overview-page .survey-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .overview-page .survey-stats div:nth-child(2) { border-right: 1px solid var(--bridge-line); }
@@ -655,7 +655,7 @@
   .overview-page .decision-body > button { grid-column: 1/-1; width: 100%; }
   .overview-page .preflight-card { grid-template-columns: minmax(0, 1fr); }
   .overview-page .preflight-card > header { min-height: 32px; border-right: 0; border-bottom: 1px solid var(--bridge-line); }
-  .overview-page .overview-modules > .telemetry-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview-page .overview-modules .bridge-lane > .telemetry-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 580px) {

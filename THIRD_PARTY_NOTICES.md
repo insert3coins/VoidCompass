@@ -150,6 +150,14 @@ by `tests/test_colonisation_planner.py`. `data/colonisation/site_types.json`
 
 Copyright © SrvSurvey contributors. Licence: <https://www.gnu.org/licenses/gpl-3.0.html>
 
+## Fonts for the skin themes
+
+`web/assets/fonts` bundles the typefaces the skin themes use: Antonio, Barlow
+Condensed, Cinzel, Cormorant Garamond, Exo 2, Inter, Marcellus, Metal Mania,
+Michroma, Orbitron, Oxanium, Rajdhani, Russo One, Saira Semi Condensed and
+Share Tech Mono. Each is licensed under the SIL Open Font License 1.1, and its
+licence (with its copyright holders) is beside it as `OFL-<Name>.txt`.
+
 ## BGS-Tally: how BGS work is counted
 
 The v5.5.2.4 BGS tab counts the work you do for factions the way

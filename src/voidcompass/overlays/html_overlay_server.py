@@ -146,6 +146,8 @@ class HtmlOverlayServer:
     # mode is on, so empty ones can be placed too. Layout mode wins.
     # Overlay ids hidden while a map is open (each overlay can opt out).
     overlays_hidden = frozenset()
+    # The theme's skin (5.8.1), on every overlay's snapshot.
+    skin = ""
     layout_mode = False
     # Overlay Studio's OPACITY for every overlay (0.4-1). The host fades each
     # window with Windows' own layered-window alpha rather than the pages
@@ -303,9 +305,29 @@ class HtmlOverlayServer:
             state.revision += 1
             self._condition.notify_all()
 
+    @classmethod
+    def set_skin(cls, skin):
+        """A new skin for every overlay: each one's last snapshot goes out again
+        wearing it. True when it changed."""
+        skin = str(skin or "")
+        if skin == cls.skin:
+            return False
+        cls.skin = skin
+        for server in list(cls._instances):
+            with server._condition:
+                states = [(overlay_id, state.snapshot_json) for overlay_id, state in server._overlays.items()
+                          if not state.shutdown and state.snapshot_json not in ("", "{}")]
+            for overlay_id, encoded in states:
+                try:
+                    server.publish(overlay_id, json.loads(encoded))
+                except (TypeError, ValueError):
+                    continue
+        return True
+
     def publish(self, overlay_id, snapshot):
         state = self.register(overlay_id)
-        snapshot = snapshot or {}
+        snapshot = {**(snapshot or {}), "skin": type(self).skin} if type(self).skin or (snapshot or {}).get("skin") \
+            else (snapshot or {})
         encoded = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
         with self._condition:
             window = dict(snapshot.get("window") or {})

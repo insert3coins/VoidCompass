@@ -14,6 +14,12 @@ def apply_theme_live(runtime, theme_name, palette):
     palette = themes.normalize_theme(palette)
     themes.ACTIVE_PALETTE = dict(palette)
     themes.ACTIVE_THEME_NAME = theme_name
+    try:
+        # A skin theme's whole look reaches every overlay with its next snapshot.
+        from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
+        HtmlOverlayServer.set_skin(themes.theme_skin(theme_name))
+    except Exception:
+        pass
     for key, value in palette.items():
         setattr(THEME, key, value)
     slots = {'COLOR_BG':'bg','COLOR_PANEL':'panel','COLOR_ACCENT':'accent',

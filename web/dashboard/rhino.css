@@ -1,0 +1,183 @@
+/* The Rhino page (rhino.js). Interface colours are theme tokens; commodity
+   colours come from rhino-draw.js so the page, the overlay and the compass
+   agree. */
+
+#rhino-workspace { container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0; }
+#rhino-workspace button { cursor: pointer; }
+#rhino-workspace input, #rhino-workspace select {
+  min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--input); color: var(--text);
+  font: 12px "Segoe UI", sans-serif; outline: none;
+}
+#rhino-workspace input:focus, #rhino-workspace select:focus { border-color: var(--accent); }
+#rhino-workspace h4 { margin: 0; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+
+.rh-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 10px 14px; border: 1px solid var(--border-soft); border-left: 3px solid var(--accent); background: var(--panel); }
+.rh-status > div { display: grid; gap: 2px; min-width: 0; }
+.rh-status b { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.rh-status span { color: var(--text); font: 11px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rh-mini { margin-right: 12px; }
+.rh-mini em { margin-right: 5px; color: var(--muted); font: 700 8.5px Consolas, monospace; font-style: normal; letter-spacing: .1em; }
+
+.rh-body { display: grid; gap: 12px; min-width: 0; }
+.rh-grid { display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); gap: 12px; align-items: start; }
+@container (max-width: 980px) { .rh-grid { grid-template-columns: minmax(0, 1fr); } }
+.rh-rail, .rh-main { display: grid; gap: 12px; min-width: 0; align-content: start; }
+.rh-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+@container (max-width: 900px) { .rh-two { grid-template-columns: minmax(0, 1fr); } }
+
+.rh-panel { display: grid; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border-soft); background: var(--panel); overflow-x: auto; }
+.rh-panel > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.rh-panel > header span { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; }
+.rh-dim { margin: 0; color: var(--dim); font: 11px/1.5 "Segoe UI", sans-serif; }
+.rh-sub { margin: 0; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.rh-sub b { color: var(--text); font-weight: 600; }
+
+/* The keys, as buttons, in the order you work a signal. */
+.rh-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.rh-keys.rigs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rh-keys:empty { display: none; }
+#rhino-workspace .rh-key {
+  display: grid; gap: 2px; justify-items: start; min-height: 40px; padding: 6px 9px; text-align: left;
+  border: 1px solid var(--border); background: var(--inset); color: var(--text);
+}
+.rh-key b { font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.rh-key kbd { color: var(--dim); font: 9.5px Consolas, monospace; }
+#rhino-workspace .rh-key:hover { border-color: var(--accent); }
+#rhino-workspace .rh-key.primary { border-color: color-mix(in srgb, var(--orange) 70%, transparent); background: color-mix(in srgb, var(--orange) 14%, var(--inset)); }
+#rhino-workspace .rh-key.primary b { color: var(--orange); }
+#rhino-workspace .rh-key.down { border-color: color-mix(in srgb, var(--green) 55%, transparent); }
+#rhino-workspace .rh-key.down b { color: var(--green); }
+#rhino-workspace .rh-key.live { border-color: var(--green); background: color-mix(in srgb, var(--green) 12%, var(--inset)); }
+#rhino-workspace .rh-danger.armed b { color: var(--red); }
+
+/* The deposit you picked. */
+.rh-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.rh-form label { display: grid; gap: 3px; min-width: 0; }
+.rh-form label span { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.rh-form .wide { grid-column: 1 / -1; }
+.rh-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+#rhino-workspace .rh-actions button { min-height: 28px; padding: 0 10px; border: 1px solid var(--border); background: var(--inset); color: var(--text); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+#rhino-workspace .rh-actions button.primary { border-color: var(--accent); color: var(--accent); }
+#rhino-workspace .rh-actions .rh-key { min-height: 28px; padding: 0 10px; align-content: center; }
+
+.rh-deposits { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.rh-deposits li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 5px 6px; border: 1px solid transparent; cursor: pointer; }
+.rh-deposits li:hover { border-color: var(--border-soft); background: var(--inset); }
+.rh-deposits li.on { border-color: var(--accent); background: var(--inset); }
+.rh-deposits li i { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; color: #000; font: 700 9px Consolas, monospace; font-style: normal; }
+.rh-deposits li b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rh-deposits li span, .rh-deposits li em { color: var(--muted); font: 11px "Segoe UI", sans-serif; font-style: normal; font-variant-numeric: tabular-nums; }
+.rh-deposits li.mined { opacity: .55; }
+
+/* Figures over the map, the map, and the line under it. */
+.rh-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+@container (max-width: 1180px) { .rh-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (max-width: 760px) { .rh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rh-tile { display: grid; gap: 3px; min-width: 0; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.rh-tile > span { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.rh-tile b { color: var(--text); font: 600 22px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.rh-tile small { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+
+.rh-mapbox {
+  position: relative; min-height: 420px; height: min(68vh, 760px); border: 1px solid var(--border-soft);
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent) 6%, var(--inset)), var(--bg) 75%);
+}
+.rh-mapbox canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.rh-mapbox canvas:active { cursor: grabbing; }
+.rh-map-controls { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px; }
+#rhino-workspace .rh-map-controls button {
+  min-width: 28px; height: 26px; padding: 0 8px; border: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 80%, transparent);
+  color: var(--text); font: 700 9px Consolas, monospace; letter-spacing: .1em;
+}
+.rh-line { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 8px 12px; border: 1px solid var(--border-soft); background: var(--panel); color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .08em; }
+.rh-line:empty { display: none; }
+.rh-line i { font-style: normal; }
+.rh-line b { color: var(--text); }
+.rh-line .route, .rh-line .green { color: var(--green); }
+.rh-line .yellow, .rh-line .edge { color: var(--yellow); }
+.rh-line .red, .rh-line .warn { color: var(--red); }
+.rh-line .accent { color: var(--accent); }
+.rh-line .dim { color: var(--dim); }
+
+.rh-table { width: 100%; border-collapse: collapse; font: 11.5px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.rh-table th { padding: 5px 8px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; text-align: left; border-bottom: 1px solid var(--border-soft); }
+.rh-table td { padding: 6px 8px; color: var(--text); border-bottom: 1px solid color-mix(in srgb, var(--border-soft) 60%, transparent); }
+.rh-table tr.mined td { color: var(--dim); }
+.rh-table tr.here td:first-child { box-shadow: inset 3px 0 0 var(--green); }
+.rh-row-actions { white-space: nowrap; }
+.rh-table td small { display: block; color: var(--dim); font-size: 10px; }
+.rh-saved-sites .rh-site-name b { color: var(--accent); font: 700 11px Consolas, monospace; letter-spacing: .06em; }
+/* The row's buttons wrap inside their own cell, DELETE in red like the rest's size. */
+.rh-saved-sites .rh-row-actions { white-space: normal; min-width: 150px; }
+.rh-saved-sites .rh-row-actions > * { margin: 2px 4px 2px 0; }
+#rhino-workspace .rh-saved-sites .rh-row-actions .rh-danger { display: inline-flex; align-items: center; min-height: 22px; padding: 0 7px; border: 1px solid color-mix(in srgb, var(--red) 55%, transparent); background: var(--inset); }
+#rhino-workspace .rh-saved-sites .rh-row-actions .rh-danger b { color: var(--red); font: 700 8.5px Consolas, monospace; letter-spacing: .08em; }
+#rhino-workspace .rh-saved-sites .rh-row-actions .rh-danger.armed { background: color-mix(in srgb, var(--red) 18%, var(--inset)); border-color: var(--red); }
+.rh-rename { display: flex; gap: 4px; flex-wrap: wrap; }
+.rh-rename input { min-width: 0; flex: 1 1 110px; }
+/* SITE: its name and the save key on one row, the same height as the keys. */
+.rh-site-form { display: grid; gap: 4px; }
+.rh-site-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.rh-site-head span, .rh-site-head em { font: 700 8.5px Consolas, monospace; font-style: normal; letter-spacing: .12em; }
+.rh-site-head span { color: var(--dim); }
+.rh-site-head em { color: var(--dim); }
+.rh-site-head em.saved { color: var(--green); }
+.rh-site-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 6px; }
+#rhino-workspace .rh-site-row input { height: auto; min-height: 40px; }
+#rhino-workspace .rh-site-row .rh-key { align-content: center; min-width: 118px; }
+
+/* Worked-out deposits: where each is in its timeline. */
+.rh-regrowth { margin: 0; color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.rh-regrowth.due, .rh-due { color: var(--yellow); }
+.rh-depleted tr.due td:first-child { box-shadow: inset 3px 0 0 var(--yellow); }
+
+/* Back aboard after a Rhino run. */
+.rh-aboard-panel { border-left: 3px solid var(--green); }
+#rhino-workspace .rh-aboard-panel > header h4 { color: var(--green); }
+.rh-aboard { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.rh-aboard div { display: grid; gap: 2px; min-width: 0; }
+.rh-aboard span { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.rh-aboard b { color: var(--text); font: 600 15px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.rh-taken { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.rh-taken li { display: flex; justify-content: space-between; gap: 8px; font: 12px "Segoe UI", sans-serif; }
+.rh-taken b { color: var(--text); font-weight: 600; }
+.rh-taken em { color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
+.rh-ready { color: var(--green); }
+.rh-out { margin: 0; color: var(--red); font: 700 9.5px Consolas, monospace; letter-spacing: .08em; }
+
+/* The planet compass's target, with its clear. */
+.rh-target { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--green) 45%, transparent); border-left: 3px solid var(--green); background: var(--panel); }
+.rh-target span { color: var(--green); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.rh-target b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.rh-target em { color: var(--muted); font: 700 10px Consolas, monospace; font-style: normal; letter-spacing: .06em; }
+#rhino-workspace .rh-target button { margin-left: auto; min-height: 26px; padding: 0 10px; border: 1px solid var(--border); background: var(--inset); color: var(--text); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+#rhino-workspace .rh-target button:hover { border-color: var(--red); color: var(--red); }
+#rhino-workspace .rh-row-actions button { min-height: 22px; margin-right: 4px; padding: 0 7px; border: 1px solid var(--border); background: var(--inset); color: var(--text); font: 700 8.5px Consolas, monospace; letter-spacing: .08em; }
+.rh-filter input { width: 100%; }
+#rhino-workspace .rh-runs-toggle { padding: 0; border: 0; background: none; color: var(--accent); font: 600 12px "Segoe UI", sans-serif; text-decoration: underline dotted; }
+.rh-runs-row td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.rh-runs { display: grid; gap: 4px; margin: 2px 0 6px; padding: 0; list-style: none; }
+.rh-runs li { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 2px 12px; font: 12px "Segoe UI", sans-serif; }
+.rh-runs li b { color: var(--text); font-weight: 600; }
+.rh-runs li span { color: var(--muted); }
+.rh-runs li em { font-style: normal; color: var(--text); }
+.rh-runs li em.best { color: var(--green); }
+.rh-runs li small { grid-column: 2; color: var(--dim); }
+.rh-sites-editor .rh-panel { border-left: 3px solid var(--accent); }
+.rh-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: -4px; }
+#rhino-workspace .rh-chip { min-height: 24px; padding: 0 9px; border: 1px solid var(--border); background: var(--inset); color: var(--muted); font: 600 11px "Segoe UI", sans-serif; }
+#rhino-workspace .rh-chip:hover { border-color: var(--accent); color: var(--text); }
+#rhino-workspace .rh-chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--inset)); color: var(--text); }
+
+.rh-prospects { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rh-prospects li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 8px 10px; border: 1px solid var(--border-soft); background: var(--inset); }
+.rh-prospects b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.rh-prospects span, .rh-prospects small { grid-column: 1; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.rh-prospects em { color: var(--yellow); font-style: normal; }
+.rh-prospects strong { grid-column: 2; grid-row: 1 / span 3; align-self: center; color: var(--text); font: 600 13px "Bahnschrift SemiCondensed", sans-serif; }
+.rh-ground { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.rh-ground li { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(60px, 2fr) 40px 90px; align-items: center; gap: 8px; color: var(--text); font: 11.5px "Segoe UI", sans-serif; }
+.rh-ground i { height: 6px; background: var(--inset); }
+.rh-ground i b { display: block; height: 100%; background: var(--accent); }
+.rh-ground small { color: var(--dim); }
+.rh-hold { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 8px; }

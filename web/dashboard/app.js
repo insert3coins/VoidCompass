@@ -22,6 +22,13 @@ function installPopOut() {
     actions.append(button);
   }
   document.addEventListener("click", (event) => {
+    // The Focused Log in a window of its own; the deck goes back to the Dashboard.
+    const log = event.target.closest("[data-flightlog-popout]");
+    if (log) {
+      window.pywebview?.api?.pop_out?.("focused-log", model?.popout_geometry?.["focused-log"] || null);
+      if (model?.ui?.flight_log_mode) command("set_flight_log_mode", {enabled: false});
+      return;
+    }
     const button = event.target.closest("[data-popout]");
     if (!button) return;
     const page = button.closest(".page")?.dataset.pageName;
@@ -39,6 +46,9 @@ import {
 import {handleBgsChange, handleBgsClick, handleBgsSubmit, renderBgs} from "./bgs.js";
 import {handleTradingClick, handleTradingInput, handleTradingSubmit, renderTrading, resetTrading} from "./trading.js";
 import {handleMiningClick, handleMiningInput, handleMiningSubmit, renderMining, resetMining} from "./mining.js";
+import {handleRhinoClick, handleRhinoInput, handleRhinoSubmit, renderRhino, resetRhino} from "./rhino.js";
+import {groupChips, groupChipsFingerprint, handleOverlayGroupsClick, handleOverlayGroupsInput, handleOverlayGroupsSubmit,
+  renderOverlayGroups} from "./overlay-groups.js";
 import {handleExpeditionsChange, handleExpeditionsClick, handleExpeditionsInput, handleExpeditionsSubmit, renderExpeditions, resetExpeditions} from "./expeditions.js";
 import {handlePlanetaryChange, handlePlanetaryClick, handlePlanetaryInput, handlePlanetarySubmit, renderPlanetary, resetPlanetary, setPlanetaryView} from "./planetary.js";
 import {renderWatcher, openWatcherTab} from "./watcher.js";
@@ -394,7 +404,7 @@ function showToast(message) {
 }
 
 const PAGE_LAYOUT_CONTAINER_SELECTOR = [
-  "#overview-modules", ".record-metrics", ".records-grid",
+  ".record-metrics", ".records-grid",
   ".tool-grid", ".about-grid",
   ".workspace-shell .workspace-metrics", ".workspace-shell .workspace-grid",
   ".workspace-shell .mission-layout", ".workspace-shell .chronicle-list",
@@ -658,6 +668,12 @@ function applyTheme(theme = {}) {
       document.documentElement.style.setProperty(`--${key.replaceAll("_", "-")}`, value);
     }
   }
+  // A skin theme's whole look (fonts, case, corners): web/assets/skins/deck-skins.css.
+  const skin = /^[a-z]+$/.test(String(theme.skin || "")) ? theme.skin : "";
+  if ((document.documentElement.dataset.skin || "") !== skin) {
+    if (skin) document.documentElement.dataset.skin = skin;
+    else delete document.documentElement.dataset.skin;
+  }
   const names = Array.isArray(theme.available) ? theme.available : [];
   const nextFingerprint = JSON.stringify({name: theme.name || "", palette: theme.palette || {}, names});
   if (nextFingerprint !== themeFingerprint) {
@@ -858,10 +874,10 @@ function renderOverlaySwitchboard(studio = {}) {
   all.title = allHidden ? "Overlays are hidden: show them again" : "Hide every overlay for now (each keeps its own setting)";
   text("overlay-all-state", allHidden ? "HIDDEN" : "SHOWN");
   text("overlay-quick-count", `${overlays.filter((row) => row.enabled).length} / ${overlays.length} ON`);
-  const fingerprint = JSON.stringify(overlays.map((row) => [row.id, row.short_label, row.label, Boolean(row.enabled)]));
+  const fingerprint = JSON.stringify(overlays.map((row) => [row.id, row.short_label, row.label, Boolean(row.enabled)])) + groupChipsFingerprint(studio);
   if (fingerprint === overlayQuickFingerprint) return;
   overlayQuickFingerprint = fingerprint;
-  host.replaceChildren(...overlays.map((row) => {
+  host.replaceChildren(...groupChips(studio), ...overlays.map((row) => {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.overlayQuick = row.id;
@@ -954,90 +970,75 @@ function renderPreflight(state) {
 }
 
 function renderFlightLog(state) {
-  const enabled = !SOLO_PAGE && Boolean(state.ui?.flight_log_mode);
+  // Its own window (popped out), or the deck shrunk to it.
+  const enabled = SOLO_PAGE === "focused-log" || (!SOLO_PAGE && Boolean(state.ui?.flight_log_mode));
   document.body.classList.toggle("flight-log-mode", enabled);
   byId("flight-log-shell")?.setAttribute("aria-hidden", String(!enabled));
   if (!enabled) return;
   const flight = state.flight || {};
-  const survey = state.survey || {};
-  const route = state.route || {};
-  const data = state.data || {};
   const session = state.session || {};
   const source = String(state.sources?.overall || "CACHED").toUpperCase();
   const sourceNode = byId("flightlog-source");
   sourceNode.dataset.source = ["LIVE", "RECENT", "CACHED"].includes(source) ? source.toLowerCase() : "cached";
-  text("flightlog-source", `LOCAL LINK ${sourceNode.dataset.source.toUpperCase()}`);
-  text("flightlog-evidence", source === "LIVE" ? "Journal or status linked · recent curated events"
-    : source === "RECENT" ? "Game link quiet · recent curated events"
-    : "Cached field state · waiting for game activity");
-  text("flightlog-commander", state.profile?.commander, "UNKNOWN COMMANDER");
-  text("flightlog-ship", flight.ship, "SHIP UNKNOWN");
+  text("flightlog-source", sourceNode.dataset.source.toUpperCase());
+  text("flightlog-commander", state.profile?.commander, "UNKNOWN");
+  text("flightlog-ship", flight.ship, "—");
   text("flightlog-session-time", session.elapsed, "00:00:00");
   text("flightlog-system", flight.system, "NO SYSTEM DATA");
   text("flightlog-state", flight.context, "WAITING FOR LIVE JOURNAL");
-  text("flightlog-directive", state.decision?.title, "AWAITING JOURNAL-BACKED OBJECTIVE");
-  text("flightlog-directive-detail", state.decision?.detail, "The field directive will appear when exploration evidence is available.");
-  text("flightlog-directive-confidence", state.decision?.confidence, "FIELD INTELLIGENCE");
+  text("flightlog-directive", state.decision?.title, "AWAITING THE JOURNAL");
+  text("flightlog-directive-detail", state.decision?.detail, "");
   renderFlightLogDirective(state);
-  const knownTotal = Boolean(survey.total_known);
-  const progress = knownTotal ? Math.max(0, Math.min(100, number(survey.percent))) : 0;
-  const gauge = byId("flightlog-survey-gauge");
-  gauge.dataset.known = String(knownTotal);
-  gauge.setAttribute("role", knownTotal ? "progressbar" : "img");
-  gauge.setAttribute("role", knownTotal ? "progressbar" : "img");
-  gauge.style.setProperty("--flightlog-survey-angle", `${progress * 3.6}deg`);
-  gauge.setAttribute("aria-label", knownTotal
-    ? `System survey ${Math.round(progress)} percent complete`
-    : "System survey total not yet confirmed");
-  if (knownTotal) gauge.setAttribute("aria-valuenow", String(Math.round(progress)));
-  else gauge.removeAttribute("aria-valuenow");
-  text("flightlog-survey-percent", knownTotal ? `${Math.round(progress)}%` : "—");
-  text("flightlog-survey-badge", knownTotal && survey.complete ? "SYSTEM COMPLETE" : knownTotal ? "SURVEY ACTIVE" : "TOTAL UNKNOWN");
-  text("flightlog-survey", `${numeric(survey.scanned)} / ${survey.total_known ? numeric(survey.total) : "?"}`);
-  text("flightlog-survey-detail", `${numeric(survey.bio_signals)} BIO · ${numeric(survey.geo_signals)} GEO · ${numeric(survey.valuable_count)} VALUABLE`);
-  const work = survey.completion || {};
-  const surveyWork = [
-    ["FSS UNKNOWN", knownTotal ? numeric(work.unknown_bodies) : "?"],
-    ["DSS LEFT", numeric(Math.max(0, number(work.dss_targets) - number(work.dss_complete)))],
-    ["BIO LEFT", numeric(Math.max(0, number(work.bio_total) - number(work.bio_complete)))],
-  ];
-  for (const [index, [label, value]] of surveyWork.entries()) {
-    text(`flightlog-work-label-${index}`, label);
-    text(`flightlog-work-value-${index}`, value);
-  }
-  text("flightlog-route", route.next || "NO ACTIVE ROUTE");
-  text("flightlog-route-detail", route.summary || route.text || "PLOT IN ELITE OR WAYPOINTS");
-  text("flightlog-route-source", route.next ? route.source : "NO PLOTTED LEG");
-  text("flightlog-route-final", route.final || "—");
-  text("flightlog-route-distance", route.distance_text || "—");
-  text("flightlog-value", credits(data.unsold_total));
-  text("flightlog-value-detail", `${credits(data.unsold_exploration)} CARTOGRAPHY · ${credits(data.unsold_bio)} BIOLOGY`);
-  text("flightlog-jumps", numeric(session.jumps));
-  text("flightlog-distance", `${number(session.distance_ly).toLocaleString(undefined, {maximumFractionDigits: 1})} LY`);
-  text("flightlog-flown", session.flown || session.elapsed || "—");
-  text("flightlog-earned", credits(session.earned));
-  text("flightlog-firsts", numeric(session.first_discoveries));
-  text("flightlog-rare", numeric(session.rare_worlds));
-  const priorities = Array.isArray(state.priorities) ? state.priorities.slice(0, 4) : [];
+  renderFlightLogStrip(state);
+  const priorities = Array.isArray(state.priorities) ? state.priorities.slice(0, 3) : [];
   const priorityList = byId("flightlog-priorities");
-  const priorityKey = JSON.stringify(priorities.map((row) => [row.title, row.detail, row.severity]));
+  const priorityKey = JSON.stringify(priorities.map((row) => [row.title, row.detail]));
   if (priorityList.dataset.renderKey !== priorityKey) {
     priorityList.dataset.renderKey = priorityKey;
-    priorityList.replaceChildren(...(priorities.length ? priorities.map((row, index) => {
-      const item = document.createElement("li");
-      const ordinal = document.createElement("b");
-      const copy = document.createElement("div");
-      const title = document.createElement("strong");
-      const detail = document.createElement("span");
-      ordinal.textContent = String(index + 1).padStart(2, "0");
-      title.textContent = row.title || "Field objective";
-      detail.textContent = row.detail || "Current field objective.";
-      copy.append(title, detail);
-      item.append(ordinal, copy);
-      return item;
-    }) : [Object.assign(document.createElement("li"), {className: "flightlog-priorities-empty", textContent: "No additional field priorities are pending."})]));
+    priorityList.innerHTML = priorities.map((row) => `<li><b>${escapeHtml(row.title || "To do")}</b>${row.detail ? `<span>${escapeHtml(row.detail)}</span>` : ""}</li>`).join("");
+    priorityList.hidden = !priorities.length;
   }
   renderFlightLogEvents(state);
+}
+
+// What's under way, small: the survey, the route and the data aboard while
+// exploring; otherwise the lead panel of what you're doing (mining, trade,
+// docked, combat), with the route if one is plotted.
+function renderFlightLogStrip(state) {
+  const survey = state.survey || {}, route = state.route || {}, data = state.data || {};
+  const activity = state.activity || {};
+  const cell = (label, value, detail = "", extra = "") => `<div class="fl-cell"><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b>${extra}${detail ? `<span>${escapeHtml(detail)}</span>` : ""}</div>`;
+  const cells = [];
+  const lead = (activity.panels || []).find((panel) => panel.blocks?.length && !["crew", "orders"].includes(panel.id));
+  if (lead && activity.activity && activity.activity !== "exploring") {
+    const hero = (lead.blocks || []).find((block) => block.type === "hero");
+    const stats = ((lead.blocks || []).find((block) => block.type === "stats")?.items || []).slice(0, 3);
+    cells.push(cell(`${lead.label || activity.label || ""}${lead.title ? ` · ${lead.title}` : ""}`,
+      hero?.value || stats[0]?.value || "—", hero?.sub || "",
+      stats.length ? `<em>${stats.map((item) => `${escapeHtml(item.label)} <i>${escapeHtml(item.value)}</i>`).join(" · ")}</em>` : ""));
+  } else {
+    const known = Boolean(survey.total_known);
+    const work = survey.completion || {};
+    const share = known ? Math.max(0, Math.min(100, number(survey.percent))) : 0;
+    const left = `FSS ${known ? numeric(work.unknown_bodies) : "?"} · DSS ${numeric(Math.max(0, number(work.dss_targets) - number(work.dss_complete)))} · BIO ${numeric(Math.max(0, number(work.bio_total) - number(work.bio_complete)))}`;
+    cells.push(cell(known && survey.complete ? "SURVEY · COMPLETE" : "SURVEY", `${numeric(survey.scanned)} / ${known ? numeric(survey.total) : "?"}`, left,
+      `<i class="fl-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(share)}"><em style="width:${share.toFixed(1)}%"></em></i>`));
+  }
+  if (route.next) cells.push(cell(`ROUTE · ${route.source || "PLOTTED"}`, route.next, [route.summary, route.final ? `to ${route.final}` : ""].filter(Boolean).join(" · ")));
+  if (number(data.unsold_total)) cells.push(cell("DATA ABOARD", credits(data.unsold_total), data.unsold_bio ? `${credits(data.unsold_bio)} biology` : "cartography"));
+  const session = state.session || {};
+  if (number(session.jumps) || number(session.earned)) {
+    const firsts = number(session.first_discoveries);
+    cells.push(cell("THIS SESSION", `${numeric(session.jumps)} JUMPS · ${number(session.distance_ly).toLocaleString(undefined, {maximumFractionDigits: 1})} LY`,
+      [number(session.earned) ? `earned ${credits(session.earned)}` : "", firsts ? `${numeric(firsts)} first${firsts === 1 ? "" : "s"}` : "",
+        session.flown ? `${session.flown} flown` : ""].filter(Boolean).join(" · ")));
+  }
+  const markup = cells.join("");
+  const strip = byId("flightlog-strip");
+  if (strip.dataset.renderKey !== markup) {
+    strip.dataset.renderKey = markup;
+    strip.innerHTML = markup;
+  }
 }
 
 // The Focused Log's directive: the same tags and action as the Mission
@@ -1062,8 +1063,9 @@ function renderFlightLogDirective(state) {
   quote.hidden = !watcher.text;
   if (watcher.text) {
     text("flightlog-watcher-text", watcher.text);
+    text("flightlog-watcher-name", watcher.name, "THE WATCHER");
     const minutes = Math.max(0, Math.round((Date.now() / 1000 - number(watcher.at)) / 60));
-    text("flightlog-watcher-when", minutes < 1 ? "JUST NOW" : minutes < 60 ? `${minutes} MIN AGO` : `${Math.round(minutes / 60)} H AGO`);
+    text("flightlog-watcher-when", !number(watcher.at) ? "" : minutes < 1 ? "JUST NOW" : minutes < 60 ? `${minutes} MIN AGO` : `${Math.round(minutes / 60)} H AGO`, "");
   }
 }
 
@@ -1215,7 +1217,7 @@ function renderSurvey(state) {
   const survey = state.survey || {};
   const intel = state.intelligence || {};
   const completion = number(survey.percent);
-  const surveyCard = document.querySelector(".overview-modules > .survey-card");
+  const surveyCard = document.querySelector(".overview-modules .survey-card");
   surveyCard.dataset.surveyState = survey.complete ? "complete" : survey.total_known ? "active" : "awaiting";
   surveyCard.dataset.starClass = String(survey.star_class || "").trim().charAt(0).toUpperCase();
   const orbital = byId("survey-orbital");
@@ -1262,7 +1264,7 @@ function renderSurvey(state) {
 
 function renderRoute(state) {
   const route = state.route || {};
-  document.querySelector(".overview-modules > .route-card").classList.toggle("has-route", Boolean(route.next));
+  document.querySelector(".overview-modules .route-card")?.classList.toggle("has-route", Boolean(route.next));
   text("route-badge", route.mode === "none" ? "NO ROUTE" : route.mode === "game" ? "GAME ROUTE" : "WAYPOINT PLAN");
   text("route-source", route.source, "NAVIGATION");
   text("route-next", route.next, "NO ACTIVE ROUTE");
@@ -1411,39 +1413,48 @@ function renderCodexHunt(state) {
   byId("codex-add-objective").title = hunt.active_expedition_id ? `Add ${hunt.target_category || "Codex"} to ${hunt.active_expedition_name || "the active expedition"}` : "Start or resume an expedition first";
 }
 
+// The Dashboard's two lanes: each panel in its lane, in its order. A panel is
+// only moved when its place changes, so the feed keeps its scroll.
+const DECK_DEFAULT_ORDER = ["system", "activity", "route", "session", "priorities", "codex", "feed"];
+const DECK_DEFAULT_LANES = {system: "main", route: "main", feed: "main", activity: "side", session: "side", priorities: "side", codex: "side"};
+const DECK_FIXED = ["system"];
+
+// The deck sends a whole order; one saved before a panel existed gets it in its usual place.
+function deckNormalised(layout) {
+  const order = [...new Set((Array.isArray(layout.module_order) ? layout.module_order : []).filter((id) => DECK_DEFAULT_ORDER.includes(id)))];
+  DECK_DEFAULT_ORDER.forEach((id, index) => {
+    if (order.includes(id)) return;
+    const before = DECK_DEFAULT_ORDER.slice(0, index).filter((other) => order.includes(other));
+    order.splice(before.length ? order.indexOf(before[before.length - 1]) + 1 : 0, 0, id);
+  });
+  return {order, hidden: Array.isArray(layout.hidden_modules) ? [...layout.hidden_modules] : [],
+    lanes: {...DECK_DEFAULT_LANES, ...(layout.module_lanes || {})}};
+}
+
 function renderDeckLayout(state) {
   const layout = state.dashboard_layout || {};
-  const order = Array.isArray(layout.module_order) ? layout.module_order : [];
-  const hidden = new Set(Array.isArray(layout.hidden_modules) ? layout.hidden_modules : []);
-  const overviewLayout = model.page_layouts?.overview;
-  const pageLayoutOwnsOrder = pageLayoutEditing === "overview"
-    || Boolean(overviewLayout && typeof overviewLayout === "object" && Object.keys(overviewLayout).length);
-  document.querySelectorAll("[data-deck-module]").forEach((node) => {
-    const index = order.indexOf(node.dataset.deckModule);
-    node.style.order = pageLayoutOwnsOrder ? "" : String(2 + (index < 0 ? order.length : index) * 2);
-    node.hidden = hidden.has(node.dataset.deckModule);
-  });
-  byId("overview-modules").classList.toggle("route-hidden", hidden.has("route"));
-  const corePanels = [
-    document.querySelector(".overview-modules > .decision-card"),
-    document.querySelector(".overview-modules > .preflight-card"),
-    document.querySelector(".overview-modules > .survey-card"),
-    document.querySelector(".overview-modules > .telemetry-strip"),
-  ];
-  if (pageLayoutOwnsOrder) {
-    corePanels.forEach((node) => { if (node) node.style.order = ""; });
-  } else {
-    const routeIndex = Math.max(0, order.indexOf("route"));
-    if (corePanels[0]) corePanels[0].style.order = "0";
-    if (corePanels[1]) corePanels[1].style.order = "1";
-    if (corePanels[2]) corePanels[2].style.order = "2";
-    if (corePanels[3]) corePanels[3].style.order = String(4 + routeIndex * 2);
+  const normal = deckNormalised(layout);
+  const order = normal.order;
+  const hidden = new Set(normal.hidden);
+  const lanes = normal.lanes;
+  const host = byId("overview-modules");
+  if (host) {
+    const laneOf = {main: host.querySelector('[data-lane="main"]'), side: host.querySelector('[data-lane="side"]')};
+    for (const lane of ["main", "side"]) {
+      const target = laneOf[lane];
+      if (!target) continue;
+      const wanted = order.filter((id) => (lanes[id] === "side" ? "side" : "main") === lane)
+        .map((id) => host.querySelector(`[data-deck-module="${CSS.escape(id)}"]`)).filter(Boolean);
+      const current = [...target.children];
+      if (wanted.length !== current.length || wanted.some((node, index) => node !== current[index])) target.append(...wanted);
+    }
+    host.querySelectorAll("[data-deck-module]").forEach((node) => node.classList.toggle("deck-hidden", hidden.has(node.dataset.deckModule)));
   }
 
   const panel = byId("deck-customiser");
   if (!panel.hidden && deckLayoutDraft) return;
-  deckLayoutDraft = {order: [...order], hidden: [...hidden]};
-  const fingerprint = JSON.stringify({available: layout.available_modules || [], order, hidden: [...hidden], doctrines: layout.doctrines || [], doctrine: layout.doctrine});
+  deckLayoutDraft = {order: [...order], hidden: [...hidden], lanes: {...lanes}};
+  const fingerprint = JSON.stringify({available: layout.available_modules || [], order, hidden: [...hidden], lanes, doctrines: layout.doctrines || [], doctrine: layout.doctrine});
   if (fingerprint === deckLayoutFingerprint) return;
   deckLayoutFingerprint = fingerprint;
   const doctrine = byId("exploration-doctrine");
@@ -1454,25 +1465,42 @@ function renderDeckLayout(state) {
     return option;
   }));
   doctrine.value = layout.doctrine || "balanced";
-  renderDeckModuleControls(layout.available_modules || []);
+  deckAvailable = layout.available_modules || [];
+  renderDeckModuleControls(deckAvailable);
 }
 
+let deckAvailable = [];
+
+// One row a panel: shown or not, which lane, and up or down within it.
 function renderDeckModuleControls(available = []) {
   if (!deckLayoutDraft) return;
-  const labels = Object.fromEntries(available.map((row) => [row.id, row.label]));
-  byId("deck-module-controls").replaceChildren(...deckLayoutDraft.order.map((id) => {
-    const row = document.createElement("div");
-    row.className = "deck-module-row";
-    row.dataset.moduleId = id;
-    const visible = document.createElement("input");
-    visible.type = "checkbox";
-    visible.checked = !deckLayoutDraft.hidden.includes(id);
-    visible.dataset.deckVisible = id;
-    const label = document.createElement("label");
-    label.textContent = labels[id] || id;
-    row.append(visible, label);
-    return row;
-  }));
+  const info = Object.fromEntries(available.map((row) => [row.id, row]));
+  const rows = (lane) => deckLayoutDraft.order.filter((id) => (deckLayoutDraft.lanes[id] === "side" ? "side" : "main") === lane);
+  const row = (id, lane, index, count) => {
+    const fixed = Boolean(info[id]?.fixed) || DECK_FIXED.includes(id);
+    const shown = fixed || !deckLayoutDraft.hidden.includes(id);
+    return `<div class="deck-module-row${shown ? "" : " off"}" data-module-id="${escapeHtml(id)}">
+      <input type="checkbox" data-deck-visible="${escapeHtml(id)}"${shown ? " checked" : ""}${fixed ? " disabled title=\"Always shown\"" : ""}>
+      <label>${escapeHtml(info[id]?.label || id)}</label>
+      <button type="button" data-deck-move="${escapeHtml(id)}" data-step="-1"${index === 0 ? " disabled" : ""} aria-label="Up">▲</button>
+      <button type="button" data-deck-move="${escapeHtml(id)}" data-step="1"${index === count - 1 ? " disabled" : ""} aria-label="Down">▼</button>
+      <button type="button" data-deck-lane="${escapeHtml(id)}" title="Move to the other lane">${lane === "main" ? "→ RIGHT" : "← LEFT"}</button></div>`;
+  };
+  const column = (lane, title) => {
+    const ids = rows(lane);
+    return `<div class="deck-lane-controls"><small>${title}</small>${ids.map((id, index) => row(id, lane, index, ids.length)).join("") || "<p>Nothing here.</p>"}</div>`;
+  };
+  byId("deck-module-controls").innerHTML = column("main", "LEFT · THE WIDE LANE") + column("side", "RIGHT · THE NARROW LANE");
+}
+
+function moveDeckModule(id, step) {
+  const lane = (deckLayoutDraft.lanes[id] === "side" ? "side" : "main");
+  const same = deckLayoutDraft.order.filter((other) => (deckLayoutDraft.lanes[other] === "side" ? "side" : "main") === lane);
+  const at = same.indexOf(id), swap = same[at + step];
+  if (swap === undefined) return;
+  const order = deckLayoutDraft.order;
+  const a = order.indexOf(id), b = order.indexOf(swap);
+  [order[a], order[b]] = [order[b], order[a]];
 }
 
 function renderPriorities(state) {
@@ -2103,6 +2131,7 @@ function showStudioDisplay(id) {
 
 function renderOverlayStudio(state) {
   const studio = state.overlay_studio || {};
+  renderOverlayGroups(studio);
   const overlays = Array.isArray(studio.overlays) ? studio.overlays : [];
   const monitors = studioMonitors();
   if (!studioSelectedId || !overlays.some((row) => row.id === studioSelectedId)) {
@@ -2987,6 +3016,16 @@ function settingFlag() {
   return `<em class="setting-flag" aria-live="polite"></em>`;
 }
 
+// The Rhino's surface commodities, each on or off: an off one isn't offered
+// first on the Rhino page (it's still in the full list).
+function rhinoCommoditySwitches(value, data) {
+  const hidden = new Set(String(value.rhino_commodities_hidden || "").split(",").map((name) => name.trim().toLowerCase()).filter(Boolean));
+  const names = data.rhino_commodities || [];
+  return settingNote("The surface commodities the Rhino finds. Ones you never mine are offered last on the Rhino page and drop out of its quick filters.")
+    + names.map((name) => settingSwitch({label: name, detail: "", checked: !hidden.has(name.toLowerCase()),
+      attrs: ` data-rhino-commodity="${escapeHtml(name)}"`})).join("");
+}
+
 function settingSwitch({key = "", id = "", label, detail = "", checked, attrs = ""}) {
   const target = key ? ` data-setting="${escapeHtml(key)}"` : "";
   return `<label class="setting-row switch" data-search="${settingSearchText(label, detail, key)}"><span class="setting-copy"><b>${escapeHtml(label)}</b>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</span><span class="setting-control"><input type="checkbox"${id ? ` id="${escapeHtml(id)}"` : ""}${target} ${checked ? "checked" : ""}${attrs}><i class="setting-switch" aria-hidden="true"></i></span>${settingFlag()}</label>`;
@@ -3061,7 +3100,7 @@ function settingsSectionBody(id, data) {
       const style = ["bg", "panel", "border", "accent", "orange", "green", "yellow", "red", "text"]
         .filter((key) => /^#[0-9a-f]{6}$/i.test(swatch[key] || "")).map((key) => `--t-${key}:${swatch[key]}`).join(";");
       const active = theme.name === editor.name;
-      return `<button type="button" class="theme-option${active ? " active" : ""}" data-theme-name="${escapeHtml(theme.name)}" style="${escapeHtml(style)}" aria-pressed="${active}"><span class="theme-preview" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>${escapeHtml(theme.name)}</b><small>${active ? "ACTIVE" : theme.custom ? "CUSTOM" : "BUILT IN"}</small></button>`;
+      return `<button type="button" class="theme-option${active ? " active" : ""}" data-theme-name="${escapeHtml(theme.name)}" style="${escapeHtml(style)}" aria-pressed="${active}"><span class="theme-preview" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>${escapeHtml(theme.name)}</b><small>${active ? "ACTIVE" : theme.custom ? "CUSTOM" : theme.skin ? "SKIN · FONTS AND SHAPES" : "BUILT IN"}</small></button>`;
     }).join("");
     const colors = (editor.keys || []).map((key) => `<label><span>${escapeHtml(key.replaceAll("_", " "))}</span><input type="color" data-theme-color="${escapeHtml(key)}" value="${escapeHtml(editor.palette?.[key] || "#000000")}"></label>`).join("");
     return settingGroup("THEME", `<div class="theme-options" data-search="${settingSearchText("theme palette colour color", (data.themes || []).map((theme) => theme.name).join(" "))}">${cards}</div>`)
@@ -3082,12 +3121,12 @@ function settingsSectionBody(id, data) {
         + settingSwitch({key: "orders_open_map", label: "Open the galaxy map when you accept", detail: "Uses your Elite key bindings (Voice settings), then you paste the system into the search.", checked: value.orders_open_map === true})
         + settingActions(`<button type="button" data-page="watcher" data-watcher-open="orders">CREW ORDERS</button>`, "crew orders officers campaigns errands"))
       + settingGroup("CREW CALLS", settingSelect({key: "target_remarks", label: "When you target a system", detail: "Whether it's new to everyone, known but unscanned by you, or a place you've finished.", value: value.target_remarks || "crew", options: [["crew", "Your companion says"], ["tone", "A notification"], ["off", "Nothing"]]})
-        + settingSwitch({key: "target_sounds", label: "Target sounds", detail: "A short sound as you target a system: a fanfare if nobody has reported it, an upbeat pair if it's known but unscanned by you, a thud if you've been. From ED-Outrider.", checked: value.target_sounds !== false})
         + settingSelect({key: "leave_behind_cr", label: "Money left behind", detail: "Target onward with mapping or biology undone worth at least this, and you're told before you go.", value: number(value.leave_behind_cr, 2000000), options: [[0, "Never"], [1000000, "1 million"], [2000000, "2 million"], [5000000, "5 million"], [10000000, "10 million"], [25000000, "25 million"]], type: "number"})
         + settingSwitch({key: "pad_location", label: "Where your pad is", detail: "\"Pad 34: at the back, up on your right\" as docking is granted, with a small diagram on the Dashboard. From bgol's LandingPad tables.", checked: value.pad_location !== false})
         + settingSwitch({key: "crew_warnings", label: "Crew warnings", detail: "Wanted (and the nearest Interstellar Factors), the wrong suit for biology, oxygen or health low with data aboard, no limpets on undock.", checked: value.crew_warnings !== false})
         + settingSwitch({key: "mining_recap", label: "Mining recap", detail: "After a stint of 20 t or more: what you refined, your rate and the best rock.", checked: value.mining_recap !== false})
         + settingSwitch({key: "canonn_reports", label: "Phenomena reports", detail: "On arriving in a system, ask Canonn what other commanders found in space there (notable stellar phenomena), and hear the ones not yet in your Codex for the region. Only the system's name is sent.", checked: value.canonn_reports !== false}))
+      + settingGroup("RHINO COMMODITIES", rhinoCommoditySwitches(value, data))
       + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: your companion's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
       + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingNote("Unlocks pop up in the cockpit's Achievements overlay: switch it on or off, and place it, in Overlay Studio.")}`);
@@ -3827,6 +3866,7 @@ function renderWorkspace(state) {
     // 5.6.1: Mission Control is the Expeditions page (expeditions.js).
     mission: (data) => renderExpeditions(data, WORKSHOP_UI),
     mining: renderMiningWorkspace,
+    rhino: (data) => renderRhino(data, WORKSHOP_UI),
     powerplay: renderPowerplayWorkspace,
     carrier: renderCarrierWorkspace,
     achievements: renderAchievementsWorkspace,
@@ -3872,6 +3912,7 @@ function renderDashboard(state) {
     resetColonisation();
     resetTrading();
     resetMining();
+    resetRhino();
     resetExpeditions();
     resetPlanetary();
     analyticsView = "trends";
@@ -4327,6 +4368,11 @@ document.addEventListener("click", async (event) => {
   if (handleOrdersClick(event, WORKSHOP_UI)) return;
   if (handleTradingClick(event, WORKSHOP_UI)) return;
   if (handleMiningClick(event, WORKSHOP_UI)) return;
+  if (handleRhinoClick(event, WORKSHOP_UI)) return;
+  if (event.target.closest?.("#studio-groups [data-og-op]")) {
+    handleOverlayGroupsClick(event, WORKSHOP_UI, model?.overlay_studio || {});
+    return;
+  }
   if (handleExpeditionsClick(event, WORKSHOP_UI)) return;
   if (handlePlanetaryClick(event, PLANETARY_UI)) return;
   const studioCard = event.target.closest(".studio-overlay-card");
@@ -4838,6 +4884,13 @@ document.addEventListener("change", async (event) => {
     await saveShipSequence(target);
     return;
   }
+  if (target.matches("[data-rhino-commodity]")) {
+    // The Rhino commodities: one list of the ones switched off.
+    const all = [...document.querySelectorAll("[data-rhino-commodity]")];
+    const hidden = all.filter((input) => !input.checked).map((input) => input.dataset.rhinoCommodity);
+    await saveSettings({rhino_commodities_hidden: hidden.join(",")}, [target.closest(".setting-row")], {revert: () => { target.checked = !target.checked; }});
+    return;
+  }
   if (target.matches("[data-setting]")) {
     const row = target.closest(".setting-row");
     // What to put back if Python refuses this save.
@@ -4858,7 +4911,8 @@ document.addEventListener("change", async (event) => {
 
 document.addEventListener("input", (event) => {
   if (event.target.id === "settings-search") applySettingsView();
-  else if (!handleMiningInput(event, WORKSHOP_UI) && !handleExpeditionsInput(event) && !handlePlanetaryInput(event, PLANETARY_UI)) handleTradingInput(event, WORKSHOP_UI);
+  else if (handleOverlayGroupsInput(event)) return;
+  else if (!handleMiningInput(event, WORKSHOP_UI) && !handleRhinoInput(event, WORKSHOP_UI) && !handleExpeditionsInput(event) && !handlePlanetaryInput(event, PLANETARY_UI)) handleTradingInput(event, WORKSHOP_UI);
 });
 
 document.addEventListener("toggle", (event) => {
@@ -4882,6 +4936,7 @@ document.addEventListener("change", async (event) => {
     const hidden = new Set(deckLayoutDraft.hidden);
     if (event.target.checked) hidden.delete(id); else hidden.add(id);
     deckLayoutDraft.hidden = [...hidden];
+    event.target.closest(".deck-module-row")?.classList.toggle("off", !event.target.checked);
   } else if (!handleColonisationChange(event, WORKSHOP_UI, model.workspace?.data)) {
     handleBgsChange(event, WORKSHOP_UI);
   }
@@ -4891,6 +4946,11 @@ document.addEventListener("submit", (event) => {
   if (handleColonisationSubmit(event, WORKSHOP_UI)) return;
   if (handleTradingSubmit(event, WORKSHOP_UI)) return;
   if (handleMiningSubmit(event, WORKSHOP_UI)) return;
+  if (handleRhinoSubmit(event, WORKSHOP_UI)) return;
+  if (event.target.closest?.("[data-og-form]")) {
+    handleOverlayGroupsSubmit(event, WORKSHOP_UI, model?.overlay_studio || {});
+    return;
+  }
   if (handleExpeditionsSubmit(event, WORKSHOP_UI)) return;
   if (handlePlanetarySubmit(event, PLANETARY_UI)) return;
   handleBgsSubmit(event, WORKSHOP_UI);
@@ -4898,12 +4958,10 @@ document.addEventListener("submit", (event) => {
 
 byId("customise-deck").addEventListener("click", () => {
   const layout = model.dashboard_layout || {};
-  deckLayoutDraft = {
-    order: [...(layout.module_order || [])],
-    hidden: [...(layout.hidden_modules || [])],
-  };
+  deckLayoutDraft = deckNormalised(layout);
   byId("exploration-doctrine").value = layout.doctrine || "balanced";
-  renderDeckModuleControls(layout.available_modules || []);
+  deckAvailable = layout.available_modules || [];
+  renderDeckModuleControls(deckAvailable);
   byId("deck-customiser").hidden = false;
   byId("deck-customiser").scrollIntoView({block: "nearest", behavior: "smooth"});
 });
@@ -4911,6 +4969,18 @@ byId("customise-deck").addEventListener("click", () => {
 byId("preflight-toggle").addEventListener("click", () => {
   preflightExpanded = !preflightExpanded;
   renderPreflight(model);
+});
+
+byId("deck-module-controls").addEventListener("click", (event) => {
+  const move = event.target.closest("[data-deck-move]");
+  const lane = event.target.closest("[data-deck-lane]");
+  if (!deckLayoutDraft || (!move && !lane)) return;
+  if (move) moveDeckModule(move.dataset.deckMove, Number(move.dataset.step));
+  if (lane) {
+    const id = lane.dataset.deckLane;
+    deckLayoutDraft.lanes[id] = deckLayoutDraft.lanes[id] === "side" ? "main" : "side";
+  }
+  renderDeckModuleControls(deckAvailable);
 });
 
 byId("close-deck-customiser").addEventListener("click", () => {
@@ -4922,7 +4992,8 @@ byId("close-deck-customiser").addEventListener("click", () => {
 byId("save-deck-layout").addEventListener("click", async () => {
   if (!deckLayoutDraft) return;
   const doctrine = byId("exploration-doctrine").value || "balanced";
-  const layoutSaved = await command("save_dashboard_layout", {module_order: deckLayoutDraft.order, hidden_modules: deckLayoutDraft.hidden});
+  const layoutSaved = await command("save_dashboard_layout", {module_order: deckLayoutDraft.order, hidden_modules: deckLayoutDraft.hidden,
+    module_lanes: deckLayoutDraft.lanes});
   const doctrineSaved = layoutSaved && await command("set_exploration_doctrine", {doctrine});
   if (layoutSaved && doctrineSaved) {
     byId("deck-customiser").hidden = true;
@@ -5048,6 +5119,10 @@ byId("studio-selected-enabled").addEventListener("change", async (event) => {
   if (!studioSelectedId || !(await toggleStudioOverlay(studioSelectedId, wanted))) event.target.checked = !wanted;
 });
 byId("overlay-quick")?.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-overlay-group]")) {
+    await handleOverlayGroupsClick(event, WORKSHOP_UI, model?.overlay_studio || {});
+    return;
+  }
   const chip = event.target.closest("[data-overlay-quick]");
   if (!chip || chip.disabled) return;
   const wanted = chip.getAttribute("aria-pressed") !== "true";

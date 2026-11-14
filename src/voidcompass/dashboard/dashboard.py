@@ -106,6 +106,7 @@ from voidcompass.dashboard.dashboard_flight_log_mixin import DashboardFlightLogM
 from voidcompass.dashboard.dashboard_journey_mixin import DashboardJourneyMixin
 from voidcompass.dashboard.dashboard_expedition_mixin import DashboardExpeditionMixin
 from voidcompass.dashboard.dashboard_rigs_mixin import DashboardRigsMixin
+from voidcompass.dashboard.dashboard_overlay_groups_mixin import DashboardOverlayGroupsMixin
 from voidcompass.dashboard.dashboard_hud_pages_mixin import DashboardHudPagesMixin
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
 from voidcompass.dashboard.dashboard_watcher_listen_mixin import DashboardWatcherListenMixin
@@ -318,6 +319,7 @@ class MainDashboard(
     DashboardJourneyMixin,
     DashboardExpeditionMixin,
     DashboardRigsMixin,
+    DashboardOverlayGroupsMixin,
     DashboardHudPagesMixin,
     DashboardWatcherVoiceMixin,
     DashboardWatcherListenMixin,
@@ -3886,14 +3888,23 @@ class MainDashboard(
         if action == "field_bookmark":
             self._field_bookmark()
             return
+        if action.startswith("group_") and action[6:].isdigit():
+            self._overlay_group_slot(int(action[6:]))
+            return
         if action.startswith("rig_") and action[4:].isdigit():
-            self._rig_mark(int(action[4:]))
+            self._rig_mark(int(action[4:]), from_key=True)
             return
         if action == "rig_clear":
             self._rig_clear_here()
             return
         if action in ("rhino_survey_centre", "rhino_survey_edge", "rhino_survey_clear"):
             self._survey_mark(action.rsplit("_", 1)[1])
+            return
+        rhino_keys = {"rhino_deposit_mark": self._deposit_mark_key, "rhino_deposit_mined_out": self._deposit_mined_out_key,
+                      "rhino_trace": self._rig_trace_key, "rhino_trace_forget": self._rig_forget_plan,
+                      "rhino_circle": self._rig_circle_key, "rhino_site_save": self._rhino_site_save}
+        if action in rhino_keys:
+            rhino_keys[action]()
             return
         if action == "watcher_poke":
             self._watcher_poke()
@@ -5250,6 +5261,7 @@ class MainDashboard(
         from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 
         HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
+        HtmlOverlayServer.set_skin(themes.theme_skin(self.config.get("ui_theme_name")))
         HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
         # The Watcher's own frame rate (5.5.7).
         from voidcompass.overlays.heartbeat_hud import frame_rate_setting
@@ -8253,6 +8265,7 @@ class MainDashboard(
         vehicle_name = self._srv_toast_vehicle_name(raw, data)
         self.current_vehicle_id = vehicle_id
         self.current_vehicle_name = vehicle_name
+        self._rhino_launched(vehicle_name, when=(raw or {}).get("timestamp") if isinstance(raw, dict) else None)
         if vehicle_id is not None:
             self._vehicle_name_by_id[vehicle_id] = vehicle_name
         self._last_surface_vehicle_name = vehicle_name
@@ -9668,6 +9681,10 @@ class MainDashboard(
             self.current_in_multicrew = False
             self.current_vehicle_id = None
             self.hud_flight_state = "LANDED" if self.current_landed else "FLIGHT"
+            # Kept while the journals are read at startup too, so a restart
+            # back in the ship still shows the run's summary.
+            self._rhino_docked(vehicle_name, when=raw.get("timestamp") if isinstance(raw, dict) else None,
+                               quiet=bool(self.batch_mode))
             # The Nomad reports its own Liftoff before docking back into the
             # mothership. Preserve that verified ascent until LeaveBody rather
             # than reverting to SURFACE APPROACH during the boarding gap.
@@ -10159,6 +10176,7 @@ class MainDashboard(
                 self._refresh_survey_status_progress()
                 self.update_hud()
         elif ev == "LeaveBody":
+            self._rhino_aboard = None
             if not self.batch_mode:
                 self._check_stale_bio_scans(self.current_body_id)
                 self._rig_left_body(d.get("body_name") or self.current_body_name)
@@ -11496,6 +11514,7 @@ class MainDashboard(
         cache[self._cargo_hold_key(incoming_vessel)] = incoming_inventory
         if incoming_vessel == "Ship":
             self._ship_hold_partial = False
+        self._rhino_page_refresh(now=True)
 
         expected_vessel = self._runtime_cargo_vessel()
         if incoming_vessel != expected_vessel:

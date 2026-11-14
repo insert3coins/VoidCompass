@@ -224,6 +224,46 @@
 .studio-ground-readout.armed b { color: var(--accent); }
 
 /* -------------------------------------------------------- all overlays -- */
+/* Overlay groups (5.8.1). */
+.studio-groups { margin-top: 13px; border-top: 2px solid color-mix(in srgb, var(--orange) 45%, var(--border)); }
+.studio-groups > header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px 0; }
+.studio-groups > header span { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .16em; }
+.studio-groups > header b { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.og-body { display: grid; gap: 10px; padding: 8px 16px 14px; }
+.og-hint, .og-empty { margin: 0; color: var(--dim); font: 11px/1.5 "Segoe UI", sans-serif; }
+.og-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.og-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 6px 10px; border: 1px solid var(--border-soft); background: var(--inset); }
+.og-row.on { border-color: color-mix(in srgb, var(--green) 55%, transparent); }
+.og-switch { display: inline-flex; align-items: center; gap: 6px; min-width: 64px; min-height: 26px; padding: 0 9px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; cursor: pointer; }
+.og-switch i { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.og-row.on .og-switch { color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, transparent); }
+.og-row.on .og-switch i { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.og-name { display: grid; gap: 2px; min-width: 0; }
+.og-name b { color: var(--text); font: 600 13px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.og-name small { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .1em; overflow-wrap: anywhere; }
+.og-key { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .1em; white-space: nowrap; }
+.og-key kbd { color: var(--accent); font: 9px Consolas, monospace; }
+.og-tools { display: inline-flex; gap: 4px; }
+.og-tools button, .og-actions button, .og-new { min-height: 24px; padding: 0 9px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: 700 9px Consolas, monospace; letter-spacing: .08em; cursor: pointer; }
+.og-tools .og-danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, transparent); }
+.og-tools .og-danger.armed { background: color-mix(in srgb, var(--red) 18%, var(--panel)); }
+.og-new { justify-self: start; min-height: 30px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.og-editor { display: grid; gap: 10px; padding: 12px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); background: var(--inset); }
+.og-editor-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.og-editor .studio-field { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 5px; padding: 0; border: 0; }
+.og-editor .studio-field > span { display: grid; gap: 2px; }
+.og-editor .studio-field :is(input, select) { width: 100%; min-height: 32px; padding: 0 9px; text-align: left; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: 13px "Segoe UI", sans-serif; }
+@container (max-width: 760px) { .og-editor-row { grid-template-columns: minmax(0, 1fr); } }
+.og-members { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 10px; }
+.og-member { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 3px 6px; border: 1px solid transparent; color: var(--muted); font: 12px "Segoe UI", sans-serif; cursor: pointer; }
+.og-member.on { color: var(--text); border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.og-member span { min-width: 0; overflow-wrap: anywhere; }
+.og-member small { margin-left: auto; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .1em; }
+.og-actions { display: flex; gap: 6px; }
+.og-actions .primary { color: var(--accent); border-color: var(--accent); }
+/* The groups at the top of the header's PANELS menu. */
+.og-quick-label { grid-column: 1 / -1; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.og-quick-rule { grid-column: 1 / -1; width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--border-soft); }
 .studio-global { margin-top: 13px; border-top: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .studio-global-body { display: flex; align-items: center; gap: 6px 22px; flex-wrap: wrap; padding: 8px 16px; }
 .studio-global-body > .studio-switch, .studio-global-body > .studio-field { min-height: 40px; margin: 0; gap: 10px; border: 0; }

@@ -4,6 +4,7 @@ import os
 import json
 import re
 import sqlite3
+import time
 from contextlib import closing
 from pathlib import Path
 
@@ -49,6 +50,16 @@ class PlanetMaterialsStore:
                 db.execute("ALTER TABLE sites ADD COLUMN planet_radius REAL")
             if "location_index" not in columns:
                 db.execute("ALTER TABLE sites ADD COLUMN location_index INTEGER")
+            # When a deposit was first worked out, and each look that found it
+            # still empty (mining/regrowth.py).
+            if "depleted_at" not in columns:
+                db.execute("ALTER TABLE sites ADD COLUMN depleted_at TEXT NOT NULL DEFAULT ''")
+            if "rechecks" not in columns:
+                db.execute("ALTER TABLE sites ADD COLUMN rechecks TEXT NOT NULL DEFAULT ''")
+            # Worked out before the dates were kept: when it was last changed is
+            # the best record of when, so it joins the timeline.
+            db.execute("""UPDATE sites SET depleted_at = replace(updated_at, ' ', 'T') || 'Z'
+                WHERE depleted = 1 AND depleted_at = '' AND updated_at <> ''""")
 
     def rows(self):
         # Read again only when the file changes (the System Map asks on every refresh).
@@ -123,6 +134,8 @@ class PlanetMaterialsStore:
             raise ValueError("Mining location must be a whole number.") from None
         if values["location_index"] is not None and not 1 <= values["location_index"] <= 9999:
             raise ValueError("Mining location must be between 1 and 9999.")
+        values["depleted_at"] = str(data.get("depleted_at") or "")[:40]
+        values["rechecks"] = str(data.get("rechecks") or "")[:2000]
         values["site_type"] = str(data.get("site_type") or "site").strip().casefold()
         if values["site_type"] not in {"site", "drill"}:
             raise ValueError("Invalid surface marker type.")
@@ -149,24 +162,44 @@ class PlanetMaterialsStore:
         with closing(sqlite3.connect(self.path)) as db, db:
             if data.get("id"):
                 values["id"] = int(data["id"])
+                self._depletion_dates(db, values, values["id"], bool(data.get("depleted_at")), bool(data.get("rechecks")))
                 cursor = db.execute("""UPDATE sites SET system=:system, body=:body,
                     name=:name, latitude=:latitude, longitude=:longitude,
                     materials=:materials, notes=:notes, body_details=:body_details,
                     density=:density, depleted=:depleted, site_type=:site_type,
                     map_name=:map_name, amount=:amount, rigs=:rigs,
                     planet_radius=:planet_radius, location_index=:location_index,
+                    depleted_at=:depleted_at, rechecks=:rechecks,
                     updated_at=CURRENT_TIMESTAMP WHERE id=:id""", values)
                 if not cursor.rowcount:
                     raise ValueError("This site no longer exists in the active profile.")
                 return values["id"]
             nearby = self._nearby_deposit(db, values)
             if nearby is not None:
+                self._depletion_dates(db, values, nearby, bool(data.get("depleted_at")), bool(data.get("rechecks")))
                 db.execute("""UPDATE sites SET amount=:amount, density=:density,
-                    depleted=:depleted, updated_at=CURRENT_TIMESTAMP WHERE id=:nearby_id""",
+                    depleted=:depleted, depleted_at=:depleted_at, rechecks=:rechecks,
+                    updated_at=CURRENT_TIMESTAMP WHERE id=:nearby_id""",
                     {**values, "nearby_id": nearby})
                 return nearby
-            return db.execute("""INSERT INTO sites (system,body,name,latitude,longitude,materials,notes,body_details,density,depleted,site_type,map_name,amount,rigs,planet_radius,location_index)
-                VALUES (:system,:body,:name,:latitude,:longitude,:materials,:notes,:body_details,:density,:depleted,:site_type,:map_name,:amount,:rigs,:planet_radius,:location_index)""", values).lastrowid
+            self._depletion_dates(db, values, None, bool(data.get("depleted_at")), bool(data.get("rechecks")))
+            return db.execute("""INSERT INTO sites (system,body,name,latitude,longitude,materials,notes,body_details,density,depleted,site_type,map_name,amount,rigs,planet_radius,location_index,depleted_at,rechecks)
+                VALUES (:system,:body,:name,:latitude,:longitude,:materials,:notes,:body_details,:density,:depleted,:site_type,:map_name,:amount,:rigs,:planet_radius,:location_index,:depleted_at,:rechecks)""", values).lastrowid
+
+    @staticmethod
+    def _depletion_dates(db, values, row_id, given_at, given_rechecks):
+        """Worked out: the first date is kept from before (or it's now);
+        not worked out: no dates. Dates given by the caller win."""
+        from voidcompass.mining.regrowth import stamp
+        if not values["depleted"]:
+            values["depleted_at"] = values["rechecks"] = ""
+            return
+        before = db.execute("SELECT depleted, depleted_at, rechecks FROM sites WHERE id=?", (row_id,)).fetchone() \
+            if row_id is not None else None
+        if not given_at:
+            values["depleted_at"] = (before[1] if before and before[0] and before[1] else "") or stamp(time.time())
+        if not given_rechecks:
+            values["rechecks"] = (before[2] if before and before[0] else "") or ""
 
     @staticmethod
     def _primary_material(value):
@@ -241,6 +274,29 @@ SURFACE_MINING_NEW = (
     "Magnesite", "Olivine", "Periclase Dunite", "Quartz Pyroxenite",
     "Ruby", "Sapphire", "Thortveitite",
 )
+
+
+def rhino_hidden(config):
+    """The surface commodities you've said you never mine (Settings)."""
+    words = {part.strip().casefold() for part in str((config or {}).get("rhino_commodities_hidden") or "").split(",")}
+    return [name for name in SURFACE_MINING_NEW if name.casefold() in words]
+
+
+def rhino_commodity_choices(config=None, found=()):
+    """{"rhino": the surface commodities, less the hidden ones, in their own
+    order; "found": the others you've found with the Rhino, most found first;
+    "others": every other commodity, A to Z}."""
+    hidden = {name.casefold() for name in rhino_hidden(config)}
+    thirteen = [name for name in SURFACE_MINING_NEW if name.casefold() not in hidden]
+    taken = {name.casefold() for name in SURFACE_MINING_NEW}
+    yours = []
+    for name in found or ():
+        name = str(name or "").strip()
+        if name and name.casefold() not in taken and name.casefold() != "unknown":
+            taken.add(name.casefold())
+            yours.append(name)
+    return {"rhino": thirteen, "found": yours,
+            "others": [name for name in mining_material_catalogue() if name.casefold() not in taken]}
 
 
 def mining_material_catalogue():

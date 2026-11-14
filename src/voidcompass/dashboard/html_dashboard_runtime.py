@@ -99,6 +99,7 @@ class HtmlDashboardRuntime:
                 "name": theme_name,
                 "palette": palette,
                 "available": theme_names,
+                "skin": themes.theme_skin(theme_name),
             },
         }
         self._commissioning_callback = None

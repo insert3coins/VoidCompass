@@ -51,7 +51,7 @@ PROVIDER_CALLS = (
     "api_status", "api_debug", "api_commander", "api_location", "api_ship", "api_journal_folder", "api_companion",
     "api_dashboard", "api_pages", "api_page", "api_open_page", "api_feed", "api_add_feed",
     "api_themes", "api_set_theme", "api_overlays", "api_overlay", "api_set_overlay",
-    "api_toggle_overlay", "api_hide_overlays", "api_notify", "api_watcher", "api_watcher_thought",
+    "api_toggle_overlay", "api_hide_overlays", "api_overlay_groups", "api_overlay_group_toggle", "api_notify", "api_watcher", "api_watcher_thought",
     "api_companion_status", "api_companions_list", "api_companion_profile", "api_companion_select",
     "api_watcher_poke", "api_watcher_answer", "api_watcher_code", "api_watcher_meet", "api_watcher_book",
     "api_voice", "api_voice_say", "api_voice_stop", "api_voice_hush", "api_music",
@@ -66,7 +66,7 @@ PROVIDER_CALLS = (
     "api_add_waypoint", "api_change_waypoint", "api_delete_waypoint", "api_clear_waypoints", "api_return_later",
     "api_return_later_action", "api_neutron_route", "api_import_neutron_route",
     "api_wrapped_years", "api_wrapped", "api_recorder_sessions", "api_recorder_tape",
-    "api_rigs", "api_rig_mark", "api_rigs_clear", "api_mining_record",
+    "api_rigs", "api_rig_mark", "api_rigs_clear", "api_rhino", "api_rhino_action", "api_mining_record",
     "api_orders", "api_orders_ask", "api_orders_answer", "api_orders_abandon",
 )
 
@@ -322,6 +322,9 @@ class LocalApi:
             ("POST", r"/overlays/hide-all", lambda req: self._call("api_hide_overlays", True), True),
             ("POST", r"/overlays/show-all", lambda req: self._call("api_hide_overlays", False), True),
             ("POST", r"/overlays/notify", self._notify, True),
+            # 5.8.1: overlay groups (before /overlays/<id>, which would take "groups").
+            ("GET", r"/overlays/groups", lambda req: self._call("api_overlay_groups"), False),
+            ("POST", r"/overlays/groups/([a-z0-9-]{1,48})/toggle", self._toggle_overlay_group, True),
             ("GET", r"/overlays/([a-z0-9_-]{1,40})", lambda req, oid: self._call("api_overlay", oid), False),
             ("POST", r"/overlays/([a-z0-9_-]{1,40})", self._set_overlay, True),
             ("POST", r"/overlays/([a-z0-9_-]{1,40})/toggle",
@@ -419,6 +422,9 @@ class LocalApi:
             ("GET", r"/rigs", lambda req: self._call("api_rigs"), False),
             ("POST", r"/rigs/clear", self._clear_rigs, True),
             ("POST", r"/rigs/([1-6])", lambda req, slot: self._call("api_rig_mark", int(slot)), True),
+            # Rhino mining: the survey, marked deposits, the rig plan and the planning circle.
+            ("GET", r"/rhino", lambda req: self._call("api_rhino"), False),
+            ("POST", r"/rhino/(deposit|mined-out|trace|circle|save)", lambda req, action: self._call("api_rhino_action", action), True),
             # Crew Orders (5.7.7): the officers' orders, and your answers.
             ("GET", r"/orders", lambda req: self._call("api_orders"), False),
             ("POST", r"/orders/ask", lambda req: self._call("api_orders_ask"), True),
@@ -433,6 +439,7 @@ class LocalApi:
         out = []
         for method, pattern, _handler, control in self._routes:
             path = pattern.pattern[1:-3].replace("\\", "")
+            path = path.replace("([a-z0-9-]{1,48})", "{group}")
             path = path.replace("([a-z0-9-]{1,40})", "{page}").replace("([a-z0-9_-]{1,40})", "{overlay}")
             path = path.replace("([^/]{1,240})", "{name}").replace("([0-9]{1,20})", "{address}")
             path = path.replace("([a-z]{1,20})", "{id}").replace("([0-9]{1,4})", "{n}").replace("([0-9]{4})", "{year}").replace("([1-6])", "{n}")
@@ -718,6 +725,12 @@ class LocalApi:
         if not changes:
             raise ApiError(400, "Nothing to change: send enabled, x, y and/or opacity")
         return self._call("api_set_overlay", overlay_id, changes)
+
+    def _toggle_overlay_group(self, req, group_id):
+        on = req.body.get("on") if isinstance(req.body, dict) else None
+        if on is not None and not isinstance(on, bool):
+            raise ApiError(400, "on must be true or false (or left out to flip it)")
+        return self._call("api_overlay_group_toggle", group_id, on)
 
     def _notify(self, req):
         title = str(req.body.get("title") or "").strip()

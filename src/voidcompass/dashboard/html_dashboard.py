@@ -39,7 +39,7 @@ from voidcompass.core import themes
 from voidcompass.core.watcher_retirement import written_log
 from voidcompass.core import companions
 from voidcompass.core.version import APP_VERSION
-from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_material_catalogue, SURFACE_MINING_NEW, location_index
+from voidcompass.mining.planet_materials import PlanetMaterialsStore, mining_material_catalogue, rhino_hidden, SURFACE_MINING_NEW, location_index
 from voidcompass.mining.rhino_intelligence import ground_intelligence, rhino_forecast, rhino_hint
 from voidcompass.core.config import get_active_profile, get_profile_dir
 from voidcompass.exploration.exploration_intelligence import body_completion
@@ -86,6 +86,7 @@ from voidcompass.dashboard.html_colonisation import HtmlColonisationMixin
 from voidcompass.dashboard.html_bgs import HtmlBgsMixin
 from voidcompass.dashboard.html_trading import HtmlTradingMixin
 from voidcompass.dashboard.html_mining import HtmlMiningMixin
+from voidcompass.dashboard.html_rhino import HtmlRhinoMixin
 from voidcompass.dashboard.html_planetary import HtmlPlanetaryMixin
 
 
@@ -99,8 +100,40 @@ THIRD_PARTY_NOTICES_URL = f"{PROJECT_URL}/blob/master/THIRD_PARTY_NOTICES.md"
 
 _CORE_RANKS = ranks.RANKS
 
+# The Dashboard's panels, two lanes: the wide one on the left, the narrow
+# stack on the right. Each lane is a plain stack, so a panel that comes and
+# goes never leaves a hole. The current system is always shown.
+DASHBOARD_MODULES = {
+    "system": "This system", "activity": "What's under way (crew, orders, mining, trade…)",
+    "route": "Route", "session": "Session pulse", "priorities": "Field priorities",
+    "codex": "Regional Codex hunt", "feed": "Live feed",
+}
+DASHBOARD_FIXED = ("system",)
+DASHBOARD_LANES = {"system": "main", "route": "main", "feed": "main",
+                   "activity": "side", "session": "side", "priorities": "side", "codex": "side"}
+
+
+def dashboard_modules(config):
+    """(order, hidden, lanes) from the saved settings. Modules added since the
+    order was saved take their default place, not the end of the list."""
+    defaults = list(DASHBOARD_MODULES)
+    saved = [str(name) for name in (config.get("dashboard_module_order") or ()) if str(name) in DASHBOARD_MODULES]
+    order = list(dict.fromkeys(saved))
+    for name in defaults:
+        if name not in order:
+            before = defaults[:defaults.index(name)]
+            at = max((order.index(other) + 1 for other in before if other in order), default=0)
+            order.insert(at, name)
+    hidden = list(dict.fromkeys(str(name) for name in (config.get("dashboard_hidden_modules") or ())
+                                if str(name) in DASHBOARD_MODULES and str(name) not in DASHBOARD_FIXED))
+    lanes_saved = config.get("dashboard_module_lanes") or {}
+    lanes = {name: (lanes_saved.get(name) if isinstance(lanes_saved, dict) and lanes_saved.get(name) in ("main", "side")
+                    else DASHBOARD_LANES[name]) for name in DASHBOARD_MODULES}
+    return order, hidden, lanes
+
+
 _HTML_WORKSPACE_PAGES = {
-    "planet-materials", "explore", "profile", "chronicle", "mission", "ground", "mining",
+    "planet-materials", "explore", "profile", "chronicle", "mission", "ground", "mining", "rhino",
     "powerplay", "carrier", "achievements", "settings",
     "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation",
     "wrapped", "games", "system-map",
@@ -190,6 +223,9 @@ HOTKEY_GROUP_OF = {
     "hud_page_next": "navigation", "hud_pages_mode": "navigation", "galaxy_minimap_view": "navigation",
     **{f"rig_{slot}": "rhino" for slot in range(1, 7)}, "rig_clear": "rhino", "rhino_map_range": "rhino",
     "rhino_survey_centre": "rhino", "rhino_survey_edge": "rhino", "rhino_survey_clear": "rhino",
+    "rhino_deposit_mark": "rhino", "rhino_deposit_mined_out": "rhino", "rhino_trace": "rhino", "rhino_trace_forget": "rhino",
+    "rhino_circle": "rhino", "rhino_site_save": "rhino",
+    **{f"group_{slot}": "controls" for slot in range(1, 9)},
     "field_bookmark": "field", "colony_fold": "field", "colony_refresh": "field",
     "orders_accept": "watcher", "orders_decline": "watcher",
 }
@@ -205,7 +241,7 @@ def _hotkey_group(action, attr):
         return "music"
     return HOTKEY_GROUP_OF.get(action, "controls")
 
-class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin, HtmlMiningMixin, HtmlPlanetaryMixin):
+class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin, HtmlMiningMixin, HtmlRhinoMixin, HtmlPlanetaryMixin):
     """Publish exploration state and accept private dashboard commands."""
 
     def start_html_dashboard_bridge(self):
@@ -263,7 +299,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         for custom_name in (self.config.get("ui_custom_themes") or {}):
             if custom_name not in available:
                 available.append(custom_name)
-        return {"name": name, "palette": palette, "available": available}
+        return {"name": name, "palette": palette, "available": available, "skin": themes.theme_skin(name),
+                "skins": {theme: skin for theme, (skin, _palette) in themes.SKIN_THEMES.items()}}
 
     def _html_dashboard_sources(self):
         now = time.time()
@@ -1098,7 +1135,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         thought = getattr(getattr(heartbeat, "mind", None), "last_thought", None) or {}
         if not thought.get("text"):
             return {}
-        return {"text": _text(thought.get("text"), 240), "at": float(thought.get("at") or 0)}
+        from voidcompass.overlays.crew_banter import NAMES
+        speaker = str(thought.get("speaker") or companions.identity(self.config) or "watcher")
+        return {"text": _text(thought.get("text"), 240), "at": float(thought.get("at") or 0),
+                "name": NAMES.get(speaker, speaker.upper())}
 
     def _html_field_cue_facts(self, flight, intelligence):
         """The facts behind the Mission Directive's field cues (5.5.3.1)."""
@@ -2435,7 +2475,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "expedition_gec_enabled", "expedition_poi_range_ly",
             "achievement_notifications_enabled", "adaptive_command_enabled",
             "home_system", "start_page", "target_remarks", "crew_warnings", "pad_location", "mining_recap",
-            "canonn_reports", "target_sounds", "leave_behind_cr",
+            "canonn_reports", "leave_behind_cr", "rhino_commodities_hidden",
             "api_enabled", "api_port", "api_allow_lan", "api_allow_control",
         ):
             value = self.config.get(key)
@@ -2449,7 +2489,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             ("trading_online_enabled", True),
             ("orders_enabled", True), ("orders_frequency", "session"), ("start_page", "last"),
             ("target_remarks", "crew"), ("crew_warnings", True), ("pad_location", True), ("mining_recap", True),
-            ("canonn_reports", True), ("target_sounds", True), ("leave_behind_cr", 2_000_000),
+            ("canonn_reports", True), ("leave_behind_cr", 2_000_000),
             ("orders_campaigns", True),
             ("orders_kind_exobiology", True), ("orders_kind_exploration", True), ("orders_kind_travel", True), ("orders_kind_trade", True), ("orders_kind_colonisation", True), ("orders_kind_powerplay", True),
             ("orders_watcher", True), ("orders_copy_target", True), ("orders_open_map", False),
@@ -2496,6 +2536,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             theme_cards.append({
                 "name": name,
                 "custom": name not in themes.BUILTIN_THEMES,
+                "skin": themes.theme_skin(name),
                 "swatch": {key: palette.get(key, "") for key in (
                     "bg", "panel", "border", "accent", "orange", "green", "yellow", "red", "text",
                 )},
@@ -2503,6 +2544,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         controllers = getattr(self, "_html_controller_settings", None)
         return {
             "values": values, "hotkeys": hotkeys, "health": health, "eddn": eddn,
+            "rhino_commodities": list(SURFACE_MINING_NEW),
             # 5.7.3: controller buttons for the shortcuts, and what Elite does with each.
             "controllers": controllers() if callable(controllers) else {},
             # 5.7.3: talking to the Watcher by voice, and the ship commands it can press.
@@ -2776,6 +2818,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "mission": self._html_mission_workspace,
             "ground": self._html_ground_workspace,
             "mining": self._html_mining_workspace,
+            # The Rhino page: surface mining round one big map.
+            "rhino": self._html_rhino_workspace,
             "powerplay": self._html_powerplay_workspace,
             "carrier": self._html_carrier_workspace,
             "achievements": self._html_achievements_workspace,
@@ -2980,22 +3024,13 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             flight, data, codex_hunt, adaptive, cues=cues,
         )
         preflight = self._html_exploration_preflight(route, flight, sources)
-        configurable_modules = ("route", "session", "priorities", "codex", "feed")
-        configured_order = self.config.get("dashboard_module_order") or configurable_modules
-        module_order = [
-            str(name) for name in configured_order
-            if str(name) in configurable_modules
-        ]
-        module_order.extend(name for name in configurable_modules if name not in module_order)
-        hidden_modules = [
-            str(name) for name in (self.config.get("dashboard_hidden_modules") or [])
-            if str(name) in configurable_modules
-        ]
+        module_order, hidden_modules, module_lanes = dashboard_modules(self.config)
         raw_page_layouts = self.config.get("dashboard_page_layouts") or {}
         page_layouts = {}
         if isinstance(raw_page_layouts, dict):
             for page, containers in list(raw_page_layouts.items())[:32]:
-                if not isinstance(containers, dict):
+                # The Dashboard is two lanes set in Deck Options, not arranged by hand.
+                if not isinstance(containers, dict) or page == "overview":
                     continue
                 clean_containers = {}
                 for container, panels in list(containers.items())[:32]:
@@ -3073,13 +3108,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "dashboard_layout": {
                 "module_order": module_order,
                 "hidden_modules": hidden_modules,
-                "available_modules": [
-                    {"id": "route", "label": "Route Horizon"},
-                    {"id": "session", "label": "Session Pulse"},
-                    {"id": "priorities", "label": "Field Priorities"},
-                    {"id": "codex", "label": "Regional Codex Hunt"},
-                    {"id": "feed", "label": "Live Exploration Feed"},
-                ],
+                "module_lanes": module_lanes,
+                "available_modules": [{"id": key, "label": label, "fixed": key in DASHBOARD_FIXED}
+                                      for key, label in DASHBOARD_MODULES.items()],
                 "doctrine": decision.get("doctrine"),
                 "doctrines": [
                     {"id": key, "label": label} for key, label in DOCTRINES.items()
@@ -3443,6 +3474,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             if changed:
                 self.update_ground_target_ui()
 
+        elif page == "rhino":
+            done = self._html_rhino_operation(operation, payload)
+            self._schedule_html_dashboard_publish(immediate=True)
+            return done
         elif page == "mining":
             handled = self._html_mining_operation(operation, payload)
             if handled is not None:
@@ -4185,7 +4220,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     "raven_share_ship_cargo": bool, "bgs_online_enabled": bool, "trading_online_enabled": bool,
                     "orders_enabled": bool, "orders_frequency": str, "orders_campaigns": bool, "start_page": str,
                     "target_remarks": str, "crew_warnings": bool, "pad_location": bool, "mining_recap": bool,
-                    "canonn_reports": bool, "target_sounds": bool, "leave_behind_cr": int,
+                    "canonn_reports": bool, "leave_behind_cr": int, "rhino_commodities_hidden": str,
                     "orders_kind_exobiology": bool, "orders_kind_exploration": bool, "orders_kind_travel": bool, "orders_kind_trade": bool, "orders_kind_colonisation": bool, "orders_kind_powerplay": bool,
                     "orders_watcher": bool, "orders_copy_target": bool, "orders_open_map": bool,
                     "eddn_market_upload_enabled": bool,
@@ -4210,6 +4245,11 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     "api_allow_lan": bool, "api_allow_control": bool,
                 }
                 updates = {}
+                if "rhino_commodities_hidden" in values:
+                    # Only the surface commodities, by their own names.
+                    values = {**values, "rhino_commodities_hidden": ",".join(rhino_hidden(
+                        {"rhino_commodities_hidden": ",".join(str(name) for name in values["rhino_commodities_hidden"])
+                         if isinstance(values["rhino_commodities_hidden"], list) else values["rhino_commodities_hidden"]}))}
                 for key, cast in allowed.items():
                     if key not in values:
                         continue
@@ -4432,23 +4472,23 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             self._schedule_html_dashboard_publish(immediate=True)
             return True
         if action == "save_dashboard_layout":
-            available = ("route", "session", "priorities", "codex", "feed")
             raw_order = payload.get("module_order")
             raw_hidden = payload.get("hidden_modules")
-            if not isinstance(raw_order, list) or not isinstance(raw_hidden, list):
+            raw_lanes = payload.get("module_lanes") or {}
+            if not isinstance(raw_order, list) or not isinstance(raw_hidden, list) or not isinstance(raw_lanes, dict):
                 return False
-            order = [str(name) for name in raw_order if str(name) in available]
-            order.extend(name for name in available if name not in order)
-            hidden = [str(name) for name in raw_hidden if str(name) in available]
+            order, hidden, lanes = dashboard_modules({"dashboard_module_order": raw_order, "dashboard_hidden_modules": raw_hidden,
+                                                      "dashboard_module_lanes": raw_lanes})
             self.config["dashboard_module_order"] = order
-            self.config["dashboard_hidden_modules"] = list(dict.fromkeys(hidden))
+            self.config["dashboard_hidden_modules"] = hidden
+            self.config["dashboard_module_lanes"] = lanes
             self._persist_config()
             self._schedule_html_dashboard_publish(immediate=True)
             return True
         if action in {"save_page_layout", "reset_page_layout"}:
             page = _text(payload.get("page"), 40).casefold()
             allowed_pages = {
-                "overview", "explore", "records", "operations", "profile",
+                "explore", "records", "operations", "profile",
                 "chronicle", "mission", "ground", "mining",
                 "powerplay", "carrier", "achievements",
                 "settings", "about",

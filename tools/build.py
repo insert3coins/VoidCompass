@@ -178,7 +178,6 @@ VSVersionInfo(
         f'--add-data={project_dir / "data" / "geo_codex.json"}{data_sep}data',
         f'--add-data={project_dir / "data" / "bio_rules.json"}{data_sep}data',
         f'--add-data={project_dir / "data" / "pronounce.json"}{data_sep}data',
-        f'--add-data={project_dir / "data" / "alert_sounds.json"}{data_sep}data',
         f'--add-data={project_dir / "data" / "colonisation"}{data_sep}data/colonisation',
         # SrvSurvey's bio criteria (GPL-3): the colours Survey Operations'
         # Codex flags judge.

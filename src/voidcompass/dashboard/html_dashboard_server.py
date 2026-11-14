@@ -28,6 +28,8 @@ MAX_POSTCARD_BYTES = 48 * 1024 * 1024
 MEDIA_CHUNK_BYTES = 64 * 1024
 _MEDIA_ID = re.compile(r"[0-9a-f]{16}")
 _RANGE = re.compile(r"bytes=(\d*)-(\d*)")
+# The skins' fonts (open licences, beside them in web/assets/fonts/).
+_SKIN_FONT = re.compile(r"/assets/fonts/[A-Za-z0-9-]+\.ttf")
 _SANDBOXED_MODULES = frozenset({
     "/assets/heartbeat-3d.js",
     "/assets/aster-companion.js",
@@ -336,8 +338,9 @@ class HtmlDashboardServer:
                             "/assets/companion-core.js",
                             "/assets/companion-mood.js",
                             "/assets/companion-caption.js",
-                            "/assets/music-visualizers.js", "/galactic_map/vendor/three.module.min.js",
-                            "/galactic_map/vendor/three.core.min.js"}:
+                            "/assets/music-visualizers.js", "/assets/rhino-draw.js", "/galactic_map/vendor/three.module.min.js",
+                            "/galactic_map/vendor/three.core.min.js", "/assets/skins/deck-skins.css"} \
+                or _SKIN_FONT.fullmatch(request_path):
             candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
             try:
                 candidate.relative_to(self.static_root.parent)

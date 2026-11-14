@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import logging
 import statistics
-import threading
 import time
 
 from voidcompass.core import companions
@@ -58,6 +57,11 @@ def _num(value):
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+# Events after which a granted pad is no longer yours.
+PAD_GONE = frozenset({"Undocked", "DockingCancelled", "DockingDenied", "DockingTimeout", "SupercruiseEntry",
+                      "StartJump", "FSDJump", "CarrierJump", "Died", "Shutdown", "LoadGame"})
 
 
 class DashboardSmallsMixin:
@@ -98,7 +102,7 @@ class DashboardSmallsMixin:
             return
         self._smalls_leaving(name)
         mode = str(self.config.get("target_remarks") or "crew")
-        if mode == "off" and not self.config.get("target_sounds", True):
+        if mode == "off":
             return
         root = getattr(self, "root", None)
         # Jump Info asked EDSM as you targeted it: give it a moment to answer.
@@ -117,10 +121,6 @@ class DashboardSmallsMixin:
         cached = (getattr(self, "_jump_info_intel", None) or {}).get(key)
         intel = cached[1] if cached else None
         status = "done" if visits else "unreported" if intel is not None and not intel.get("known", True) else "known" if intel is not None else None
-        if status and self.config.get("target_sounds", True):
-            self._smalls_sound(status)
-        if mode == "off":
-            return
         if visits and own:
             left = sum(1 for item in own if int(item.get("bio_count") or 0) > int(item.get("organic_complete_count") or 0))
             text = (f"{name}: you've been there, and left biology on {left} world{'s' if left != 1 else ''}." if left
@@ -139,16 +139,6 @@ class DashboardSmallsMixin:
                 toast.push("TARGET", text)
             return
         self._small_say(text, heading="TARGET", topic="target_remark")
-
-    def _smalls_sound(self, status):
-        """Outrider's targeting sound: a fanfare, an upbeat pair or a thud."""
-        from voidcompass.voice import alert_sounds
-        who = companions.identity(self.config)
-        volume = _num(self.config.get(f"{who}_voice_volume", self.config.get("watcher_voice_volume", 80)))
-        name = alert_sounds.TARGET_SOUNDS.get(status)
-        if name:
-            threading.Thread(target=alert_sounds.play, args=(name, (volume if volume is not None else 80) / 100),
-                             name="TargetSound", daemon=True).start()
 
     def _smalls_leaving(self, target):
         """Targeting onward with mapping or biology undone, over the value you set."""
@@ -528,6 +518,9 @@ class DashboardSmallsMixin:
 
     # -- one entry for the journal --------------------------------------------------------------------
     def _smalls_event(self, event, raw, startup_replay=False):
+        # Leaving the station (or never getting in): the pad is no longer yours.
+        if event in PAD_GONE:
+            self._pad_info = None
         if startup_replay or not isinstance(raw, dict):
             return
         try:

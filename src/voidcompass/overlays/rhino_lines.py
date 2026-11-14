@@ -9,14 +9,16 @@ Fields: {slot} the rig's number, {left} rigs still out, {km} how far (one
 decimal), {body} the planet, {material} what the Rhino refined.
 """
 
-IMPORTANCE = {"rig_placed": 1, "rig_ready": 1, "rig_collected": 1, "rig_all_collected": 2, "rig_far": 2,
-              "rig_lost": 2, "rigs_left_behind": 2}
+# They answer your own rig keys (and warn of a rig about to be lost), so like
+# docking they're always said, at any chat setting but off.
+IMPORTANCE = {"rig_placed": 3, "rig_ready": 3, "rig_collected": 3, "rig_all_collected": 3, "rig_far": 3,
+              "rig_lost": 3, "rigs_left_behind": 3}
 
 WATCHER_NORMAL = {
     "rig_placed": ("Rig {slot} down.", "Rig {slot} set. Let it work.", "Rig {slot} in the ground.", "That's rig {slot} placed.",
                    "Rig {slot}. I'll keep an eye on it.", "Rig {slot} is digging.", "Rig {slot} down. Good spot.",
-                   "Another rig: {slot}.", "Rig {slot} set. Give it a couple of minutes.", "Rig {slot}, deployed."),
-    "rig_ready": ("Rig {slot} should be ready.", "Rig {slot}'s had its two minutes.", "Rig {slot}: ready to collect.",
+                   "Another rig: {slot}.", "Rig {slot} set. Give it its time.", "Rig {slot}, deployed."),
+    "rig_ready": ("Rig {slot} should be ready.", "Rig {slot}'s had its time.", "Rig {slot}: ready to collect.",
                   "You can pick up rig {slot}.", "Rig {slot} has done its work.", "Rig {slot}'s ready when you are.",
                   "That's rig {slot} ready.", "Rig {slot}. Collect it.", "Rig {slot} has finished.", "Time for rig {slot}."),
     "rig_collected": ("Rig {slot} back aboard. {left} still out.", "Got rig {slot}. {left} to go.",
@@ -100,11 +102,11 @@ PERSONAS = {
                               "{material} refined. One tonne closer to a satisfying total.",
                               "More {material} from the rigs. Patient work, properly rewarded."),
             "rig_placed": ("Rig {slot} deployed. I have noted its position, since the journal will not.",
-                           "Rig {slot} in the ground. Two minutes, and it should have something for us.",
+                           "Rig {slot} in the ground. Give it a little while, and it should have something for us.",
                            "Rig {slot} placed, Commander. Do remember where.",
                            "Rig {slot} down. I shall keep the register; the ground keeps the ore.",
                            "Rig {slot} at work. A tidy placement."),
-            "rig_ready": ("Rig {slot} should be ready, Commander. It has waited its two minutes.",
+            "rig_ready": ("Rig {slot} should be ready, Commander. It has had its time.",
                           "Rig {slot} is ready to collect. Punctual, as rigs go.",
                           "Rig {slot} has finished. I recommend collecting it before it feels neglected.",
                           "Collect rig {slot} at your convenience. Which is now.",
@@ -158,11 +160,11 @@ PERSONAS = {
                               "The Rhino refined {material}. One more line in the ledger.",
                               "{material}. Surface mining is slow, but the data is excellent."),
             "rig_placed": ("Rig {slot} placed. I have recorded its exact position. The journal will not.",
-                           "Rig {slot} active. Estimated useful time: two minutes.",
+                           "Rig {slot} active. Estimated useful time: as long as your last ones took.",
                            "Rig {slot} down. Spacing looks correct. I checked.",
                            "Rig {slot} deployed. Another sampling point in the grid.",
                            "Rig {slot} in the ground. I am already curious what it finds."),
-            "rig_ready": ("Rig {slot} has run two minutes. Ready to collect.",
+            "rig_ready": ("Rig {slot} has run its time. Ready to collect.",
                           "Rig {slot}: ready. The yield should be waiting.",
                           "Rig {slot} finished. Please collect. I would like the numbers.",
                           "Collect rig {slot}. It has completed its cycle.",
@@ -215,12 +217,12 @@ PERSONAS = {
                               "{material} aboard the Rhino. A miner's patience, rewarded.",
                               "{material}, refined. Another tonne for the tally."),
             "rig_placed": ("Rig {slot} set, Commander. Like dropping a line.",
-                           "Rig {slot} in the ground. Give it two minutes.",
+                           "Rig {slot} in the ground. Give it its time.",
                            "Rig {slot} placed. I've marked it on my chart; the journal won't.",
                            "Rig {slot} down. Mind its spacing from the others.",
                            "Rig {slot} working. Good ground for it."),
             "rig_ready": ("Rig {slot} should be ready, Commander. Haul it in.",
-                          "Rig {slot}'s had its two minutes. Collect it.",
+                          "Rig {slot}'s had its time. Collect it.",
                           "Rig {slot} done. Time to bring in the catch.",
                           "Rig {slot} ready. Don't leave it waiting.",
                           "Collect rig {slot}. It's finished its work."),

@@ -8,8 +8,10 @@
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
-  <!-- Rig Tracker (5.5.10): the mining rigs set down on this planet, each a
-       dial pointing the way it lies from where you face. -->
+  <!-- Rig Tracker: everything for the Rhino in one box. A dial for each rig
+       pointing the way it lies from where you face, then the guide, the
+       deposit you're nearest, the targets round you and the status (each on
+       or off in Overlay Studio), the survey and plan lines and the holds. -->
   <main id="rigs" class="rigs empty">
     <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <header class="notice">
@@ -17,8 +19,14 @@
       <strong id="rigs-body">—</strong>
       <b id="rigs-count"></b>
     </header>
+    <div id="rigs-hazard" class="hazard" hidden></div>
+    <section id="rigs-aboard" class="part aboard" hidden></section>
+    <section id="rigs-guide" class="part" hidden></section>
     <ol id="rigs-dials" class="dials"></ol>
     <p id="rigs-order" class="order"></p>
+    <section id="rigs-deposit" class="part" hidden></section>
+    <section id="rigs-targets" class="part" hidden></section>
+    <section id="rigs-status" class="part" hidden></section>
     <ul id="rigs-survey" class="survey" hidden></ul>
     <ul id="rigs-holds" class="holds"></ul>
     <p id="rigs-hint" class="hint"></p>
@@ -27,6 +35,7 @@
   <script src="/assets/frame-cap.js"></script>
   <script src="/assets/overlay-layout.js"></script>
   <script src="/assets/overlay-client.js"></script>
+  <script src="/assets/rhino-draw.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

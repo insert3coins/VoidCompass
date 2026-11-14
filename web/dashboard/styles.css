@@ -106,6 +106,12 @@ body.ready .app { opacity: 1; visibility: visible; }
 .overlay-quick button:hover { border-color: var(--border); color: var(--muted); }
 .overlay-quick button.on { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-soft)); color: var(--text); }
 .overlay-quick button.on i { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+/* Overlay groups (5.8.1) lead the chips; the label and rule only show in the PANELS menu. */
+.overlay-quick .og-quick { border-color: color-mix(in srgb, var(--orange) 35%, var(--border-soft)); }
+.overlay-quick .og-quick i { border-radius: 1px; }
+.overlay-quick .og-quick.on { border-color: color-mix(in srgb, var(--orange) 60%, var(--border-soft)); }
+.overlay-quick .og-quick.on i { border-color: var(--orange); background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+.overlay-quick .og-quick-label, .overlay-quick .og-quick-rule { display: none; }
 .overlay-switchboard.all-hidden .overlay-quick button.on { color: var(--muted); }
 .overlay-switchboard.all-hidden .overlay-quick button.on i { border-color: var(--orange); background: transparent; box-shadow: none; }
 .overlay-quick button:focus-visible, .overlay-all:focus-visible, .overlay-more:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
@@ -179,13 +185,13 @@ body.atlas-focus .atlas-frame-shell {
 body.atlas-focus .atlas-frame { pointer-events: auto; }
 
 .overview-modules { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); grid-auto-flow: row; gap: 13px; align-items: stretch; }
-.overview-modules > .decision-card, .overview-modules > .preflight-card, .overview-modules > .telemetry-strip { grid-column: span 12; }
-.overview-modules > .feed-card { grid-column: span 12; }
-.overview-modules > .survey-card { grid-column: span 7; }
-.overview-modules > .route-card { grid-column: span 5; }
+.overview-modules .bridge-lane > .decision-card, .overview-modules .bridge-lane > .preflight-card, .overview-modules .bridge-lane > .telemetry-strip { grid-column: span 12; }
+.overview-modules .bridge-lane > .feed-card { grid-column: span 12; }
+.overview-modules .bridge-lane > .survey-card { grid-column: span 7; }
+.overview-modules .bridge-lane > .route-card { grid-column: span 5; }
 .overview-modules.route-hidden > .survey-card { grid-column: span 12; }
-.overview-modules > .session-card, .overview-modules > .priority-card, .overview-modules > .codex-hunt-card { grid-column: span 4; }
-.overview-modules > [hidden] { display: none !important; }
+.overview-modules .bridge-lane > .session-card, .overview-modules .bridge-lane > .priority-card, .overview-modules .bridge-lane > .codex-hunt-card { grid-column: span 4; }
+.overview-modules .bridge-lane > [hidden] { display: none !important; }
 .card { min-width: 0; container-type: inline-size; background: linear-gradient(145deg, color-mix(in srgb, var(--panel) 96%, transparent), color-mix(in srgb, var(--panel-alt) 91%, transparent)); border: 1px solid var(--border-soft); position: relative; overflow: hidden; }
 .card::after { content: ""; position: absolute; width: 17px; height: 17px; right: -1px; bottom: -1px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .accent-card { border-top-color: var(--accent); }
@@ -831,7 +837,7 @@ button.cockpit-button.busy::after { opacity: 1; animation: cockpit-button-scan .
 .settings-workspace-grid,.about-grid,.achievement-grid { min-width: 0; }
 .page { width: 100%; }
 .card > *, .workspace-card > *,
-.workspace-grid > *, .overview-modules > *, .intel-grid > *,
+.workspace-grid > *, .overview-modules .bridge-lane > *, .intel-grid > *,
 .records-grid > *, .tool-grid > *, .settings-grid > *,
 .mission-layout > *, .ground-grid > *, .carrier-grid > *,
 .settings-workspace-grid > *, .stellar-grid > *,
@@ -901,8 +907,8 @@ input,select,textarea,button { max-width: 100%; }
   .workspace-grid.profile-workspace-grid { column-count: 1; }
   .route-workspace-grid > .neutron-plotter-card,
   .carrier-grid > .carrier-expedition-card { grid-column: auto; }
-  .overview-modules > .session-card,.overview-modules > .priority-card,
-  .overview-modules > .codex-hunt-card { grid-column: span 12; }
+  .overview-modules .bridge-lane > .session-card,.overview-modules .bridge-lane > .priority-card,
+  .overview-modules .bridge-lane > .codex-hunt-card { grid-column: span 12; }
   .workspace-metrics,.record-metrics,.profile-ship-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .workspace-tabs { flex-wrap: wrap; }
   .workspace-tabs button { flex: 1 1 140px; min-width: 0; }
@@ -920,10 +926,10 @@ input,select,textarea,button { max-width: 100%; }
   .galnet-reader-telemetry > span:nth-child(3) { display: none; }
   .topbar { grid-template-columns: 1fr 1.3fr auto; }
   .commander { display: none; }
-  .overview-modules > .survey-card, .overview-modules > .route-card { grid-column: span 6; }
-  .overview-modules > .session-card, .overview-modules > .priority-card { grid-column: span 6; }
-  .overview-modules > .codex-hunt-card { grid-column: span 12; }
-  .overview-modules > .feed-card { grid-column: span 12; }
+  .overview-modules .bridge-lane > .survey-card, .overview-modules .bridge-lane > .route-card { grid-column: span 6; }
+  .overview-modules .bridge-lane > .session-card, .overview-modules .bridge-lane > .priority-card { grid-column: span 6; }
+  .overview-modules .bridge-lane > .codex-hunt-card { grid-column: span 12; }
+  .overview-modules .bridge-lane > .feed-card { grid-column: span 12; }
   .deck-module-controls { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .telemetry-strip { grid-template-columns: repeat(2,1fr); }
   .tool-grid { grid-template-columns: repeat(2,1fr); }
@@ -932,8 +938,8 @@ input,select,textarea,button { max-width: 100%; }
 }
 
 @media (max-width: 1180px) {
-  .overview-modules > .session-card,.overview-modules > .priority-card,
-  .overview-modules > .codex-hunt-card { grid-column: span 12; }
+  .overview-modules .bridge-lane > .session-card,.overview-modules .bridge-lane > .priority-card,
+  .overview-modules .bridge-lane > .codex-hunt-card { grid-column: span 12; }
   .neutron-form { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 
@@ -949,9 +955,9 @@ input,select,textarea,button { max-width: 100%; }
   .top-metrics div { padding: 0 8px; }
   .top-metrics div:last-child { display: none; }
   .intel-grid, .records-grid, .settings-grid { grid-template-columns: 1fr; }
-  .overview-modules > .session-card, .overview-modules > .priority-card,
-  .overview-modules > .codex-hunt-card { grid-column: span 12; }
-  .overview-modules > .feed-card { grid-column: span 12; }
+  .overview-modules .bridge-lane > .session-card, .overview-modules .bridge-lane > .priority-card,
+  .overview-modules .bridge-lane > .codex-hunt-card { grid-column: span 12; }
+  .overview-modules .bridge-lane > .feed-card { grid-column: span 12; }
   .galnet-reader { padding: 16px; }.galnet-reader-shell > main { grid-template-columns: 250px minmax(0,1fr); }
   .galnet-reader-header { grid-template-columns:minmax(230px,1fr) auto; }.galnet-reader-telemetry { display:none; }
   .galnet-article > header { padding-left:30px; padding-right:30px; }.galnet-article-body,.galnet-article > footer { padding-left:30px; padding-right:30px; }

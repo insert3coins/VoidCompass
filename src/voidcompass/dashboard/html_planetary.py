@@ -12,6 +12,7 @@ import logging
 import math
 
 from voidcompass.core import companion_features
+from voidcompass.overlays.rig_tracker import local_offset
 from voidcompass.overlays.survey_status_hud import annotate_codex, body_codex_flag, build_survey_model
 
 
@@ -59,18 +60,16 @@ def _point(row):
 
 
 class _Plane:
-    """Metres east and north of an anchor on a sphere of ``radius``: close
-    enough for the few kilometres a survey covers."""
+    """Metres east and north of an anchor on a sphere of ``radius``, by
+    great-circle range and bearing, so it holds on small bodies and near a pole."""
 
     def __init__(self, anchor, radius):
         self.lat0, self.lon0 = anchor
         self.radius = float(radius)
-        self.cos0 = math.cos(math.radians(self.lat0))
 
     def __call__(self, point):
-        lat, lon = point
-        dlon = (lon - self.lon0 + 540.0) % 360.0 - 180.0
-        return [round(math.radians(dlon) * self.radius * self.cos0, 1), round(math.radians(lat - self.lat0) * self.radius, 1)]
+        east, north = local_offset((self.lat0, self.lon0), point, self.radius)
+        return [round(east, 1), round(north, 1)]
 
 
 class HtmlPlanetaryMixin:

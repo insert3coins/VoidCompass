@@ -58,6 +58,7 @@ OVERLAY_SPECS = (
     OverlaySpec("galaxy_minimap_hud", "galaxy-minimap", "Void Compass Galaxy Minimap", "galaxy_minimap_overlay_enabled", "galaxy_minimap_hud_x", "galaxy_minimap_hud_y", (40, 600), (240, 280), "Galaxy Minimap", "MINIMAP", False, "galaxy_minimap", "overlay_hotkey_galaxy_minimap", "Galaxy Minimap"),
     # 5.5.18: the ground round you in the Rhino, apart from the minimap.
     OverlaySpec("rhino_map_hud", "rhino-map", "Void Compass Rhino Map", "rhino_map_overlay_enabled", "rhino_map_hud_x", "rhino_map_hud_y", (300, 600), (240, 280), "Rhino Map", "RHINO MAP", True, "rhino_map", "overlay_hotkey_rhino_map", "Rhino Map"),
+    # The Rhino's readouts: a compass tape, the guide, the deposit you're on, the targets and the status.
     OverlaySpec("postcard_hud", "postcards", "Void Compass Postcards", "postcard_overlay_enabled", "postcard_hud_x", "postcard_hud_y", (1700, 640), (380, 330), "Postcards", "POSTCARDS", True, "postcards", "overlay_hotkey_postcards", "Postcards"),
     # Rhino mining (5.5.10): the rigs you've set down, after SrvSurvey's rig tracker.
     OverlaySpec("rig_tracker_hud", "rig-tracker", "Void Compass Rig Tracker", "rig_tracker_overlay_enabled", "rig_tracker_hud_x", "rig_tracker_hud_y", (1320, 400), (420, 155), "Rig Tracker", "RIGS", True, "rig_tracker", "overlay_hotkey_rig_tracker", "Rig Tracker"),
@@ -88,6 +89,8 @@ def _overlay_hotkey(action: str) -> tuple[str, str, str, str]:
 OVERLAY_HOTKEY_SPECS = (
     ("layout_studio", "overlay_hotkey_layout_studio", "Toggle Overlay Layout Studio", None),
     ("toggle_all", "overlay_hotkey_toggle_all", "Show / hide all overlays", None),
+    # 5.8.1: overlay groups, by their place in Overlay Studio's list.
+    *((f"group_{slot}", f"overlay_hotkey_group_{slot}", f"Overlay group {slot}", None) for slot in range(1, 9)),
     _overlay_hotkey("navigation"),
     # The HUD's pages (5.5.17): follow what you're doing or choose, and the next page.
     ("hud_pages_mode", "overlay_hotkey_hud_pages_mode", "Navigation HUD: page mode (auto / manual)", None),
@@ -112,10 +115,16 @@ OVERLAY_HOTKEY_SPECS = (
     # The game logs nothing when a rig goes down: its key marks it where you stand.
     *((f"rig_{n}", f"overlay_hotkey_rig_{n}", f"Rig Tracker: rig {n} deployed / collected", None) for n in range(1, 7)),
     ("rig_clear", "overlay_hotkey_rig_clear", "Rig Tracker: forget the rigs on this planet", None),
-    # 5.7.6: a survey area after EDSMT, its centre and edge where you stand.
+    # 5.7.6: a survey area, its centre and edge where you stand.
     ("rhino_survey_centre", "overlay_hotkey_rhino_survey_centre", "Rhino survey: mark the centre here", None),
     ("rhino_survey_edge", "overlay_hotkey_rhino_survey_edge", "Rhino survey: mark the edge here", None),
     ("rhino_survey_clear", "overlay_hotkey_rhino_survey_clear", "Rhino survey: clear the survey on this planet", None),
+    ("rhino_deposit_mark", "overlay_hotkey_rhino_deposit_mark", "Rhino: mark a deposit here", None),
+    ("rhino_deposit_mined_out", "overlay_hotkey_rhino_deposit_mined_out", "Rhino: the deposit here is mined out", None),
+    ("rhino_trace", "overlay_hotkey_rhino_trace", "Rig planner: trace a deposit's edge / close the trace", None),
+    ("rhino_trace_forget", "overlay_hotkey_rhino_trace_forget", "Rig planner: forget the plan here", None),
+    ("rhino_circle", "overlay_hotkey_rhino_circle", "Rhino: planning circle here / clear it", None),
+    ("rhino_site_save", "overlay_hotkey_rhino_site_save", "Rhino: save this mining location", None),
     _overlay_hotkey("planet_materials"),
     _overlay_hotkey("powerplay"),
     _overlay_hotkey("gravity"),

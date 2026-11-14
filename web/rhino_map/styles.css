@@ -82,6 +82,7 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 .map #galaxy { will-change: transform; }
 
 #facts .warn { color: var(--red); }
+#facts .edge { color: var(--yellow, #ffb545); }
 
 /* Sized by its content (overlayfix.md): a square map, then the strip at its
    natural height, its facts wrapping rather than cut short; the window

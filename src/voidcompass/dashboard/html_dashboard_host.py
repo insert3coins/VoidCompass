@@ -565,8 +565,11 @@ class DashboardApi:
         url = self._host.dashboard_url
         url += ("&" if "?" in url else "?") + f"solo=1&page={page}"
         keeper = _PopOutWindow(self._host, page, rect)
+        # The Focused Log is made for a small window beside the game.
+        small = page == "focused-log"
         window = webview.create_window(f"Void Compass · {page.replace('-', ' ').title()}", url, js_api=self,
-                                       width=1400, height=900, min_size=(720, 480), background_color="#070b10",
+                                       width=820 if small else 1400, height=680 if small else 900,
+                                       min_size=(480, 420) if small else (720, 480), background_color="#070b10",
                                        text_select=True, hidden=True)
         if window is None:
             return False

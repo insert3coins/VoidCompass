@@ -31,7 +31,7 @@ from voidcompass.overlays.hud import HUD_FONT_FACES, HUD_LABEL_SIZES, HUD_SCENE_
 # How lively the Navigation HUD's holographic scenes are.
 HUD_ANIMATION_LEVELS = ("Calm", "Standard", "Energetic")
 from voidcompass.overlays.html_heartbeat_overlay import thought_zone
-from voidcompass.overlays import galaxy_minimap_hud, hud_pages, postcards, surface_map
+from voidcompass.overlays import galaxy_minimap_hud, hud_pages, postcards, rig_sections, surface_map
 from voidcompass.overlays.jump_info_hud import LINGER_CHOICES as JUMP_INFO_LINGER_CHOICES, linger_seconds
 from voidcompass.overlays.galnet_ticker_hud import (
     TICKER_CONTENT, TICKER_CRT, TICKER_GLITCH, TICKER_GLITCH_STRENGTH, TICKER_SPEEDS,
@@ -43,7 +43,8 @@ from voidcompass.overlays.music_player_hud import (
 )
 from voidcompass.overlays.rhino_map_hud import rhino_map_size
 from voidcompass.overlays.rig_tracker import (
-    HERE_M, HERE_RANGE_M, SPACING_M, SPACING_RANGE_M, WARN_M, WARN_RANGE_M, rig_here_m, rig_spacing_m, rig_warn_m,
+    DROP_M, DROP_RANGE_M, HERE_M, HERE_RANGE_M, SPACING_M, SPACING_RANGE_M, WARN_M, WARN_RANGE_M,
+    rig_drop_m, rig_here_m, rig_spacing_m, rig_warn_m,
 )
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 from voidcompass.colonisation.views import overlay_options as colony_overlay_options
@@ -304,6 +305,7 @@ class HtmlOverlayStudioMixin:
             "monitors": monitors,
             "overlays": overlays,
             "presets": preset_names,
+            "groups": self._overlay_groups_studio(),
             "ground_target": {
                 "active": ground_configured,
                 "lat": _number(getattr(self, "target_lat", None)) if ground_configured else None,
@@ -391,9 +393,11 @@ class HtmlOverlayStudioMixin:
                 "galaxy_minimap_text_scale_percent": heartbeat_text_size(self.config.get("galaxy_minimap_text_scale_percent")),
                 "galaxy_minimap_region_text_percent": heartbeat_text_size(self.config.get("galaxy_minimap_region_text_percent")),
                 "rig_tracker_show_holds": bool(self.config.get("rig_tracker_show_holds", True)),
+                **{f"rig_tracker_{name}": shown for name, shown in rig_sections.section_options(self.config).items()},
                 "rig_tracker_here_m": rig_here_m(self.config),
                 "rig_tracker_spacing_m": rig_spacing_m(self.config),
                 "rig_tracker_warn_m": rig_warn_m(self.config),
+                "rig_tracker_drop_m": rig_drop_m(self.config),
                 "postcard_hold_s": postcards.postcard_options(self.config)["hold"],
                 "postcard_photo": postcards.postcard_options(self.config)["photo"],
                 "postcard_size": postcards.postcard_options(self.config)["size"],
@@ -631,6 +635,10 @@ class HtmlOverlayStudioMixin:
         if bool(self.config.get("overlay_hide_when_game_closed", False)) and getattr(self, "_game_closed", False):
             # The game is shut down (or gone): only the music player stays.
             hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in self.GAME_CLOSED_KEEP}
+        # Overlay groups (5.8.1): what the groups that are on (and off) leave hidden.
+        groups_hidden = getattr(self, "_overlay_groups_hidden", None)
+        if callable(groups_hidden):
+            hidden |= groups_hidden()
         if self.config.get("colony_hide_other_overlays", False) and getattr(self, "_colony_overlay_showing", False):
             # While the Construction Needs panel is up: it, the Navigation
             # HUD, notifications, gravity warnings and the heartbeat stay.
@@ -662,6 +670,15 @@ class HtmlOverlayStudioMixin:
                     self._ui_post(lambda: self._observe_game_session("Shutdown"), key="game-process")
             threading.Thread(target=worker, name="GameProcessCheck", daemon=True).start()
         self.root.call_later(20000, self._tick_game_process)
+
+    def _overlay_groups_studio(self):
+        """The groups for Overlay Studio and the header: theirs, the activities
+        and each group hotkey's key."""
+        from voidcompass.core import overlay_groups
+        brief = self._overlay_groups_brief() if callable(getattr(self, "_overlay_groups_brief", None)) else {"groups": []}
+        keys = {slot: str(self.config.get(f"overlay_hotkey_group_{slot}") or "") for slot in range(1, overlay_groups.MAX_GROUPS + 1)}
+        return {**brief, "activities": [list(item) for item in overlay_groups.ACTIVITIES], "max": overlay_groups.MAX_GROUPS,
+                "keys": {slot: key for slot, key in keys.items() if key}}
 
     def _set_overlay_map_hiding(self, overlay_id, hide):
         """Overlay Studio inspector: whether one overlay hides on the maps."""
@@ -714,7 +731,7 @@ class HtmlOverlayStudioMixin:
             "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion", "lyra_hud_motion",
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "galaxy_minimap_orders", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
-            "rig_tracker_show_holds",
+            "rig_tracker_show_holds", "rig_tracker_guide", "rig_tracker_deposit", "rig_tracker_targets", "rig_tracker_status",
             "hud_pages_takeover", "hud_hold_lists", "hud_page_expedition", "hud_page_jump", "hud_page_survey", "hud_page_planet", "hud_page_rhino", "hud_page_mining", "hud_page_combat", "hud_page_station", "hud_page_colony", "hud_page_carrier", "hud_page_trade", "hud_page_powerplay",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps", "overlay_hide_in_menus", "overlay_hide_when_game_closed", "overlay_transparency_fix", "overlay_classic_windows",
@@ -768,7 +785,7 @@ class HtmlOverlayStudioMixin:
             music = getattr(self, "music_player_hud", None)
             if music is not None:
                 music.apply_settings()
-        elif key == "rig_tracker_show_holds":
+        elif key.startswith("rig_tracker_"):
             update_rigs = getattr(self, "_rig_update_overlay", None)
             if callable(update_rigs):
                 update_rigs()
@@ -823,6 +840,7 @@ class HtmlOverlayStudioMixin:
             "rig_tracker_here_m": (*HERE_RANGE_M, HERE_M, True),
             "rig_tracker_spacing_m": (*SPACING_RANGE_M, SPACING_M, True),
             "rig_tracker_warn_m": (*WARN_RANGE_M, WARN_M, True),
+            "rig_tracker_drop_m": (*DROP_RANGE_M, DROP_M, True),
         }
         # Studio saves one field as it changes, so a key missing from the
         # payload keeps the commander's current value rather than resetting.
@@ -832,7 +850,7 @@ class HtmlOverlayStudioMixin:
             value = _number(payload.get(key), default)
             value = max(low, min(high, value if value is not None else default))
             self.config[key] = int(round(value)) if integer else round(value, 2)
-        if {"rig_tracker_here_m", "rig_tracker_spacing_m", "rig_tracker_warn_m"} & set(payload):
+        if {"rig_tracker_here_m", "rig_tracker_spacing_m", "rig_tracker_warn_m", "rig_tracker_drop_m"} & set(payload):
             for refresh in ("_rig_update_overlay", "_update_rhino_map"):
                 update = getattr(self, refresh, None)
                 if callable(update):
@@ -1086,6 +1104,14 @@ class HtmlOverlayStudioMixin:
             return True
         if operation == "toggle":
             return self._html_overlay_toggle(overlay_id)
+        if operation == "group_save":
+            return self._overlay_group_save(payload.get("group") or {})
+        if operation == "group_delete":
+            return self._overlay_group_delete(_text(payload.get("group_id"), 40))
+        if operation == "group_toggle":
+            return self._overlay_group_toggle(_text(payload.get("group_id"), 40))
+        if operation == "group_move":
+            return self._overlay_group_move(_text(payload.get("group_id"), 40), payload.get("step"))
         if operation == "snap":
             return self._html_overlay_snap(overlay_id)
         if operation == "reset":

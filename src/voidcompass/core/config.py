@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import re
@@ -154,6 +155,14 @@ DEPRECATED_CONFIG_KEYS = (
     'dashboard_compact_geometry',
     'dashboard_expanded_geometry',
     'dashboard_window_geometry_version',
+    # Target sounds were removed in 5.8.1; the Rhino Compass and Rhino Status
+    # were folded into the Rig Tracker.
+    'target_sounds',
+    'rhino_compass_overlay_enabled', 'rhino_compass_hud_x', 'rhino_compass_hud_y', 'rhino_compass_width',
+    'rhino_compass_span', 'rhino_compass_text_scale_percent', 'overlay_hotkey_rhino_compass',
+    'rhino_status_overlay_enabled', 'rhino_status_compass', 'rhino_status_guide', 'rhino_status_deposit',
+    'rhino_status_targets', 'rhino_status_status', 'rhino_status_hud_x', 'rhino_status_hud_y', 'rhino_status_width',
+    'rhino_status_text_scale_percent', 'overlay_hotkey_rhino_status',
 ) + RETIRED_COMPASS_CONFIG_KEYS + RETIRED_SYSTEM_INFO_CONFIG_KEYS + RETIRED_HATCHLING_CONFIG_KEYS
 # Overlay/HUD colors are seeded from the active theme at startup; the live
 # theme bridge rebinds these module constants and repaints open overlays.
@@ -174,6 +183,8 @@ PROFILE_TEXT_SETTINGS = (
     "start_page",
     # 5.7.8: what's said as you target a system: "crew", "tone" (a toast) or "off".
     "target_remarks",
+    # 5.8.1: Rhino surface commodities you never mine, comma separated (Settings).
+    "rhino_commodities_hidden",
     # 5.7.7: Crew Orders, how often and which kinds.
     "orders_frequency",
     # 5.7.7: crew banter, how often and how many talk.
@@ -287,6 +298,20 @@ PROFILE_TEXT_SETTINGS = (
     "overlay_hotkey_rhino_survey_centre",
     "overlay_hotkey_rhino_survey_edge",
     "overlay_hotkey_rhino_survey_clear",
+    "overlay_hotkey_rhino_deposit_mark",
+    "overlay_hotkey_rhino_deposit_mined_out",
+    "overlay_hotkey_rhino_trace",
+    "overlay_hotkey_rhino_trace_forget",
+    "overlay_hotkey_rhino_circle",
+    "overlay_hotkey_rhino_site_save",
+    "overlay_hotkey_group_1",
+    "overlay_hotkey_group_2",
+    "overlay_hotkey_group_3",
+    "overlay_hotkey_group_4",
+    "overlay_hotkey_group_5",
+    "overlay_hotkey_group_6",
+    "overlay_hotkey_group_7",
+    "overlay_hotkey_group_8",
     "overlay_hotkey_galaxy_minimap",
     "overlay_hotkey_galaxy_minimap_view",
     "overlay_hotkey_rhino_map",
@@ -346,7 +371,6 @@ PROFILE_BOOL_SETTINGS = (
     "pad_location",
     "mining_recap",
     "canonn_reports",
-    "target_sounds",
     "orders_campaigns",
     "orders_watcher",
     "orders_copy_target",
@@ -481,6 +505,10 @@ PROFILE_BOOL_SETTINGS = (
     "galnet_ticker_overlay_enabled",
     "galnet_ticker_show_date",
     "rig_tracker_show_holds",
+    "rig_tracker_guide",
+    "rig_tracker_deposit",
+    "rig_tracker_targets",
+    "rig_tracker_status",
     "galnet_ticker_crt_motion",
     "galnet_ticker_glitch_on_news",
     "music_player_overlay_enabled",
@@ -606,6 +634,7 @@ PROFILE_VALUE_SETTINGS = (
     "rig_tracker_here_m",
     "rig_tracker_spacing_m",
     "rig_tracker_warn_m",
+    "rig_tracker_drop_m",
     "galnet_ticker_stories",
     "galnet_ticker_text_scale_percent",
     "music_player_hud_x",
@@ -660,6 +689,9 @@ PROFILE_VALUE_SETTINGS = (
     "overlay_frame_rate",
     "overlay_map_keep_visible",
     "overlay_menu_keep_visible",
+    # 5.8.1: overlay groups and which are on.
+    "overlay_groups",
+    "overlay_group_state",
     "overlay_opacity_percent",
     "overlay_opacity_by_overlay",
     # 5.7.3: a controller button (or combination) for each shortcut.
@@ -670,6 +702,7 @@ PROFILE_VALUE_SETTINGS = (
     "overlay_layout_studio_geometry",
     "dashboard_module_order",
     "dashboard_hidden_modules",
+    "dashboard_module_lanes",
     "dashboard_page_layouts",
     "dashboard_window_geometry",
     "dashboard_window_physical",
@@ -775,6 +808,29 @@ def rename_commander_profile(config, key, new_name, previous_name):
     if previous_name and previous_name not in renames:
         renames.append(previous_name)
     return profile
+
+
+def resolve_hotkey_clashes(values, defaults):
+    """Two actions on one shortcut: the one still on its shipped default gives
+    way to the one the commander chose, so a new default never takes a key
+    already in use. Neither one would work, and Settings refuses every save
+    while they clash. Returns the settings cleared."""
+    owners = {}
+    for key in sorted(name for name in values if name.startswith("overlay_hotkey_")):
+        chord = str(values.get(key) or "").strip().casefold()
+        if chord:
+            owners.setdefault(chord, []).append(key)
+    cleared = []
+    for chord, keys in owners.items():
+        if len(keys) < 2:
+            continue
+        chosen = [key for key in keys if str(defaults.get(key) or "").strip().casefold() != chord]
+        keep = chosen[0] if chosen else keys[0]
+        for key in keys:
+            if key != keep:
+                values[key] = ""
+                cleared.append(key)
+    return cleared
 
 
 def get_profile_dir(profile_key):
@@ -932,7 +988,7 @@ def apply_profile_config(config, profile_key=None):
     text_defaults = {
         "edsm_cmdr_name": profile.get("commander_name", ""),
         "orders_frequency": "session",
-        "start_page": "last", "target_remarks": "crew",
+        "start_page": "last", "target_remarks": "crew", "rhino_commodities_hidden": "",
         "crew_banter": "sometimes", "crew_banter_size": "three", "crew_banter_length": "short",
         # 5.7.7: a duty never chosen showed blank; it starts at its default.
         "crew_rota_docked": "aster", "crew_rota_scanning": "axiom", "crew_rota_surface": "axiom",
@@ -1051,6 +1107,20 @@ def apply_profile_config(config, profile_key=None):
         "overlay_hotkey_rig_clear": "",
         "overlay_hotkey_rhino_survey_centre": "Ctrl+Alt+7",
         "overlay_hotkey_rhino_survey_edge": "Ctrl+Alt+8",
+        "overlay_hotkey_rhino_deposit_mark": "Ctrl+Alt+9",
+        "overlay_hotkey_rhino_deposit_mined_out": "",
+        "overlay_hotkey_rhino_trace": "Ctrl+Alt+0",
+        "overlay_hotkey_rhino_trace_forget": "",
+        "overlay_hotkey_rhino_circle": "",
+        "overlay_hotkey_rhino_site_save": "",
+        "overlay_hotkey_group_1": "",
+        "overlay_hotkey_group_2": "",
+        "overlay_hotkey_group_3": "",
+        "overlay_hotkey_group_4": "",
+        "overlay_hotkey_group_5": "",
+        "overlay_hotkey_group_6": "",
+        "overlay_hotkey_group_7": "",
+        "overlay_hotkey_group_8": "",
         "overlay_hotkey_rhino_survey_clear": "",
         "overlay_hotkey_galaxy_minimap": "",
         "overlay_hotkey_galaxy_minimap_view": "",
@@ -1096,7 +1166,7 @@ def apply_profile_config(config, profile_key=None):
         "orders_copy_target": True, "orders_open_map": False,
         "crew_banter_flight": True, "crew_banter_exploring": True, "crew_banter_port": True, "crew_banter_crew": True,
         "crew_banter_quiet": True,
-        "crew_warnings": True, "pad_location": True, "mining_recap": True, "canonn_reports": True, "target_sounds": True,
+        "crew_warnings": True, "pad_location": True, "mining_recap": True, "canonn_reports": True,
         "orders_kind_exobiology": True, "orders_kind_exploration": True, "orders_kind_travel": True, "orders_kind_trade": True, "orders_kind_colonisation": True, "orders_kind_powerplay": True,
         "watcher_voice_enabled": False,
         "watcher_listen_enabled": False,
@@ -1114,6 +1184,10 @@ def apply_profile_config(config, profile_key=None):
         "galnet_auto_rotate_enabled": True,
         "galnet_ticker_show_date": True,
         "rig_tracker_show_holds": True,
+        "rig_tracker_guide": True,
+        "rig_tracker_deposit": True,
+        "rig_tracker_targets": True,
+        "rig_tracker_status": True,
         "galnet_ticker_crt_motion": True,
         "galnet_ticker_glitch_on_news": True,
         "music_player_show_art": True,
@@ -1216,6 +1290,8 @@ def apply_profile_config(config, profile_key=None):
                 "overlay_transparency_fix": False,
                 "overlay_classic_windows": False,
                 "overlay_map_keep_visible": [],
+                "overlay_groups": [],
+                "overlay_group_state": {},
                 # Construction Needs is made for station services (5.7.1).
                 "overlay_menu_keep_visible": ["colony_needs_hud"],
                 # Overlays with their own opacity (Studio id: percent).
@@ -1226,8 +1302,9 @@ def apply_profile_config(config, profile_key=None):
                 "overlay_opacity_percent": 100,
                 "overlay_layout_presets": {},
                 "overlay_layout_studio_geometry": "1080x720",
-                "dashboard_module_order": ["route", "session", "priorities", "codex", "feed"],
+                "dashboard_module_order": ["system", "activity", "route", "session", "priorities", "codex", "feed"],
                 "dashboard_hidden_modules": [],
+                "dashboard_module_lanes": {},
                 "dashboard_page_layouts": {},
                 "dashboard_window_geometry": "1720x1120",
                 "dashboard_window_physical": False,
@@ -1270,6 +1347,7 @@ def apply_profile_config(config, profile_key=None):
                 "rig_tracker_here_m": 40,
                 "rig_tracker_spacing_m": 78,
                 "rig_tracker_warn_m": 3500,
+                "rig_tracker_drop_m": 7,
                 "galnet_ticker_stories": 5,
                 "galnet_ticker_text_scale_percent": 0,
                 "music_player_text_scale_percent": 0,
@@ -1304,6 +1382,9 @@ def apply_profile_config(config, profile_key=None):
                 profile_defaults[setting] if not is_initial_profile and setting in profile_defaults
                 else config.get(setting)
             )
+    cleared = resolve_hotkey_clashes(profile, text_defaults)
+    if cleared:
+        logging.info("Hotkeys cleared where a default clashed with your own: %s", ", ".join(cleared))
     for setting in PROFILE_TEXT_SETTINGS:
         config[setting] = profile.get(setting, "")
     for setting in PROFILE_BOOL_SETTINGS:
@@ -1435,6 +1516,20 @@ def load_config():
         'overlay_hotkey_rig_clear': '',
         'overlay_hotkey_rhino_survey_centre': 'Ctrl+Alt+7',
         'overlay_hotkey_rhino_survey_edge': 'Ctrl+Alt+8',
+        'overlay_hotkey_rhino_deposit_mark': 'Ctrl+Alt+9',
+        'overlay_hotkey_rhino_deposit_mined_out': '',
+        'overlay_hotkey_rhino_trace': 'Ctrl+Alt+0',
+        'overlay_hotkey_rhino_trace_forget': '',
+        'overlay_hotkey_rhino_circle': '',
+        'overlay_hotkey_rhino_site_save': '',
+        'overlay_hotkey_group_1': '',
+        'overlay_hotkey_group_2': '',
+        'overlay_hotkey_group_3': '',
+        'overlay_hotkey_group_4': '',
+        'overlay_hotkey_group_5': '',
+        'overlay_hotkey_group_6': '',
+        'overlay_hotkey_group_7': '',
+        'overlay_hotkey_group_8': '',
         'overlay_hotkey_rhino_survey_clear': '',
         'overlay_hotkey_galaxy_minimap': '',
         'overlay_hotkey_galaxy_minimap_view': '',
@@ -1648,11 +1743,11 @@ def load_config():
         'orders_frequency': 'session',
         'start_page': 'last',
         'target_remarks': 'crew',
+        'rhino_commodities_hidden': '',
         'crew_warnings': True,
         'pad_location': True,
         'mining_recap': True,
         'canonn_reports': True,
-        'target_sounds': True,
         'leave_behind_cr': 2000000,
         'muted_lines': [],
         'explore_nearby_radius': 25,
@@ -1709,9 +1804,14 @@ def load_config():
         'galnet_ticker_content': 'summary',
         'galnet_ticker_show_date': True,
         'rig_tracker_show_holds': True,
+        'rig_tracker_guide': True,
+        'rig_tracker_deposit': True,
+        'rig_tracker_targets': True,
+        'rig_tracker_status': True,
         'rig_tracker_here_m': 40,
         'rig_tracker_spacing_m': 78,
         'rig_tracker_warn_m': 3500,
+        'rig_tracker_drop_m': 7,
         'galnet_ticker_crt': 'follow',
         'galnet_ticker_crt_motion': True,
         'galnet_ticker_glitch': 'occasional',
@@ -1768,8 +1868,9 @@ def load_config():
         'main_geometry': '1000x700',
         'dashboard_window_geometry': '1720x1120',
         'dashboard_window_physical': False,
-        'dashboard_module_order': ['route', 'session', 'priorities', 'codex', 'feed'],
+        'dashboard_module_order': ['system', 'activity', 'route', 'session', 'priorities', 'codex', 'feed'],
         'dashboard_hidden_modules': [],
+        'dashboard_module_lanes': {},
         'dashboard_page_layouts': {},
         'flight_log_geometry': '820x650',
         'flight_log_mode_enabled': False,
@@ -1865,6 +1966,8 @@ def load_config():
         'overlay_transparency_fix': False,
         'overlay_classic_windows': False,
         'overlay_map_keep_visible': [],
+        'overlay_groups': [],
+        'overlay_group_state': {},
         'overlay_menu_keep_visible': ['colony_needs_hud'],
         'overlay_opacity_by_overlay': {},
         # Controller buttons as shortcuts (5.7.3): on, none bound yet.
