@@ -2546,6 +2546,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         return {
             "values": values, "hotkeys": hotkeys, "health": health, "eddn": eddn,
             "rhino_commodities": list(SURFACE_MINING_NEW),
+            # 5.8.3: pads learnt at surface stations, and the designs they make.
+            "surface_pads": self._surface_pads_summary() if hasattr(self, "_surface_pads_summary") else {},
             # 5.7.3: controller buttons for the shortcuts, and what Elite does with each.
             "controllers": controllers() if callable(controllers) else {},
             # 5.7.3: talking to the Watcher by voice, and the ship commands it can press.
@@ -2859,7 +2861,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
     def _request_html_dashboard_page(self, page):
         page = _text(page, 40).casefold()
         if page not in {
-            "overview", "explore", "map", "records", "operations", "route",
+            "overview", "explore", "map", "records", "operations", "route", "journal-log",
             "overlay-studio", "settings", "about", *_HTML_WORKSPACE_PAGES,
         }:
             return False
@@ -4069,6 +4071,22 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 self._persist_config()
                 self._apply_active_profile_theme()
                 changed = True
+            elif operation == "export_pads":
+                written = self._surface_pads_export(payload.get("path")) if hasattr(self, "_surface_pads_export") else None
+                if written is None:
+                    return False
+                self.add_event_feed_entry("PADS", f"Pad layouts exported: {written.name}", severity="INFO")
+                changed = True
+            elif operation == "import_pads":
+                paths = [str(path)[:1000] for path in payload.get("paths") or () if isinstance(path, str)][:50]
+                result = self._surface_pads_import(paths) if hasattr(self, "_surface_pads_import") else None
+                if not result or not result["files"]:
+                    self.add_event_feed_entry("PADS", "Nothing imported: those aren't pad layout exports", severity="WARN")
+                    return False
+                self.add_event_feed_entry("PADS", f"Pooled {result['files']} file{'s' if result['files'] != 1 else ''}: "
+                                          f"{result['pads']} new pads at {result['stations']} new stations, {result['designs']} new designs",
+                                          severity="INFO")
+                changed = True
             elif operation == "test_raven":
                 # Raven Colonial: whose key is this, and is it this commander's?
                 api_key = _text(payload.get("api_key"), 300)
@@ -4420,7 +4438,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         if action == "page_changed":
             page = _text(payload.get("page"), 40).casefold()
             if page not in {
-                "overview", "explore", "map", "records", "operations", "route",
+                "overview", "explore", "map", "records", "operations", "route", "journal-log",
                 "overlay-studio", "settings", "about", "music", *_HTML_WORKSPACE_PAGES,
             }:
                 return False
@@ -4450,6 +4468,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         if action == "copy_next":
             self._dashboard_copy_next()
             return True
+        if action == "target_system":
+            # 5.8.3: 🎯 plots a route to it in the game's galaxy map.
+            return self._html_target_system(payload)
         if action == "set_auto_copy":
             self.config["auto_copy_waypoint"] = bool(payload.get("enabled"))
             self._persist_config()

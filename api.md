@@ -1182,6 +1182,7 @@ Everything on Explore & Survey's ROUTE tab: your waypoints, the places worth com
 |---|---|---|
 | GET | `/api/v1/route` | Your next destination, your waypoints (each with its `index`), and the expedition you're on |
 | POST | `/api/v1/route/copy-next` | Copy the next system to the clipboard, ready to paste into the galaxy map |
+| POST | `/api/v1/route/target` | Plot a route to a system in the game: `{"system": "Colonia"}` (and its id64 as `"address"`, if you have it, to check it took). Opens the galaxy map with your own key bindings, searches, plots and closes it; `409` and why when it can't (keys missing, another screen open, the drive charging…). How it went is said in the cockpit |
 | POST | `/api/v1/route/waypoints` | Add a waypoint at the end: `{"name": "Colonia", "note": "Jaques Station"}` |
 | POST | `/api/v1/route/waypoints/{n}` | Change waypoint `n`: any of `{"visited": true, "name": "...", "note": "...", "move": "up"}` |
 | POST | `/api/v1/route/waypoints/{n}/delete` | Remove waypoint `n` |
@@ -1371,7 +1372,8 @@ The mining rigs you've set down for Rhino mining, as the Rig Tracker overlay sho
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/v1/rigs` | The rigs on the planet you're on (`slot`, `distance_m`, `bearing`, `relative` to where you face, `here`, `at`, `commodity` it's working, `tonnes` refined from it), the order to collect them in, any rigs left on other planets, and `holds`: how full the Rhino's hold and the ship's are (`used`, `capacity`, `free`), and `aboard`: back in the ship after a Rhino run, its summary (`minutes`, `refined_t`, `taken` by commodity, rigs still `out`, the `site`, what's `next`), else null |
+| GET | `/api/v1/rigs` | The rigs on the planet you're on (`slot`, `distance_m`, `bearing`, `relative` to where you face, `here`, `at`, `commodity` it's working, `tonnes` refined from it, `fill_s` seconds filling since it went down or since you drove off after collecting from it, `collecting` while you're still collecting from it, `haul` the tonnes of this collection (or the last one), `ready_s` how long your rigs take once learnt, and `ready`), the order to collect them in, any rigs left on other planets, and `holds`: how full the Rhino's hold and the ship's are (`used`, `capacity`, `free`), and `aboard`: back in the ship after a Rhino run, its summary (`minutes`, `refined_t`, `taken` by commodity, rigs still `out`, the `site`, what's `next`), else null |
+| GET | `/api/v1/pads` | Landing pads learnt at surface stations (planetary ports, surface outposts, settlements), as Settings › EXPORT PAD LAYOUTS writes them: `stations` (by `market_id`, each pad landed on with `lat`, `lon` and the `heading` a ship faces on it, and the `planet_radius_m`) and `designs` (each station design's pads in metres, `x_m` east and `y_m` north, with their `heading`, how many stations of it you've seen and whether it's `trusted`). `format` is `voidcompass-surface-pads`, `version` 1 |
 | POST | `/api/v1/rigs/{n}` | Rig `n` (1 to 6) where you stand: deployed, or collected if it was already down (`"done": "placed"` or `"collected"`) |
 | POST | `/api/v1/rigs/clear` | Forget the rigs on this planet: `{"confirmed": true}` |
 

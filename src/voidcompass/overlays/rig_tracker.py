@@ -26,8 +26,7 @@ from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD, _integer
 
 SLOTS = 6
 # Closer than this, you're at the rig (Studio can change it, 10 to 200 m).
-HERE_M = 40.0
-HERE_RANGE_M = (10, 200)
+HERE_M = 25.0
 # Rigs want room between them (78 m, the community's working figure); the
 # game destroys a rig left 5 km behind, so warn well before; and a rig
 # that's worked its time (learnt from your own rigs) is worth collecting.
@@ -45,6 +44,22 @@ LAST_WARNING_M = 4800.0
 MIN_TIMED = 2
 TIMED_RANGE_S = (30, 1800)
 MAX_TIMINGS = 60
+# A rig keeps working after you collect from it, and fills again. A tonne
+# refined while you're at it (its HERE distance) starts a collection; the
+# collection is over, and the fill clock starts, when you leave it (it's no
+# longer HERE). The refinery goes on turning out tonnes after you've driven
+# off: those still count for the rig, but don't touch its clock. Only
+# collecting at it again does, and a tonne within SAME_COLLECTION_S of its
+# last is still the same collection (not a new fill to time). Waiting at the
+# rig for it to fill is common: a collection also ends when nothing has been
+# refined round it for QUIET_S, and the clock counts from its last tonne (while
+# you collect, a tonne comes every second or two).
+SAME_COLLECTION_S = 180.0
+QUIET_S = 30.0
+# A collection started well before the learnt time (you didn't wait for
+# READY) says nothing of how long a rig takes to fill: it isn't timed. Within
+# this share of it still counts, so the learnt time can come down if it's long.
+EARLY_SHARE = 0.9
 # Rigs left untouched this long are forgotten.
 FORGET_S = 7 * 86400
 # The rig lands behind the Rhino's cockpit, which is where Status.json puts you.
@@ -58,14 +73,10 @@ MAX_YIELDS = 60
 MIN_YIELDS = 3
 
 
-def rig_here_m(config):
-    """How close counts as HERE, from the commander's Studio setting."""
-    low, high = HERE_RANGE_M
-    try:
-        value = float((config or {}).get("rig_tracker_here_m", HERE_M))
-    except (TypeError, ValueError):
-        value = HERE_M
-    return int(round(max(low, min(high, value))))
+def rig_here_m(config=None):
+    """How close counts as HERE: 25 m, fixed (5.8.3; it was a Studio setting).
+    It's also where a collection ends and the rig's clock starts again."""
+    return int(HERE_M)
 
 
 def _key(system, body):
@@ -188,7 +199,8 @@ class RigStore:
                 for other_key, other in self.bodies.items():
                     if other_key != key:
                         (other.get("rigs") or {}).pop(str(slot), None)
-                rigs[str(slot)] = {"lat": round(float(lat), 6), "lon": round(float(lon), 6), "at": round(now, 1)}
+                rigs[str(slot)] = {"lat": round(float(lat), 6), "lon": round(float(lon), 6), "at": round(now, 1),
+                                   "fill_from": round(now, 1)}
                 if commodity:
                     rigs[str(slot)]["commodity"] = str(commodity)[:40]
                 if density:
@@ -198,8 +210,9 @@ class RigStore:
         self.save()
         return outcome
 
-    def book(self, system, body, slot, commodity, now=None):
-        """A refined tonne the rig threw up."""
+    def book(self, system, body, slot, commodity, now=None, at_rig=True):
+        """A refined tonne the rig threw up; ``at_rig`` when you're at it (else
+        the refinery's still finishing what you collected there)."""
         name = str(commodity or "").strip()[:40]
         if not name:
             return False
@@ -208,16 +221,54 @@ class RigStore:
             if not isinstance(rig, dict):
                 return False
             tonnes = rig.setdefault("tonnes", {})
-            first = not any(int(value or 0) for value in tonnes.values())
             tonnes[name] = int(tonnes.get(name) or 0) + 1
-            if first and rig.get("at") is not None:
-                # Its first tonne: collecting started, so it was ready by now.
-                now = time.time() if now is None else now
-                rig["ready_at"] = round(now, 1)
-                self.timings = (self.timings + [{"s": round(now - float(rig["at"])), "density": str(rig.get("density") or ""),
-                                                 "at": round(now, 1)}])[-MAX_TIMINGS:]
+            now = time.time() if now is None else now
+            last = rig.get("last_tonne_at")
+            same = last is not None and now - float(last) <= SAME_COLLECTION_S
+            if not rig.get("collecting") and at_rig:
+                if not same and rig.get("at") is not None:
+                    # A collection starting: it was full by now, since it went
+                    # down (or since you last left it after collecting), unless
+                    # you came for it before it was due.
+                    since = float(rig.get("fill_from") or rig["at"])
+                    expected = self.ready_s(rig.get("density") or "")
+                    if expected is None or now - since >= expected * EARLY_SHARE:
+                        self.timings = (self.timings + [{"s": round(now - since), "density": str(rig.get("density") or ""),
+                                                         "at": round(now, 1)}])[-MAX_TIMINGS:]
+                    rig["haul"] = 0
+                rig["collecting"] = True
+            # This collection's tonnes (the refinery's last ones included).
+            rig["haul"] = int(rig.get("haul") or 0) + 1
+            rig.pop("left_at", None)
+            rig["last_tonne_at"] = round(now, 1)
         self.save()
         return True
+
+    def left_behind(self, system, body, lat, lon, radius_m, now=None, here_m=HERE_M):
+        """Rigs whose collection is over: you've left them (no longer HERE),
+        and their clocks start now; or you've stayed and nothing has been
+        refined for QUIET_S, and they count from the last tonne. The slots
+        that started."""
+        now = time.time() if now is None else now
+        started = []
+        with self.lock:
+            for slot, rig in ((self.bodies.get(_key(system, body)) or {}).get("rigs") or {}).items():
+                if not isinstance(rig, dict) or not rig.get("collecting"):
+                    continue
+                last = float(rig.get("last_tonne_at") or rig["at"])
+                if surface_distance_m(lat, lon, float(rig["lat"]), float(rig["lon"]), radius_m) > here_m:
+                    fill_from = now
+                elif now - last >= QUIET_S:
+                    fill_from = last
+                else:
+                    continue
+                rig["collecting"] = False
+                rig.pop("left_at", None)
+                rig["fill_from"] = round(fill_from, 1)
+                started.append(int(slot))
+        if started:
+            self.save()
+        return started
 
     def ready_s(self, density=""):
         """How long your rigs take to be ready, in seconds, learnt from the ones
@@ -339,13 +390,21 @@ def rig_commodity(rig):
     return max(tonnes, key=lambda name: (int(tonnes[name] or 0), name)) if tonnes else ""
 
 
-def booking_rig(rigs, lat, lon, radius_m, within_m=BOOK_WITHIN_M):
-    """The rig a tonne refined here came from: the nearest one within reach."""
+def booking_rig(rigs, lat, lon, radius_m, within_m=BOOK_WITHIN_M, here_m=None, now=None):
+    """The rig a tonne refined here came from: the one you're at; else (with
+    ``here_m``) the one you were just collecting from, as the refinery goes on
+    working after you drive off; else the nearest within reach."""
     best = None
     for slot, rig in (rigs or {}).items():
         distance = surface_distance_m(lat, lon, rig["lat"], rig["lon"], radius_m)
         if distance <= within_m and (best is None or distance < best[0]):
             best = (distance, slot)
+    if here_m is not None and not (best and best[0] <= here_m):
+        now = time.time() if now is None else now
+        recent = [(float(rig.get("last_tonne_at") or 0), slot) for slot, rig in (rigs or {}).items()
+                  if rig.get("collecting") or now - float(rig.get("last_tonne_at") or 0) <= SAME_COLLECTION_S]
+        if recent:
+            return max(recent)[1]
     return best[1] if best else None
 
 
@@ -355,7 +414,7 @@ def rig_advice(rows, spacing_m=SPACING_M, warn_m=WARN_M):
     tracked = [row for row in rows or () if row.get("tracked") and row.get("distance_m") is not None]
     close = sorted((row for row in tracked if row["distance_m"] < spacing_m), key=lambda row: row["distance_m"])
     far = sorted((row for row in tracked if warn_m and row["distance_m"] >= warn_m), key=lambda row: -row["distance_m"])
-    ready = [row["slot"] for row in tracked if row.get("here") and row.get("ready")]
+    ready = [row["slot"] for row in tracked if row.get("ready")]
     return {
         "too_close": close[0]["slot"] if close else None,
         "too_far": [{"slot": row["slot"], "distance": round(row["distance_m"]),
@@ -393,13 +452,19 @@ def build_rig_model(rigs, lat, lon, heading, radius_m, body="", now=None, in_rhi
         distance = surface_distance_m(lat, lon, rig["lat"], rig["lon"], radius_m)
         bearing = bearing_deg(lat, lon, rig["lat"], rig["lon"])
         relative = (bearing - heading) % 360.0 if heading is not None else bearing
+        # Filling since it went down, or since you left it after collecting;
+        # nothing while you're still collecting from it.
+        collecting = bool(rig.get("collecting"))
+        fill_from = float(rig.get("fill_from") or rig["at"])
         row = {"slot": slot, "tracked": True, "distance_m": round(distance, 1), "bearing": round(bearing, 1),
                "relative": round(relative, 1), "here": distance <= here_m, "at": float(rig["at"]),
-               "age_s": round(max(0.0, now - float(rig["at"]))), "commodity": rig_commodity(rig),
+               "age_s": round(max(0.0, now - float(rig["at"]))), "fill_from": fill_from, "collecting": collecting,
+               "fill_s": 0 if collecting else round(max(0.0, now - fill_from)), "commodity": rig_commodity(rig),
+               "haul": int(rig.get("haul") or 0),
                "tonnes": sum(int(value or 0) for value in (rig.get("tonnes") or {}).values())}
         # When it's ready, if your rigs have taught us (``ready_for(rig)``).
         row["ready_s"] = ready_for(rig) if ready_for else None
-        row["ready"] = bool(row["ready_s"]) and row["age_s"] >= row["ready_s"]
+        row["ready"] = bool(row["ready_s"]) and not collecting and row["fill_s"] >= row["ready_s"]
         slots.append(row)
         if nearest is None or distance < nearest["distance_m"]:
             nearest = row

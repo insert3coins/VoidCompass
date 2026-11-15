@@ -8,10 +8,11 @@
   <link rel="stylesheet" href="/assets/cursor.css">
 </head>
 <body>
-  <!-- Rig Tracker: everything for the Rhino in one box. A dial for each rig
-       pointing the way it lies from where you face, then the guide, the
-       deposit you're nearest, the targets round you and the status (each on
-       or off in Overlay Studio), the survey and plan lines and the holds. -->
+  <!-- Rig Tracker: everything for the Rhino in one box. A card for each rig
+       out, two to a line (its fill ring, what it's working, which way and how far, and its
+       clock) and the rig radar's word, then the guide and the deposit you're
+       nearest (each on or off in Overlay Studio), the survey and plan lines
+       and the holds. Made to be read at a glance (5.8.3). -->
   <main id="rigs" class="rigs empty">
     <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <header class="notice">
@@ -22,11 +23,11 @@
     <div id="rigs-hazard" class="hazard" hidden></div>
     <section id="rigs-aboard" class="part aboard" hidden></section>
     <section id="rigs-guide" class="part" hidden></section>
-    <ol id="rigs-dials" class="dials"></ol>
+    <ol id="rigs-list" class="rig-list"></ol>
+    <p id="rigs-free" class="free" hidden></p>
+    <p id="rigs-word" class="line rig-word" hidden></p>
     <p id="rigs-order" class="order"></p>
     <section id="rigs-deposit" class="part" hidden></section>
-    <section id="rigs-targets" class="part" hidden></section>
-    <section id="rigs-status" class="part" hidden></section>
     <ul id="rigs-survey" class="survey" hidden></ul>
     <ul id="rigs-holds" class="holds"></ul>
     <p id="rigs-hint" class="hint"></p>

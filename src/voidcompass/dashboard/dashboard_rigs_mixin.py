@@ -72,6 +72,10 @@ def rhino_surface_commodity(row):
     return primary_material((row or {}).get("materials"))
 
 
+# How often a rig's READY is checked while you're standing still.
+RIG_READY_TICK_MS = 5000
+
+
 class DashboardRigsMixin:
     def rig_store(self):
         key = get_active_profile(getattr(self, "config", None) or {})
@@ -407,9 +411,11 @@ class DashboardRigsMixin:
         spots["spots"].append((lat, lon, material[:40]))
         del spots["spots"][:-2000]
         rigs = self.rig_store().rigs(system, body)
-        slot = booking_rig(rigs, lat, lon, _radius)
+        here_m = rig_here_m(getattr(self, "config", None) or {})
+        slot = booking_rig(rigs, lat, lon, _radius, here_m=here_m)
         if slot is not None:
-            self.rig_store().book(system, body, slot, material)
+            at_rig = surface_distance_m(lat, lon, rigs[slot]["lat"], rigs[slot]["lon"], _radius) <= here_m
+            self.rig_store().book(system, body, slot, material, at_rig=at_rig)
             self._deposit_named_by_rig(system, body, slot, _radius)
             self._deposit_regrown_by_rig(system, body, slot, _radius, material)
         # 5.7.6: kept per planet too, for the best patch after a restart.
@@ -694,14 +700,31 @@ class DashboardRigsMixin:
         except (TypeError, ValueError):
             return False
 
+    def _rhino_location(self, system, body, lat, lon, radius):
+        """Is (lat, lon) part of the mining location you're at? Within
+        LOCATION_REACH_M of you, or anywhere inside the survey you're working
+        (a wide survey's far side is further than that from its other edge)."""
+        survey = self.survey_store().survey(system, body)
+        centre = (survey or {}).get("centre")
+        reach = ((survey["radius_m"] if survey.get("edge") else rhino_survey.DEFAULT_RADIUS_M) + 200.0) if centre else 0.0
+        if centre and not self._rhino_within(lat, lon, centre[0], centre[1], radius, reach=max(rhino_survey.LOCATION_REACH_M, reach + 1800.0)):
+            centre = None
+
+        def at(other_lat, other_lon):
+            return self._rhino_within(lat, lon, other_lat, other_lon, radius) or bool(
+                centre and self._rhino_within(centre[0], centre[1], other_lat, other_lon, radius, reach=reach))
+        return at
+
     def _pulses_near(self, system, body, lat, lon, radius):
         """The refining spots kept at the mining location you're at."""
-        return [row for row in self.survey_store().pulses(system, body) if self._rhino_within(lat, lon, row[0], row[1], radius)]
+        at = self._rhino_location(system, body, lat, lon, radius)
+        return [row for row in self.survey_store().pulses(system, body) if at(row[0], row[1])]
 
     def _deposit_rows(self, system, body, near=None):
         """The deposits you've marked on this body (planet-materials sites);
         with ``near`` (lat, lon, planet radius), only the mining location
-        you're at: those within LOCATION_REACH_M."""
+        you're at: those within LOCATION_REACH_M, inside the survey you're
+        working, or saved with the site you're at."""
         from voidcompass.mining.planet_materials import PlanetMaterialsStore
         store = getattr(self, "_planet_materials_store", None)
         if not callable(store):
@@ -716,7 +739,13 @@ class DashboardRigsMixin:
                 and PlanetMaterialsStore._body_key(system, row.get("body")) == here
                 and str(row.get("site_type") or "site") == "site"]
         if near:
-            rows = [row for row in rows if self._rhino_within(near[0], near[1], row.get("latitude"), row.get("longitude"), near[2])]
+            at = self._rhino_location(system, body, near[0], near[1], near[2])
+            try:
+                site = self._rhino_site_here((system, body, near[0], near[1], near[2]))
+            except Exception:
+                site = None
+            kept = set(((site or {}).get("deposits") or {}).get("ids") or ()) - {None}
+            rows = [row for row in rows if row.get("id") in kept or at(row.get("latitude"), row.get("longitude"))]
         return rows
 
     def _deposit_near(self, system, body, lat, lon, radius, within_m=60.0):
@@ -1043,16 +1072,13 @@ class DashboardRigsMixin:
             self._circle_out_said = False
         return False
 
-    def _rig_range_watch(self):
-        """A rig getting too far away: said once a trip, as the game destroys
-        it at 5 km. Said again only after you've been back near."""
-        self._rig_circle_watch()
-        from voidcompass.overlays.rig_tracker import LOST_M, rig_advice, rig_warn_m
-        warn = rig_warn_m(getattr(self, "config", None) or {})
-        model = self._rig_model()
-        advice = rig_advice((model or {}).get("slots"), warn_m=warn) if model else {"too_far": [], "ready": []}
-        far = {row["slot"]: row for row in advice["too_far"]} if warn else {}
-        # 5.7.5: a rig that has had its time (learnt from your rigs), with you beside it, once.
+    def _rig_ready_watch(self, model=None, advice=None):
+        """A rig that has had its time (learnt from your rigs), said once each
+        time it fills, wherever you are (5.8.3). The slots already said."""
+        from voidcompass.overlays.rig_tracker import rig_advice
+        model = model if model is not None else self._rig_model()
+        if advice is None:
+            advice = rig_advice((model or {}).get("slots")) if model else {"ready": []}
         ready_said = getattr(self, "_rig_ready_said", None)
         if ready_said is None:
             ready_said = self._rig_ready_said = set()
@@ -1060,6 +1086,42 @@ class DashboardRigsMixin:
             if slot not in ready_said:
                 ready_said.add(slot)
                 self._rig_tell("rig_ready", slot=slot)
+        # Collected from, it fills again: READY can be said next time round.
+        for row in (model or {}).get("slots") or ():
+            if row.get("tracked") and not row.get("ready"):
+                ready_said.discard(row["slot"])
+        return ready_said
+
+    def _tick_rig_ready(self):
+        """Every few seconds while rigs are out here: a timer runs out while
+        you're standing still too."""
+        if not getattr(self, "is_running", True):
+            return
+        try:
+            place = self._rig_place()
+            if place and self.rig_store().rigs(place[0], place[1]):
+                # A collection settles while you sit still too.
+                if self.rig_store().left_behind(*place, here_m=rig_here_m(getattr(self, "config", None) or {})):
+                    self._rig_update_overlay()
+                self._rig_ready_watch()
+        except Exception:
+            logging.debug("Rig ready check skipped", exc_info=True)
+        self.root.call_later(RIG_READY_TICK_MS, self._tick_rig_ready)
+
+    def _rig_range_watch(self):
+        """A rig getting too far away: said once a trip, as the game destroys
+        it at 5 km. Said again only after you've been back near."""
+        self._rig_circle_watch()
+        # Driven off from rigs you were collecting from: they fill again from now.
+        place = self._rig_place()
+        if place and self.rig_store().left_behind(*place, here_m=rig_here_m(getattr(self, "config", None) or {})):
+            self._rig_update_overlay()
+        from voidcompass.overlays.rig_tracker import LOST_M, rig_advice, rig_warn_m
+        warn = rig_warn_m(getattr(self, "config", None) or {})
+        model = self._rig_model()
+        advice = rig_advice((model or {}).get("slots"), warn_m=warn) if model else {"too_far": [], "ready": []}
+        far = {row["slot"]: row for row in advice["too_far"]} if warn else {}
+        ready_said = self._rig_ready_watch(model, advice)
         warned = getattr(self, "_rig_far_warned", None)
         if warned is None:
             warned = self._rig_far_warned = set()
@@ -1109,7 +1171,9 @@ class DashboardRigsMixin:
         signal = self._rhino_signal_here()
         other = (signal is not None and (survey or {}).get("signal") is not None
                  and int(signal) != int(survey["signal"]) and away > rhino_survey.SITE_SAME_M)
-        if away <= rhino_survey.LOCATION_REACH_M and not other:
+        # A survey marked out wider than that reaches as far as its edge.
+        reach = max(rhino_survey.LOCATION_REACH_M, (float(survey["radius_m"]) + 2000.0) if survey and survey.get("edge") else 0.0)
+        if away <= reach and not other:
             return None
         site = None
         if survey:
@@ -1268,7 +1332,8 @@ class DashboardRigsMixin:
             if len(centre) != 2:
                 continue
             apart = surface_distance_m(lat, lon, centre[0], centre[1], radius)
-            if apart > rhino_survey.LOCATION_REACH_M:
+            survey = site.get("survey") or {}
+            if apart > max(rhino_survey.LOCATION_REACH_M, float(survey.get("radius_m") or 0) + 2000.0 if survey.get("edge") else 0.0):
                 continue
             if signal is not None and site.get("signal") is not None:
                 if int(site["signal"]) == int(signal):

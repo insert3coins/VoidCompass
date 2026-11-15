@@ -12,6 +12,6 @@ def attach_html_rig_tracker_overlay(overlay, overlay_id, title, enabled_key, x_k
         bridge_attr="_html_rig_tracker_bridge", template="rig_tracker",
         snapshot_key="rigs", model_attr="_html_render_model",
         log_name="Rig Tracker", width=420,
-        min_height=130, default_height=320, max_height=900,
+        min_height=130, default_height=320, max_height=1100,
         bridge_class=HtmlJumpInfoBridge,
     )

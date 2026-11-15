@@ -5,20 +5,17 @@ location in the one overlay, each section on or off in Overlay Studio.
   and what comes next. It moves on by itself as each step is done.
 - **Deposit:** the marked deposit you're nearest, what's known of it and
   the location it's in (the Rhino Map is the map: no radar here).
-- **Targets:** the nearest deposits, which way and how far, and what the
-  ground round you is worth by commodity. Not the rigs: the dials have them.
-- **Status:** an estimate of what's here, the drive through it, what a rig
-  gives, the rig radar's word and the best patches; and a red bar for high
-  gravity or a rig about to be lost.
+- **The rig radar's word** (RIG OK HERE, TOO CLOSE…) on its own line, and a
+  red bar for high gravity or a rig about to be lost. (The status section
+  went in 5.8.3: the Rhino Map and the Rhino page have the figures.)
 
 Built from the Rhino map's model (surface_map), so they always agree."""
 from __future__ import annotations
 
 import math
 
-SECTIONS = ("guide", "deposit", "targets", "status")
+SECTIONS = ("guide", "deposit")
 DEPOSIT_NEAR_M = 500.0
-TARGETS_SHOWN = 6
 STEPS = 8
 
 
@@ -53,17 +50,17 @@ def guide_step(facts, keys=None):
     if facts.get("hold_full"):
         return step(8, "BACK TO THE SHIP", "The Rhino's hold is full: dock it and move the cargo across", following="Next deposit")
     if rigs >= 6:
-        return step(8, "COLLECT THE RIGS", "All six down: collect each when its dial says READY, in the order they went down",
+        return step(8, "COLLECT THE RIGS", "All six down: collect each when it says READY, in the order they went down",
                     f"rig_{facts.get('next_rig') or 1}", "Next deposit")
     if rigs:
         slot = int(facts.get("free_slot") or rigs + 1)
         return step(7, f"RIG {slot} DOWN", facts.get("rig_words") or "Where the next rig can go", f"rig_{slot}",
-                    "Collect each when its dial says READY")
+                    "Collect each when it says READY")
     if live and not facts.get("plan"):
         return step(6, "PLAN THE RIGS", "Trace the deposit's edge, or just put rig 1 down", "rhino_trace", "Rigs down")
     if live:
         return step(7, "RIG 1 DOWN", facts.get("rig_words") or "On the first pin of your plan", "rig_1",
-                    "Collect each when its dial says READY")
+                    "Collect each when it says READY")
     if not facts.get("survey"):
         return step(3, "MARK THE SURVEY CENTRE", "Drive to the middle of the mining location, or mark a deposit if you're on one",
                     "rhino_survey_centre", "Mark its edge")
@@ -153,31 +150,7 @@ def sections_model(surface, *, keys=None, holds=(), gravity=None, threshold=3.0,
                             "refined": sum(rig["tonnes"] for rig in worked),
                             "refined_value": sum(rig["value"] or 0 for rig in worked) or None}
 
-    if options.get("targets"):
-        rows = [{"commodity": item["commodity"], "distance": item.get("distance"), "bearing": item.get("bearing"),
-                 "rigs": item.get("rigs") or 0, "depleted": bool(item.get("depleted"))} for item in deposits]
-        rows = sorted(rows, key=lambda row: row.get("distance") or 0)[:TARGETS_SHOWN]
-        worth, refined = {}, False
-        for item in live:
-            if item.get("value"):
-                worth[item["commodity"]] = worth.get(item["commodity"], 0) + item["value"]
-        if not worth:
-            # Before there's a deposit value, what your rigs have refined here.
-            for rig in worked:
-                if rig["value"]:
-                    worth[rig["commodity"]] = worth.get(rig["commodity"], 0) + rig["value"]
-                    refined = True
-        model["targets"] = {"rows": rows, "refined": refined,
-                            "bars": [{"commodity": name, "credits": credits} for name, credits in
-                                     sorted(worth.items(), key=lambda pair: -pair[1])[:6]]}
-
-    if options.get("status"):
-        model["status"] = {
-            "deposits": value.get("deposits", len(live)), "rigs": value.get("rigs", 0),
-            "credits": value.get("credits"), "unpriced": value.get("unpriced", 0), "per_rig": value.get("per_rig"),
-            "route_m": value.get("route_m", 0),
-            "words": words[0] if words else "", "tone": words[1] if words else "",
-            "groups": [{key: group.get(key) for key in ("n", "rigs", "credits", "cr_per_h", "distance", "bearing")}
-                       for group in surface.get("groups") or ()],
-        }
+    if words:
+        # The rig radar's word, whatever's switched on: it matters as each rig goes down.
+        model["radar"] = {"words": words[0], "tone": words[1]}
     return model

@@ -69,6 +69,23 @@ export function renderOverlayGroups(studio) {
   host.innerHTML = markup;
 }
 
+// The inspector's row (5.8.3): the groups the selected overlay is in, each a
+// switch to put it in or take it out.
+export function renderGroupMembership(studio, overlayId) {
+  const host = document.getElementById("studio-selected-groups");
+  if (!host) return;
+  const data = groupsOf(studio);
+  const chips = data.groups.map((group) => {
+    const member = group.members.includes(overlayId);
+    return `<button type="button" class="og-member-chip${member ? " on" : ""}" data-og-member="${esc(group.id)}" aria-pressed="${member}" title="${member ? `In ${esc(group.name)}: click to take it out` : `Put it in ${esc(group.name)}`}"><i></i>${esc(group.name)}</button>`;
+  }).join("");
+  const markup = overlayId ? `<small>IN GROUPS</small>${chips || `<span>None yet: make one under OVERLAY GROUPS.</span>`}` : "";
+  if (host.dataset.markup === markup && host.dataset.overlay === overlayId) return;
+  host.dataset.markup = markup;
+  host.dataset.overlay = overlayId || "";
+  host.innerHTML = markup;
+}
+
 // The group buttons at the top of the header's PANELS menu.
 export function groupChips(studio) {
   const data = groupsOf(studio);
@@ -99,6 +116,16 @@ export function groupChipsFingerprint(studio) {
 }
 
 export async function handleOverlayGroupsClick(event, ui, studio) {
+  const chip = event.target.closest?.("#studio-selected-groups [data-og-member]");
+  if (chip) {
+    const host = chip.closest("#studio-selected-groups");
+    const member = chip.getAttribute("aria-pressed") !== "true";
+    chip.setAttribute("aria-pressed", String(member));
+    chip.classList.toggle("on", member);
+    await ui.command("overlay_studio", {operation: "group_member", group_id: chip.dataset.ogMember,
+      overlay_id: host?.dataset.overlay || "", member});
+    return true;
+  }
   const quick = event.target.closest?.("[data-overlay-group]");
   if (quick) {
     await ui.command("overlay_studio", {operation: "group_toggle", group_id: quick.dataset.overlayGroup});

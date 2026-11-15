@@ -49,7 +49,7 @@ import {handleMiningClick, handleMiningInput, handleMiningSubmit, renderMining, 
 import {handleRhinoClick, handleRhinoInput, handleRhinoSubmit, renderRhino, resetRhino} from "./rhino.js";
 import {handleThemeWorkshopClick, handleThemeWorkshopInput, themeSettings, themeWorkshopOpen, workshopTheme} from "./theme-workshop.js";
 import {groupChips, groupChipsFingerprint, handleOverlayGroupsClick, handleOverlayGroupsInput, handleOverlayGroupsSubmit,
-  renderOverlayGroups} from "./overlay-groups.js";
+  renderGroupMembership, renderOverlayGroups} from "./overlay-groups.js";
 import {handleExpeditionsChange, handleExpeditionsClick, handleExpeditionsInput, handleExpeditionsSubmit, renderExpeditions, resetExpeditions} from "./expeditions.js";
 import {handlePlanetaryChange, handlePlanetaryClick, handlePlanetaryInput, handlePlanetarySubmit, renderPlanetary, resetPlanetary, setPlanetaryView} from "./planetary.js";
 import {renderWatcher, openWatcherTab} from "./watcher.js";
@@ -60,6 +60,7 @@ import {renderCapsules} from "./capsules.js";
 import {handleOrdersClick} from "./orders.js";
 import {renderConstellation} from "./constellation.js";
 import {renderGames} from "./games.js";
+import {renderJournalLog} from "./explore-log.js";
 import {renderWrapped} from "./wrapped.js";
 import {renderAbout} from "./about.js";
 import {installSystemMap,renderSystemMap,setSystemMapActive,resetSystemMap,openSystemMap,systemMapState} from "./system-map.js";
@@ -873,6 +874,15 @@ function regionName(state) {
   return known(state?.tiles?.where?.region) || known(state?.intelligence?.region);
 }
 
+// Settings › Flight & exploration (5.8.3): the pads learnt at surface
+// stations, and the file to share them.
+function surfacePadsSettings(pads) {
+  const count = (n, one, many) => `${numeric(n)} ${Number(n) === 1 ? one : many}`;
+  const learnt = Number(pads.pads) ? `${count(pads.pads, "pad", "pads")} at ${count(pads.stations, "station", "stations")}; ${count(pads.designs, "station design", "station designs")}, ${numeric(pads.trusted)} trusted.`
+    : "Nothing yet: each pad you land on at a planetary port, surface outpost or settlement is learnt.";
+  return `<div class="setting-row" data-search="${settingSearchText("surface pads landing pads planetary port outpost settlement export share designs")}"><span class="setting-copy"><b>Learnt so far</b><small>${escapeHtml(learnt)}</small><small>Export them as a plain JSON file (stations by MarketID, and each design's pad layout in metres) to share with other commanders, or for other apps to use. Import theirs to pool them with yours: pads you've landed on keep your own landings. The Local API gives the same at GET /api/v1/pads.</small></span><span class="setting-control"><button type="button" data-ws-page="settings" data-ws-op="export_pads_picker"${Number(pads.pads) ? "" : " disabled"}>EXPORT PAD LAYOUTS</button><button type="button" data-ws-page="settings" data-ws-op="import_pads_picker">IMPORT PAD LAYOUTS</button></span></div>`;
+}
+
 function renderOverlaySwitchboard(studio = {}) {
   const host = byId("overlay-quick");
   if (!host) return;
@@ -1286,6 +1296,12 @@ function renderRoute(state) {
   text("route-remaining", `${number(route.remaining)} ${number(route.remaining) === 1 ? "JUMP" : "JUMPS"} LEFT`);
   percentWidth("route-progress", route.percent);
   byId("copy-next").disabled = !route.next;
+  const target = byId("route-target");
+  if (target) {
+    target.hidden = !route.next;
+    target.dataset.targetSystem = route.next || "";
+    target.title = route.next ? `Plot a route to ${route.next} in the galaxy map (presses your Elite keys)` : "";
+  }
   const autoCopy = byId("auto-copy");
   if (autoCopy) {
     autoCopy.textContent = `AUTO-COPY NEXT WAYPOINT ON ARRIVAL · ${route.auto_copy ? "ON" : "OFF"}`;
@@ -1964,6 +1980,8 @@ function selectStudioOverlay(id, follow = false) {
     input.dataset.overlayId = id;
   };
   fill(byId("studio-selected-enabled"), Boolean(selected.enabled));
+  // 5.8.3: the groups it's in, a switch each.
+  renderGroupMembership(studioData(), id);
   // Per overlay; the All overlays switch turns map hiding on or off for all.
   const mapsOn = Boolean((studioData().options || {}).overlay_hide_on_maps ?? true);
   const mapHide = byId("studio-selected-maphide");
@@ -3124,10 +3142,11 @@ function settingsSectionBody(id, data) {
         + settingActions(`<button type="button" data-page="watcher" data-watcher-open="orders">CREW ORDERS</button>`, "crew orders officers campaigns errands"))
       + settingGroup("CREW CALLS", settingSelect({key: "target_remarks", label: "When you target a system", detail: "Whether it's new to everyone, known but unscanned by you, or a place you've finished.", value: value.target_remarks || "crew", options: [["crew", "Your companion says"], ["tone", "A notification"], ["off", "Nothing"]]})
         + settingSelect({key: "leave_behind_cr", label: "Money left behind", detail: "Target onward with mapping or biology undone worth at least this, and you're told before you go.", value: number(value.leave_behind_cr, 2000000), options: [[0, "Never"], [1000000, "1 million"], [2000000, "2 million"], [5000000, "5 million"], [10000000, "10 million"], [25000000, "25 million"]], type: "number"})
-        + settingSwitch({key: "pad_location", label: "Where your pad is", detail: "\"Pad 34: at the back, up on your right\" as docking is granted, with a small diagram on the Dashboard. From bgol's LandingPad tables.", checked: value.pad_location !== false})
+        + settingSwitch({key: "pad_location", label: "Where your pad is", detail: "\"Pad 34: at the back, up on your right\" as docking is granted, with a small diagram on the Dashboard (from bgol's LandingPad tables). At surface ports, outposts and settlements, where no pad tables exist, each pad you land on is remembered, and the next time you're given it there the planet compass takes you to it.", checked: value.pad_location !== false})
         + settingSwitch({key: "crew_warnings", label: "Crew warnings", detail: "Wanted (and the nearest Interstellar Factors), the wrong suit for biology, oxygen or health low with data aboard, no limpets on undock.", checked: value.crew_warnings !== false})
         + settingSwitch({key: "mining_recap", label: "Mining recap", detail: "After a stint of 20 t or more: what you refined, your rate and the best rock.", checked: value.mining_recap !== false})
         + settingSwitch({key: "canonn_reports", label: "Phenomena reports", detail: "On arriving in a system, ask Canonn what other commanders found in space there (notable stellar phenomena), and hear the ones not yet in your Codex for the region. Only the system's name is sent.", checked: value.canonn_reports !== false}))
+      + settingGroup("SURFACE PADS", surfacePadsSettings(data.surface_pads || {}))
       + settingGroup("RHINO COMMODITIES", rhinoCommoditySwitches(value, data))
       + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: your companion's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
@@ -3151,6 +3170,7 @@ function settingsSectionBody(id, data) {
       <section class="input-card" data-search="talk key hold tap hotkey control"><header><b>3 · TALK CONTROL</b><span>${escapeHtml(listen.hotkey || "NO KEY SET")}</span></header>${choice("watcher_listen_mode", listen.mode === "tap" ? "tap" : "hold", [["hold", "Hold to talk", "Hold, speak, release for the quickest reply."], ["tap", "Tap to talk", "Tap to start; tap again to send."]])}<div class="voice-key"><kbd>${escapeHtml(listen.hotkey || "NONE")}</kbd><button type="button" data-settings-goto="hotkeys">CHANGE IN HOTKEYS</button><p>${escapeHtml(keyNote)}</p></div>${settingFlag()}</section></div>`
       + `<div class="setting-row voice-test" data-search="test microphone mic level hear it back"><span class="setting-copy"><b>Check your microphone</b><small id="voice-test-note">Say something for a few seconds, then hear it back.</small></span><span class="setting-control"><span class="voice-meter" id="voice-meter" aria-hidden="true"><i></i></span><button type="button" id="voice-test"${listen.enabled && listen.installed ? "" : " disabled"}>TEST MIC</button><button type="button" id="voice-play"${listen.has_test ? "" : " hidden"}>HEAR IT BACK</button></span></div>`
       + settingNote("Replies aloud also need your companion’s voice switched on (its page, SETUP), and its display enabled in Overlay Studio.")
+      + settingNote("Your overlay groups answer to their names: “show the Rhino group”, “hide the exploring group”, “switch to the combat group”.")
       + (listen.notice ? settingNote(listen.notice) : ""));
     const missing = Array.isArray(ship.missing) ? ship.missing : [];
     const commands = settingGroup("COMMAND CONTROLS",
@@ -4140,6 +4160,8 @@ function showPage(name) {
   if (name === "map") window.setTimeout(syncAtlasLayerRequest, 160);
   if (name === "overlay-studio") renderOverlayStudio(model);
   if (name === "route") renderRoutePage();
+  // 5.8.3: the Journal Log, a page of its own.
+  if (name === "journal-log") renderJournalLog(byId("journal-log-workspace"), EXPLORE_WORKSPACE_UI);
   if (name === "overview") renderOverview(model);
   if (name === "records") {
     renderMetrics(model);
@@ -4306,6 +4328,17 @@ async function toggleStudioOverlay(id, wanted) {
 }
 
 document.addEventListener("click", async (event) => {
+  // 🎯 anywhere (5.8.3): plot a route to the system in the game's galaxy map.
+  const targetButton = event.target.closest("[data-target-system]");
+  if (targetButton) {
+    const system = targetButton.dataset.targetSystem;
+    if (!system) return;
+    targetButton.disabled = true;
+    const distance = targetButton.dataset.distanceLy;
+    if (await command("target_system", {system, ...(distance ? {distance_ly: Number(distance)} : {})})) showToast(`Plotting a route to ${system}… keep Elite in front`);
+    window.setTimeout(() => { targetButton.disabled = false; }, 4000);
+    return;
+  }
   const flightLogFilterButton = event.target.closest("[data-flightlog-filter]");
   if (flightLogFilterButton) {
     flightLogFilter = flightLogFilterButton.dataset.flightlogFilter || "ALL";
@@ -4371,7 +4404,7 @@ document.addEventListener("click", async (event) => {
   if (handleTradingClick(event, WORKSHOP_UI)) return;
   if (handleMiningClick(event, WORKSHOP_UI)) return;
   if (handleRhinoClick(event, WORKSHOP_UI)) return;
-  if (event.target.closest?.("#studio-groups [data-og-op]")) {
+  if (event.target.closest?.("#studio-groups [data-og-op], #studio-selected-groups [data-og-member]")) {
     handleOverlayGroupsClick(event, WORKSHOP_UI, model?.overlay_studio || {});
     return;
   }
@@ -4703,11 +4736,21 @@ document.addEventListener("click", async (event) => {
       if (!window.confirm("Confirm this profile-local change?")) return;
       payload.confirmed = true;
     }
-    if (operation === "backup_picker" || operation === "restore_picker") {
+    if (operation === "import_pads_picker") {
+      try {
+        const files = await window.pywebview?.api?.choose_pad_files?.();
+        if (!files || !files.length) return;
+        payload.operation = "import_pads";
+        payload.paths = files;
+      } catch (error) {
+        showToast(error.message || "Native file picker unavailable");
+        return;
+      }
+    } else if (operation === "backup_picker" || operation === "restore_picker" || operation === "export_pads_picker") {
       try {
         const selected = await window.pywebview?.api?.choose_folder?.();
         if (!selected) return;
-        payload.operation = operation === "backup_picker" ? "backup" : "restore";
+        payload.operation = {backup_picker: "backup", restore_picker: "restore", export_pads_picker: "export_pads"}[operation];
         payload.path = String(selected);
         if (payload.operation === "restore") {
           if (!window.confirm("Restore this backup on the next VoidCompass start? The current profile will be preserved as a rollback snapshot.")) return;

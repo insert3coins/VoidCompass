@@ -136,6 +136,39 @@ def follow_activity(groups, state, activity):
     return state
 
 
+_ON_WORDS = r"show|open|bring up|use|switch on|turn on|activate|start|switch to|change to|go to|load"
+_OFF_WORDS = r"hide|close|switch off|turn off|deactivate|stop|drop|put away|clear"
+_FLIP_WORDS = r"toggle|flip|switch"
+
+
+def _words(text):
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", str(text or "").casefold()).split())
+
+
+def request(text, groups):
+    """A group asked for by name, "show the Rhino group", "hide exploring
+    group", "switch to the combat group": {"id", "on": True/False/None (flip)},
+    {"id": None} for a group that isn't one of yours, or None when no group
+    was asked about. The word "group" must be said."""
+    said = _words(text)
+    if not re.search(r"\bgroups?\b", said):
+        return None
+    said = re.sub(r"^(?:(?:please|could you|can you|would you|will you|ok|okay|hey|now)\s+)+", "", said)
+    match = re.match(rf"^(?:(?P<on>{_ON_WORDS})|(?P<off>{_OFF_WORDS})|(?P<flip>{_FLIP_WORDS}))\s+(?:the\s+|my\s+)?(?P<name>.+?)\s+"
+                     rf"(?:overlay\s+)?groups?(?:\s+(?P<tail>on|off))?(?:\s+(?:please|now|for me))*$", said)
+    if not match:
+        match = re.match(r"^(?:the\s+)?(?P<name>.+?)\s+(?:overlay\s+)?groups?\s+(?P<tail>on|off)$", said)
+        if not match:
+            return None
+    name = match.group("name")
+    by_name = {_words(group["name"]): group for group in groups}
+    by_name.update({_words(group["id"]): group for group in groups if _words(group["id"]) not in by_name})
+    group = by_name.get(name) or next((row for key, row in by_name.items() if key.startswith(name) or name.startswith(key)), None)
+    tail = match.groupdict().get("tail")
+    on = True if (match.groupdict().get("on") or tail == "on") else False if (match.groupdict().get("off") or tail == "off") else None
+    return {"id": group["id"] if group else None, "name": group["name"] if group else name, "on": on}
+
+
 def activity_of(facts):
     """What you're doing, from the Navigation HUD's page facts: the most
     particular first."""

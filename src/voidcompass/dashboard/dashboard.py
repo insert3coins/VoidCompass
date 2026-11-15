@@ -107,6 +107,8 @@ from voidcompass.dashboard.dashboard_journey_mixin import DashboardJourneyMixin
 from voidcompass.dashboard.dashboard_expedition_mixin import DashboardExpeditionMixin
 from voidcompass.dashboard.dashboard_rigs_mixin import DashboardRigsMixin
 from voidcompass.dashboard.dashboard_overlay_groups_mixin import DashboardOverlayGroupsMixin
+from voidcompass.dashboard.dashboard_target_mixin import DashboardTargetMixin
+from voidcompass.dashboard.dashboard_surface_pads_mixin import DashboardSurfacePadsMixin
 from voidcompass.dashboard.dashboard_hud_pages_mixin import DashboardHudPagesMixin
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
 from voidcompass.dashboard.dashboard_watcher_listen_mixin import DashboardWatcherListenMixin
@@ -320,6 +322,8 @@ class MainDashboard(
     DashboardExpeditionMixin,
     DashboardRigsMixin,
     DashboardOverlayGroupsMixin,
+    DashboardTargetMixin,
+    DashboardSurfacePadsMixin,
     DashboardHudPagesMixin,
     DashboardWatcherVoiceMixin,
     DashboardWatcherListenMixin,
@@ -3213,6 +3217,7 @@ class MainDashboard(
         self._tick_overlay_position_sync()
         self._tick_overlay_hotkey_guard()
         self._tick_hud_pages()
+        self._tick_rig_ready()
         self._retire_watcher_models()
 
     def _retire_watcher_models(self):

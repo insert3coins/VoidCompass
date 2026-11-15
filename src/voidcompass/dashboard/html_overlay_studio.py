@@ -43,8 +43,8 @@ from voidcompass.overlays.music_player_hud import (
 )
 from voidcompass.overlays.rhino_map_hud import rhino_map_size
 from voidcompass.overlays.rig_tracker import (
-    DROP_M, DROP_RANGE_M, HERE_M, HERE_RANGE_M, SPACING_M, SPACING_RANGE_M, WARN_M, WARN_RANGE_M,
-    rig_drop_m, rig_here_m, rig_spacing_m, rig_warn_m,
+    DROP_M, DROP_RANGE_M, SPACING_M, SPACING_RANGE_M, WARN_M, WARN_RANGE_M,
+    rig_drop_m, rig_spacing_m, rig_warn_m,
 )
 from voidcompass.overlays.survey_options import SPOTLIGHT_ROTATION_MODES, survey_overlay_options
 from voidcompass.colonisation.views import overlay_options as colony_overlay_options
@@ -394,7 +394,6 @@ class HtmlOverlayStudioMixin:
                 "galaxy_minimap_region_text_percent": heartbeat_text_size(self.config.get("galaxy_minimap_region_text_percent")),
                 "rig_tracker_show_holds": bool(self.config.get("rig_tracker_show_holds", True)),
                 **{f"rig_tracker_{name}": shown for name, shown in rig_sections.section_options(self.config).items()},
-                "rig_tracker_here_m": rig_here_m(self.config),
                 "rig_tracker_spacing_m": rig_spacing_m(self.config),
                 "rig_tracker_warn_m": rig_warn_m(self.config),
                 "rig_tracker_drop_m": rig_drop_m(self.config),
@@ -732,7 +731,7 @@ class HtmlOverlayStudioMixin:
             "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion", "lyra_hud_motion",
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "galaxy_minimap_orders", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
-            "rig_tracker_show_holds", "rig_tracker_guide", "rig_tracker_deposit", "rig_tracker_targets", "rig_tracker_status",
+            "rig_tracker_show_holds", "rig_tracker_guide", "rig_tracker_deposit",
             "hud_pages_takeover", "hud_hold_lists", "hud_page_expedition", "hud_page_jump", "hud_page_survey", "hud_page_planet", "hud_page_rhino", "hud_page_mining", "hud_page_combat", "hud_page_station", "hud_page_colony", "hud_page_carrier", "hud_page_trade", "hud_page_powerplay",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps", "overlay_hide_in_menus", "overlay_hide_when_game_closed", "overlay_transparency_fix", "overlay_classic_windows",
@@ -838,7 +837,6 @@ class HtmlOverlayStudioMixin:
             "station_info_timeout_s": (5.0, 3600.0, 30.0, True),
             "contact_scope_timeout_s": (0.0, 3600.0, 45.0, True),
             "gravity_warning_threshold_g": (0.5, 20.0, 3.0, False),
-            "rig_tracker_here_m": (*HERE_RANGE_M, HERE_M, True),
             "rig_tracker_spacing_m": (*SPACING_RANGE_M, SPACING_M, True),
             "rig_tracker_warn_m": (*WARN_RANGE_M, WARN_M, True),
             "rig_tracker_drop_m": (*DROP_RANGE_M, DROP_M, True),
@@ -851,7 +849,7 @@ class HtmlOverlayStudioMixin:
             value = _number(payload.get(key), default)
             value = max(low, min(high, value if value is not None else default))
             self.config[key] = int(round(value)) if integer else round(value, 2)
-        if {"rig_tracker_here_m", "rig_tracker_spacing_m", "rig_tracker_warn_m", "rig_tracker_drop_m"} & set(payload):
+        if {"rig_tracker_spacing_m", "rig_tracker_warn_m", "rig_tracker_drop_m"} & set(payload):
             for refresh in ("_rig_update_overlay", "_update_rhino_map"):
                 update = getattr(self, refresh, None)
                 if callable(update):
@@ -1111,6 +1109,9 @@ class HtmlOverlayStudioMixin:
             return self._overlay_group_delete(_text(payload.get("group_id"), 40))
         if operation == "group_toggle":
             return self._overlay_group_toggle(_text(payload.get("group_id"), 40))
+        if operation == "group_member":
+            return self._overlay_group_member(_text(payload.get("group_id"), 40), _text(payload.get("overlay_id"), 50),
+                                              bool(payload.get("member")))
         if operation == "group_move":
             return self._overlay_group_move(_text(payload.get("group_id"), 40), payload.get("step"))
         if operation == "snap":
