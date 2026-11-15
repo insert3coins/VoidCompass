@@ -163,6 +163,11 @@ DEPRECATED_CONFIG_KEYS = (
     'rhino_status_overlay_enabled', 'rhino_status_compass', 'rhino_status_guide', 'rhino_status_deposit',
     'rhino_status_targets', 'rhino_status_status', 'rhino_status_hud_x', 'rhino_status_hud_y', 'rhino_status_width',
     'rhino_status_text_scale_percent', 'overlay_hotkey_rhino_status',
+    # 5.8.3: the Rig Tracker's NEAREST and STATUS sections went (the rigs, the
+    # deposit and the rig radar's line say what matters; the Rhino Map the rest).
+    'rig_tracker_targets', 'rig_tracker_status',
+    # 5.8.3: HERE is a fixed 25 m (it's where a collection ends, too).
+    'rig_tracker_here_m',
 ) + RETIRED_COMPASS_CONFIG_KEYS + RETIRED_SYSTEM_INFO_CONFIG_KEYS + RETIRED_HATCHLING_CONFIG_KEYS
 # Overlay/HUD colors are seeded from the active theme at startup; the live
 # theme bridge rebinds these module constants and repaints open overlays.
@@ -507,8 +512,6 @@ PROFILE_BOOL_SETTINGS = (
     "rig_tracker_show_holds",
     "rig_tracker_guide",
     "rig_tracker_deposit",
-    "rig_tracker_targets",
-    "rig_tracker_status",
     "galnet_ticker_crt_motion",
     "galnet_ticker_glitch_on_news",
     "music_player_overlay_enabled",
@@ -632,7 +635,6 @@ PROFILE_VALUE_SETTINGS = (
     "galnet_ticker_hud_x",
     "galnet_ticker_hud_y",
     "galnet_ticker_width",
-    "rig_tracker_here_m",
     "rig_tracker_spacing_m",
     "rig_tracker_warn_m",
     "rig_tracker_drop_m",
@@ -1197,8 +1199,6 @@ def apply_profile_config(config, profile_key=None):
         "rig_tracker_show_holds": True,
         "rig_tracker_guide": True,
         "rig_tracker_deposit": True,
-        "rig_tracker_targets": True,
-        "rig_tracker_status": True,
         "galnet_ticker_crt_motion": True,
         "galnet_ticker_glitch_on_news": True,
         "music_player_show_art": True,
@@ -1355,7 +1355,6 @@ def apply_profile_config(config, profile_key=None):
                 "music_follow_fade_s": 2,
                 "music_scene_tracks": {},
                 "galnet_ticker_width": 860,
-                "rig_tracker_here_m": 40,
                 "rig_tracker_spacing_m": 78,
                 "rig_tracker_warn_m": 3500,
                 "rig_tracker_drop_m": 7,
@@ -1818,9 +1817,6 @@ def load_config():
         'rig_tracker_show_holds': True,
         'rig_tracker_guide': True,
         'rig_tracker_deposit': True,
-        'rig_tracker_targets': True,
-        'rig_tracker_status': True,
-        'rig_tracker_here_m': 40,
         'rig_tracker_spacing_m': 78,
         'rig_tracker_warn_m': 3500,
         'rig_tracker_drop_m': 7,

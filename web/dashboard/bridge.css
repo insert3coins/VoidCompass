@@ -109,3 +109,9 @@ body.solo .app, html.solo-window .app { grid-template-columns: 1fr; }
 body.solo .rail, body.solo [data-popout], html.solo-window .rail, html.solo-window [data-popout] { display: none; }
 html.solo-window #boot { display: none !important; }
 body.solo .atlas-dockbar [data-page="overview"] { display: none; }
+
+/* 🎯 beside the next destination (5.8.3): plot a route to it in the galaxy map. */
+.overview-page #overview-modules .route-target h3 { display: flex; align-items: center; gap: 8px; }
+.route-target h3 .target-button { flex: 0 0 auto; min-width: 30px; min-height: 26px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, var(--inset)); font: 14px "Segoe UI Emoji", "Segoe UI Symbol", sans-serif; line-height: 1; cursor: pointer; }
+.route-target h3 .target-button:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--inset)); }
+.route-target h3 .target-button:disabled { opacity: .45; cursor: progress; }

@@ -734,6 +734,11 @@ class DashboardWatcherVoiceMixin:
             return self._watcher_uplink(original_text, request, rng)
         if native.get("kind") == "overlay":
             return self._watcher_overlay({key: native[key] for key in ("overlay", "op")}, rng)
+        # 5.8.3: an overlay group, by its name ("show the Rhino group").
+        talk_group = getattr(self, "_overlay_group_talk", None)
+        group = talk_group(text, rng) if callable(talk_group) else None
+        if group:
+            return group
         # 5.7.6: the nearest station with a service, and how far to a system.
         station = watcher_copilot.station_request(text)
         if station:

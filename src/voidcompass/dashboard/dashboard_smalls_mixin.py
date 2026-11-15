@@ -197,11 +197,15 @@ class DashboardSmallsMixin:
             return
         kind = pads.layout(raw.get("StationType"), raw.get("StationName") or "", raw.get("MarketID"))
         info = pads.where(kind, pad) if kind else None
-        self._pad_info = {"pad": pad, "station": raw.get("StationName"), "kind": kind,
+        if not kind and hasattr(self, "_surface_pad_granted"):
+            # 5.8.3: a station on a planet's surface: pads learnt from your landings.
+            info = self._surface_pad_granted(raw)
+            kind = "surface" if info else None
+        self._pad_info = {"pad": pad, "station": raw.get("StationName_Localised") or raw.get("StationName"), "kind": kind,
                           "words": (info or {}).get("words"), "map": (info or {}).get("map"), "at": time.time()}
         say = (info or {}).get("say")
         if say and self.config.get("pad_location", True):
-            self._small_say(f"Pad {pad}: {say}.", heading=f"PAD {pad}", topic="pad")
+            self._small_say(say if kind == "surface" else f"Pad {pad}: {say}.", heading=f"PAD {pad}", topic="pad")
 
     # -- fuel from your own jumps ---------------------------------------------------------------------
     def _smalls_on_jump(self, raw):
@@ -521,6 +525,8 @@ class DashboardSmallsMixin:
         # Leaving the station (or never getting in): the pad is no longer yours.
         if event in PAD_GONE:
             self._pad_info = None
+            if not startup_replay and hasattr(self, "_surface_pad_forget"):
+                self._surface_pad_forget()
         if startup_replay or not isinstance(raw, dict):
             return
         try:
@@ -541,6 +547,8 @@ class DashboardSmallsMixin:
             elif event == "Undocked":
                 self._smalls_on_undocked(raw)
             elif event == "Docked":
+                if hasattr(self, "_surface_pad_docked"):
+                    self._surface_pad_docked(raw)
                 self._smalls_on_docked(raw)
             elif event == "ScanOrganic":
                 self._smalls_on_organic(raw)

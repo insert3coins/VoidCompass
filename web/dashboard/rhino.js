@@ -28,6 +28,9 @@ let sitesEditing = null;
 let runsOpen = null;
 const when = (seconds) => n(seconds) ? new Date(n(seconds) * 1000).toLocaleDateString("en-GB", {day: "numeric", month: "short", year: "numeric"}) : "—";
 let confirming = {key: "", until: 0};
+// SITES: the deposit being edited, and the table it was opened from (it opens
+// under that row, as a saved site's runs do).
+let sitesEditingIn = "all";
 let drawnParts = {};
 // The map's own view, apart from the Rhino Map overlay's range (its hotkey
 // never touches this one). It opens fitted to the mining location being
@@ -281,10 +284,15 @@ function mapLine(data, esc) {
 // A rig's time: how long still to go, or READY, once your rigs have taught
 // how long they take; until then, how long it's been down.
 function readyWords(rig) {
+  // Still collecting from it: its clock starts again as you drive off (5.8.3).
+  if (rig.collecting) return `<b class="rh-collecting">COLLECTING</b> · ${n(rig.haul)} t so far · its clock starts once you've driven off`;
   const down = Math.max(0, Date.now() / 1000 - n(rig.at));
   if (!n(rig.ready_s)) return `${Math.floor(down / 60)}:${String(Math.floor(down % 60)).padStart(2, "0")} down`;
-  const left = Math.ceil(n(rig.ready_s) - down);
-  return left <= 0 ? `<b class="rh-ready">READY</b>` : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} to go`;
+  // Filling since it went down, or since you last collected from it.
+  const filling = Math.max(0, Date.now() / 1000 - n(rig.fill_from || rig.at));
+  const left = Math.ceil(n(rig.ready_s) - filling);
+  const last = n(rig.haul) ? ` · last ${n(rig.haul)} t` : "";
+  return (left <= 0 ? `<b class="rh-ready">READY</b>` : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} to go`) + last;
 }
 
 function rigsTable(data, esc) {
@@ -328,6 +336,36 @@ function mapView(data, esc) {
 }
 
 // -- SITES and WHERE TO LAND ------------------------------------------------------------
+// Sites compared (5.8.3): each saved site's usual rate as a bar, its best run
+// as a tick on it, and its runs in order as a strip of dots, all on one scale.
+const STRIP_RUNS = 12;
+function sitesCompared(data, esc) {
+  const sites = (data.saved_sites || []).filter((site) => site.runs && (site.runs.runs || []).some((run) => n(run.tph) > 0))
+    .sort((a, b) => n(b.runs.usual_tph) - n(a.runs.usual_tph));
+  if (!sites.length) return "";
+  const top = Math.max(...sites.map((site) => n(site.runs.best_tph)), 1);
+  const scale = (value) => Math.max(0, Math.min(100, (n(value) / top) * 100));
+  const rows = sites.map((site) => {
+    const runs = (site.runs.runs || []).filter((run) => n(run.tph) > 0).slice(0, STRIP_RUNS).reverse();
+    const width = 132, height = 26, pad = 6;
+    const x = (index) => runs.length < 2 ? width / 2 : pad + (index * (width - 2 * pad)) / (runs.length - 1);
+    const y = (tph) => height - pad - (n(tph) / top) * (height - 2 * pad);
+    const line = runs.length > 1 ? `<polyline points="${runs.map((run, index) => `${x(index).toFixed(1)},${y(run.tph).toFixed(1)}`).join(" ")}"/>` : "";
+    const dots = runs.map((run, index) => `<circle cx="${x(index).toFixed(1)}" cy="${y(run.tph).toFixed(1)}" r="4"${index === runs.length - 1 ? ' class="latest"' : ""}><title>${esc(when(run.docked))}: ${whole(run.tph)} t/h · ${whole(run.refined_t)} t in ${whole(run.minutes)} min</title></circle>`).join("");
+    const usual = n(site.runs.usual_tph);
+    const best = n(site.runs.best_tph);
+    const label = `Usual ${whole(usual)} t/h over ${whole(site.runs.count)} run${site.runs.count === 1 ? "" : "s"}, best ${whole(best)} t/h`;
+    return `<li class="${site.here ? "here" : ""}">
+      <span class="rh-cmp-name"><b>${esc(site.name || "Mining location")}</b><small>${esc(site.body)}${site.runs.best_commodity ? ` · ${esc(site.runs.best_commodity)}` : ""}</small></span>
+      <span class="rh-cmp-bar" title="${esc(label)}" aria-label="${esc(label)}"><i style="width:${scale(usual).toFixed(1)}%"></i><em style="left:${scale(best).toFixed(1)}%"></em><b style="left:${Math.max(scale(usual), scale(best)).toFixed(1)}%">${whole(usual)}<small> t/h</small></b></span>
+      <svg class="rh-cmp-strip" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${esc(`Runs at ${site.name}, oldest to newest`)}">${line}${dots}</svg>
+    </li>`;
+  }).join("");
+  const body = `<p class="rh-cmp-key"><span><i class="bar"></i>usual rate</span><span><i class="tick"></i>best run</span><span><i class="dot"></i>each run, oldest to newest (hover for it)</span></p>
+    <ul class="rh-cmp">${rows}</ul>`;
+  return panel("SITES COMPARED · TONNES AN HOUR", body, {note: `${whole(sites.length)} site${sites.length === 1 ? "" : "s"} with runs`});
+}
+
 function savedSites(data, esc, words) {
   const all = data.saved_sites || [];
   const rows = all.filter((row) => !words.length || words.some((word) =>
@@ -354,6 +392,17 @@ function savedSites(data, esc, words) {
     {note: `${whole(rows.length)} of ${whole(all.length)}`});
 }
 
+// EDIT on a deposit's row, and its editor under that row while it's open.
+function editButton(row, where) {
+  const open = String(sitesEditing) === String(row.id) && sitesEditingIn === where;
+  return `<button type="button" data-rhino-op="${open ? "sites_edit_done" : "sites_edit"}" data-id="${lastUi.escapeHtml(String(row.id))}" data-where="${where}" aria-expanded="${open}">${open ? "CLOSE" : "EDIT"}</button>`;
+}
+
+function editRow(data, esc, row, where, columns) {
+  if (String(sitesEditing) !== String(row.id) || sitesEditingIn !== where) return "";
+  return `<tr class="rh-edit-row"><td colspan="${columns}"><div class="rh-sites-editor">${depositEditor(data, esc, row)}</div></td></tr>`;
+}
+
 // Worked-out deposits and when to look again: due a look first, then those
 // checked (the mark comes off), then the freshest.
 const REGROWTH_ORDER = {due: 0, expired: 1, unknown: 2, waiting: 3, fresh: 4};
@@ -369,7 +418,7 @@ function depletedPanel(data, esc, words) {
         fresh: `Look in ${Math.max(0, 14 - n(info.age_days))} d`}[info.state] || "—";
       return `<tr class="${info.due ? "due" : ""}"><td>${esc(String(row.materials || "").split(",")[0])}</td><td>${esc(row.system)}<small>${esc(row.body)}</small></td>
         <td>${info.age_days != null ? `${whole(info.age_days)} days ago` : "—"}${info.looks ? `<small>checked ${info.looks}×</small>` : ""}</td><td>${esc(next)}</td>
-        <td class="rh-row-actions"><button type="button" data-rhino-op="sites_edit" data-id="${esc(row.id)}">EDIT</button><button type="button" data-rhino-op="deposit_navigate" data-id="${esc(row.id)}">TARGET</button><button type="button" data-rhino-op="deposit_regrown" data-id="${esc(row.id)}">REGROWN</button></td></tr>`;
+        <td class="rh-row-actions">${editButton(row, "depleted")}<button type="button" data-rhino-op="deposit_navigate" data-id="${esc(row.id)}">TARGET</button><button type="button" data-rhino-op="deposit_regrown" data-id="${esc(row.id)}">REGROWN</button>${confirmButton(`del-${row.id}`, "DELETE", "deposit_delete", {id: row.id})}</td></tr>${editRow(data, esc, row, "depleted", 5)}`;
     }).join("")}</tbody></table>` : empty("No worked-out deposit matches that.");
   return panel("WORKED-OUT DEPOSITS", `${table}<p class="rh-dim">Deposits grow back, nobody knows quite how fast. Two weeks after you work one out it's due a look: MINED OUT on it (or STILL DEPLETED here) if it's still empty, and the mark comes off a week later. A rig refining it again marks it grown back by itself.</p>`,
     {note: due ? `${whole(due)} due a look` : `${whole(all.length)}`});
@@ -393,17 +442,15 @@ function sitesView(data, esc) {
   const here = String(data.body || "").toLowerCase();
   const table = rows.length ? `<table class="rh-table"><thead><tr><th>SYSTEM</th><th>BODY</th><th>COMMODITY</th><th>RIGS</th><th>AMOUNT</th><th>DENSITY</th><th>SIGNAL</th><th></th></tr></thead><tbody>${rows.map((row) =>
     `<tr class="${row.depleted ? "mined" : ""}${String(row.body || "").toLowerCase() === here ? " here" : ""}"><td>${esc(row.system)}</td><td>${esc(row.body)}</td><td>${esc(row.materials)}</td><td>${row.rigs || "—"}</td><td>${row.depleted ? `${row.regrowth?.due ? "<b class=\"rh-due\">Recheck due</b>" : "Depleted"}${row.regrowth?.age_days != null ? `<small>${whole(row.regrowth.age_days)} days</small>` : ""}` : esc(row.amount || "—")}</td><td>${esc(row.density || "—")}</td><td>${row.signal ?? "—"}</td>
-     <td class="rh-row-actions"><button type="button" data-rhino-op="sites_edit" data-id="${esc(row.id)}">EDIT</button><button type="button" data-rhino-op="copy_system" data-system="${esc(row.system)}">COPY SYSTEM</button><button type="button" data-rhino-op="deposit_navigate" data-id="${esc(row.id)}">TARGET</button></td></tr>`).join("")}</tbody></table>`
+     <td class="rh-row-actions">${editButton(row, "all")}<button type="button" data-rhino-op="copy_system" data-system="${esc(row.system)}">COPY SYSTEM</button><button type="button" data-rhino-op="deposit_navigate" data-id="${esc(row.id)}">TARGET</button>${confirmButton(`del-${row.id}`, "DELETE", "deposit_delete", {id: row.id})}</td></tr>${editRow(data, esc, row, "all", 8)}`).join("")}</tbody></table>`
     : empty(words.length ? "Nothing marked matches that." : "Deposits you mark show here, on every planet.");
-  const editing = (data.sites || []).find((row) => String(row.id) === String(sitesEditing));
   const chips = [...(data.catalogue?.rhino || []), ...(data.catalogue?.found || [])].map((name) => {
     const on = words.includes(name.toLowerCase());
     return `<button type="button" class="rh-chip${on ? " on" : ""}" data-rhino-op="filter_chip" data-name="${esc(name)}" aria-pressed="${on}">${esc(name)}</button>`;
   }).join("");
   return `${targetBar(data, esc)}<form class="rh-filter" data-rhino-form="filter"><input name="filter" value="${esc(filter)}" placeholder="Filter: name, system, body or commodity; commas mean any of them"></form>
     ${chips ? `<div class="rh-chips" role="group" aria-label="Rhino commodities">${chips}</div>` : ""}
-    ${editing ? `<div class="rh-sites-editor">${depositEditor(data, esc, editing)}</div>` : ""}
-    ${savedSites(data, esc, words)}${depletedPanel(data, esc, words)}${panel("EVERY DEPOSIT YOU'VE MARKED", table, {note: `${whole(rows.length)} of ${whole((data.sites || []).length)}`})}`;
+    ${words.length ? "" : sitesCompared(data, esc)}${savedSites(data, esc, words)}${depletedPanel(data, esc, words)}${panel("EVERY DEPOSIT YOU'VE MARKED", table, {note: `${whole(rows.length)} of ${whole((data.sites || []).length)}`})}`;
 }
 
 function landView(data, esc) {
@@ -605,6 +652,7 @@ export function handleRhinoClick(event, ui) {
   if (op === "site_runs") { runsOpen = runsOpen === control.dataset.id ? null : control.dataset.id; renderRhino(last, ui, true); return true; }
   if (op === "sites_edit") {
     sitesEditing = control.dataset.id;
+    sitesEditingIn = control.dataset.where || "all";
     renderRhino(last, ui, true);
     ui.byId("rhino-workspace")?.querySelector(".rh-sites-editor")?.scrollIntoView({block: "nearest"});
     return true;

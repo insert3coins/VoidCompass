@@ -160,6 +160,41 @@ class DashboardOverlayGroupsMixin:
         self._overlay_groups_apply(self._overlay_group_state(groups))
         return True
 
+    def _overlay_group_member(self, group_id, attr, member):
+        """Overlay Studio's inspector (5.8.3): this overlay in that group, or not."""
+        if attr not in OVERLAY_SPEC_BY_ATTR:
+            return False
+        groups = self._overlay_groups()
+        group = next((row for row in groups if row["id"] == group_id), None)
+        if group is None or (attr in group["members"]) == bool(member):
+            return False
+        group["members"] = [*group["members"], attr] if member else [item for item in group["members"] if item != attr]
+        self.config["overlay_groups"] = groups
+        self._overlay_groups_apply(self._overlay_group_state(groups), switched_on=(group_id,) if member and overlay_groups.is_on(
+            group, self._overlay_group_state(groups)) else ())
+        return True
+
+    def _overlay_group_talk(self, text, rng=None):
+        """A group asked for by name, by TALK or voice (5.8.3): its reply, or
+        None when no group was asked about."""
+        from voidcompass.overlays import watcher_copilot
+        groups = self._overlay_groups()
+        asked = overlay_groups.request(text, groups)
+        if asked is None:
+            return None
+        if not groups:
+            return watcher_copilot.reply("group_none", rng)
+        if asked["id"] is None:
+            return watcher_copilot.reply("group_unknown", rng, name=asked["name"],
+                                         names=", ".join(group["name"] for group in groups))
+        group = next(row for row in groups if row["id"] == asked["id"])
+        was = overlay_groups.is_on(group, self._overlay_group_state(groups))
+        want = (not was) if asked["on"] is None else asked["on"]
+        if want == was:
+            return watcher_copilot.reply("group_already_on" if was else "group_already_off", rng, name=group["name"])
+        self._ui_post(lambda: self._overlay_group_toggle(group["id"], on=want, say=False), key="talk-group")
+        return watcher_copilot.reply("group_on" if want else "group_off", rng, name=group["name"])
+
     # -- the Local API --------------------------------------------------------------
     def api_overlay_groups(self):
         return self._overlay_groups_brief()

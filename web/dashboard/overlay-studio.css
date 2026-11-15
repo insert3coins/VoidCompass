@@ -261,6 +261,15 @@
 .og-member small { margin-left: auto; color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .1em; }
 .og-actions { display: flex; gap: 6px; }
 .og-actions .primary { color: var(--accent); border-color: var(--accent); }
+/* The inspector's IN GROUPS row (5.8.3). */
+.studio-member-groups { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 8px 0 2px; }
+.studio-member-groups:empty { display: none; }
+.studio-member-groups > small { flex-basis: 100%; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.studio-member-groups > span { color: var(--dim); font: 11px/1.4 "Segoe UI", sans-serif; }
+.og-member-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 9px; border: 1px solid var(--border-soft); background: var(--inset); color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .08em; cursor: pointer; }
+.og-member-chip i { width: 7px; height: 7px; border: 1px solid var(--dim); border-radius: 1px; }
+.og-member-chip.on { border-color: color-mix(in srgb, var(--orange) 55%, var(--border-soft)); color: var(--text); }
+.og-member-chip.on i { border-color: var(--orange); background: var(--orange); }
 /* The groups at the top of the header's PANELS menu. */
 .og-quick-label { grid-column: 1 / -1; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
 .og-quick-rule { grid-column: 1 / -1; width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--border-soft); }

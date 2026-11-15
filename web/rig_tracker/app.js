@@ -52,49 +52,65 @@
     }
   }
 
-  // A dial: a ring with a needle pointing the way the rig lies (up is
-  // straight ahead), or a filled ring when you're at it.
   // How far a rig is towards ready, 0 to 1, once your rigs have taught how
-  // long they take (rig.ready_s); null before then.
-  const readiness = (rig) => rig.tracked && number(rig.ready_s) > 0
-    ? Math.max(0, Math.min(1, (Date.now() / 1000 - number(rig.at)) / number(rig.ready_s))) : null;
+  // long they take (rig.ready_s); null before then, or while you're
+  // collecting from it.
+  const readiness = (rig) => rig.tracked && !rig.collecting && number(rig.ready_s) > 0
+    ? Math.max(0, Math.min(1, (Date.now() / 1000 - number(rig.fill_from || rig.at)) / number(rig.ready_s))) : null;
+  const clockText = (seconds) => {
+    const s = Math.max(0, Math.round(seconds));
+    return s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, "0")}h` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  };
 
-  function dial(rig) {
-    const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("viewBox", "0 0 40 40");
-    svg.setAttribute("aria-hidden", "true");
-    const ring = document.createElementNS(NS, "circle");
-    ring.setAttribute("cx", "20"); ring.setAttribute("cy", "20"); ring.setAttribute("r", "15");
-    ring.setAttribute("class", "ring");
-    svg.appendChild(ring);
-    if (!rig.tracked) return svg;
-    // The countdown: a ring filling round the dial over the time your rigs take.
-    const share = readiness(rig);
+  function svg(tag, attrs) {
+    const element = document.createElementNS(NS, tag);
+    for (const [name, value] of Object.entries(attrs)) element.setAttribute(name, String(value));
+    return element;
+  }
+
+  // The rig's ring: its number in the middle, filling round to READY, and a
+  // marker riding round the outside pointing the way it lies from where you
+  // face (top is straight ahead), as the old dials' needle did.
+  function ring(rig, share) {
+    const box = svg("svg", {viewBox: "0 0 52 52", class: "rig-ring", "aria-hidden": "true"});
+    box.append(svg("circle", {cx: 26, cy: 26, r: 17, class: "track"}));
     if (share != null) {
-      const around = 2 * Math.PI * 18.5;
-      const fill = document.createElementNS(NS, "circle");
-      fill.setAttribute("cx", "20"); fill.setAttribute("cy", "20"); fill.setAttribute("r", "18.5");
-      fill.setAttribute("class", "timer");
-      fill.setAttribute("stroke-dasharray", `${(around * share).toFixed(2)} ${around.toFixed(2)}`);
-      fill.setAttribute("transform", "rotate(-90 20 20)");
-      svg.appendChild(fill);
+      const around = 2 * Math.PI * 17;
+      box.append(svg("circle", {cx: 26, cy: 26, r: 17, class: "fill", transform: "rotate(-90 26 26)",
+        "stroke-dasharray": `${(around * share).toFixed(2)} ${around.toFixed(2)}`}));
     }
-    if (rig.here) {
-      const dot = document.createElementNS(NS, "circle");
-      dot.setAttribute("cx", "20"); dot.setAttribute("cy", "20"); dot.setAttribute("r", "6");
-      dot.setAttribute("class", "here-dot");
-      svg.appendChild(dot);
-      return svg;
-    }
-    const needle = document.createElementNS(NS, "path");
-    needle.setAttribute("d", "M20 7.5 L23.6 15.5 L20 13.8 L16.4 15.5 Z M20 20 L20 13.8");
-    needle.setAttribute("class", "needle");
-    needle.setAttribute("transform", `rotate(${number(rig.relative)} 20 20)`);
-    const hub = document.createElementNS(NS, "circle");
-    hub.setAttribute("cx", "20"); hub.setAttribute("cy", "20"); hub.setAttribute("r", "2.6");
-    hub.setAttribute("class", "hub");
-    svg.append(needle, hub);
-    return svg;
+    if (rig.here) box.append(svg("circle", {cx: 26, cy: 26, r: 14, class: "here"}));
+    else box.append(svg("path", {d: "M26 -2 L35.5 12 L26 8 L16.5 12 Z", class: "bug", transform: `rotate(${number(rig.relative)} 26 26)`}));
+    const label = svg("text", {x: 26, y: 27, class: "num", "text-anchor": "middle", "dominant-baseline": "middle"});
+    label.textContent = String(rig.slot);
+    box.append(label);
+    return box;
+  }
+
+  // One rig out, a card two to a line: its ring, what it's working, which
+  // way and how far (and its tonnes), and its clock.
+  function rigRow(rig) {
+    const share = readiness(rig);
+    const ready = share != null && share >= 1;
+    const learning = !rig.collecting && !(number(rig.ready_s) > 0);
+    const state = rig.collecting ? "collecting" : ready ? "ready" : learning ? "learning" : "filling";
+    const item = node("li", `rig ${state}${rig.next ? " nearest" : ""}${rig.here ? " at" : ""}`);
+    const working = rig.commodity ? String(rig.commodity).toUpperCase() : "WORKING";
+    const where = node("span", "rig-where");
+    where.append(node("b", "", rig.here ? "HERE" : distance(rig.distance_m)));
+    if (number(rig.tonnes)) where.append(node("small", "", `· ${number(rig.tonnes)} t`));
+    const filled = Date.now() / 1000 - number(rig.fill_from || rig.at);
+    const clock = node("span", "rig-clock");
+    // This collection's tonnes as they come in, then what the last one gave.
+    const haul = number(rig.haul);
+    const last = haul ? `· last ${haul} t` : "";
+    if (rig.collecting) clock.append(node("b", "", "COLLECTING"), node("small", "haul", `${haul} t`));
+    else if (ready) clock.append(node("b", "", "READY"), node("small", "", last));
+    else if (learning) clock.append(node("b", "", clockText(filled)), node("small", "", ["filling", last].filter(Boolean).join(" ")));
+    else clock.append(node("b", "", clockText(number(rig.ready_s) - filled)), node("small", "", ["to ready", last].filter(Boolean).join(" ")));
+    item.append(ring(rig, share), node("b", "rig-name", working), where, clock);
+    item.title = `Rig ${rig.slot}: ${working}, down ${age(rig.at)}`;
+    return item;
   }
 
   // A hold: how full it is, never what's in it (that's the Cargo overlay).
@@ -146,31 +162,6 @@
       ${number(data.refined) ? `<div class="telemetry">REFINED HERE <b>${number(data.refined)} t</b>${data.refined_value ? ` · ~${credits(data.refined_value)} CR` : ""}</div>` : ""}`;
   }
 
-  function targets(data) {
-    if (!data) return "";
-    const rows = (data.rows || []).map((row) => `<li class="${row.depleted ? "mined" : ""}" style="color:${colourOf(row.commodity, row.depleted)}">
-        <span>${turn(row.bearing)} ${escapeHtml(row.commodity)}</span><b>${row.depleted ? "mined" : `${Draw.metres(number(row.distance))}${row.rigs ? ` ${row.rigs}R` : ""}`}</b></li>`).join("");
-    const most = Math.max(1, ...(data.bars || []).map((bar) => number(bar.credits)));
-    const bars = (data.bars || []).length ? `<div class="bars">${data.bars.map((bar) =>
-      `<div><i style="height:${Math.max(4, number(bar.credits) / most * 100).toFixed(0)}%;background:${colourOf(bar.commodity)}"></i><small>${escapeHtml(String(bar.commodity).toUpperCase().slice(0, 7))}</small></div>`).join("")}</div>` : "";
-    return `<header><h4>NEAREST</h4></header>
-      ${rows ? `<ul class="list">${rows}</ul>` : `<div class="dim">Nothing marked here yet: MARK DEPOSIT on each one you find.</div>`}${bars}${data.refined && bars ? `<div class="dim">refined here so far, at what it sells for</div>` : ""}`;
-  }
-
-  function status(data) {
-    if (!data) return "";
-    const value = data.credits ? `~${credits(data.credits)} CR${data.unpriced ? ` · +${data.unpriced} unpriced` : ""}`
-      : data.per_rig ? "—" : "after a few rigs worked";
-    const lines = [`<dl class="rows pairs"><dt>EST. VALUE</dt><dd>${value}</dd><dt>DRIVE</dt><dd>${Draw.metres(number(data.route_m))}</dd>
-      ${data.per_rig ? `<dt>A RIG GIVES</dt><dd>~${Math.round(number(data.per_rig))} t (your rigs)</dd>` : ""}</dl>`];
-    // The rig radar's word, unless the guide is already saying it.
-    if (data.words && sections.guide?.detail !== data.words) lines.push(`<div class="line ${escapeHtml(data.tone)}">${escapeHtml(data.words)}</div>`);
-    for (const group of data.groups || []) {
-      lines.push(`<div class="line yellow">PATCH ${group.n} · ${group.rigs}R${group.cr_per_h ? ` · ~${credits(group.cr_per_h)} CR/H` : ""} · ${turn(group.bearing)} ${Draw.metres(number(group.distance))}</div>`);
-    }
-    return `<header><h4>STATUS</h4><em>${number(data.deposits)} DEP · ${number(data.rigs)}R</em></header>${lines.join("")}`;
-  }
-
   // Back in the ship: what the run gave, what's still out, and what's next.
   function aboardCard(data) {
     if (!data) return "";
@@ -208,23 +199,15 @@
     byId("rigs-body").textContent = String(model.body || "").toUpperCase();
     byId("rigs-count").textContent = model.aboard && !number(model.tracked) ? "IN THE SHIP" : `${number(model.tracked)} OUT`;
     part("rigs-aboard", aboardCard(model.aboard));
-    byId("rigs-dials").hidden = Boolean(model.aboard) && !number(model.tracked);
-    byId("rigs-dials").replaceChildren(...(model.slots || []).map((rig) => {
-      const share = readiness(rig);
-      const ready = share != null && share >= 1;
-      const item = node("li", `dial${rig.tracked ? "" : " idle"}${rig.next ? " nearest" : ""}${rig.here ? " at" : ""}${ready ? " ready" : ""}`);
-      // What it's working on one line and its tonnes and time down on the
-      // next, each cut to the dial's width: never across the next dial.
-      const working = rig.tracked && rig.commodity ? String(rig.commodity).toUpperCase() : "";
-      const left = share == null ? 0 : Math.ceil(number(rig.ready_s) * (1 - share));
-      const clock = share == null ? age(rig.at) : ready ? "READY" : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
-      const since = rig.tracked ? [number(rig.tonnes) ? `${number(rig.tonnes)}T` : "", clock].filter(Boolean).join(" · ") : "";
-      item.append(node("span", "slot", `#${rig.slot}`), dial(rig),
-        node("b", "distance", rig.tracked ? (rig.here ? "HERE" : distance(rig.distance_m)) : "--"),
-        node("small", "working", working), node("small", "age", since));
-      if (working) item.title = working;
-      return item;
-    }));
+    const out = (model.slots || []).filter((rig) => rig.tracked);
+    const list = byId("rigs-list");
+    list.hidden = !out.length;
+    list.replaceChildren(...out.map(rigRow));
+    // The rig numbers still free, on one line rather than empty rows.
+    const free = (model.slots || []).filter((rig) => !rig.tracked).map((rig) => `#${rig.slot}`);
+    const freeLine = byId("rigs-free");
+    freeLine.hidden = !out.length || !free.length || (Boolean(model.aboard) && !out.length);
+    freeLine.textContent = free.length ? `FREE  ${free.join("  ")}` : "";
     const order = (model.order || []).map((slot) => `#${slot}`);
     byId("rigs-order").textContent = order.length > 1 ? `COLLECT ▸ ${order.join(" → ")}` : "";
     byId("rigs-order").hidden = order.length < 2;
@@ -234,8 +217,12 @@
     hazard.textContent = sections.hazard ? `⚠ ${sections.hazard}` : "";
     part("rigs-guide", on.has("guide") ? guide(sections.guide) : "");
     part("rigs-deposit", on.has("deposit") ? deposit(sections.deposit) : "");
-    part("rigs-targets", on.has("targets") ? targets(sections.targets) : "");
-    part("rigs-status", on.has("status") ? status(sections.status) : "");
+    // The rig radar's word, unless the guide is already saying it.
+    const radar = sections.radar && sections.guide?.detail !== sections.radar.words ? sections.radar : null;
+    const radarLine = byId("rigs-word");
+    radarLine.hidden = !radar;
+    radarLine.className = `line rig-word ${radar ? radar.tone || "" : ""}`;
+    radarLine.textContent = radar ? radar.words : "";
     const lines = factLines(model.survey || {});
     const survey = byId("rigs-survey");
     survey.replaceChildren(...lines.map((line) => node("li", "", line.trim())));

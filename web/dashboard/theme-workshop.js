@@ -14,6 +14,11 @@ const GROUPS = [
   ["STATUS", [["green", "Good", "Online, done, safe"], ["yellow", "Caution", "Warnings"], ["red", "Danger", "Alerts and errors"]]],
 ];
 const KEYS = GROUPS.flatMap(([, rows]) => rows.map(([key]) => key));
+// Share codes (5.8.3) keep the colours in themes.py's THEME_KEYS order, so a
+// code made today still reads the same after the workshop's groups change.
+const CODE_KEYS = ["bg", "panel", "panel_alt", "panel_raised", "header", "input", "inset", "border", "border_soft",
+  "selection", "accent", "orange", "text", "muted", "dim", "green", "yellow", "red"];
+const CODE_PREFIX = "VCTHEME-";
 const HEX = /^#[0-9a-f]{6}$/i;
 
 let open = false;
@@ -23,6 +28,8 @@ let original = "";         // the draft as it opened, to tell what's changed
 let confirm = {what: "", until: 0};
 let pending = {name: "", until: 0};   // saved: keep showing it until the deck has it
 let last = {};             // the settings data last drawn
+let codeNote = {text: "", bad: false};
+let wantPaste = false;     // opened to paste a code: the box gets the focus
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[char]));
 
@@ -76,6 +83,58 @@ function checks(palette) {
     const grade = ratio >= good ? "good" : ratio >= fair ? "fair" : "low";
     return `<li class="tw-check ${grade}"><span>${label}</span><b>${ratio.toFixed(1)} : 1</b><em>${grade === "good" ? "EASY TO READ" : grade === "fair" ? "READABLE" : "HARD TO READ"}</em></li>`;
   }).join("");
+}
+
+// -- share codes -----------------------------------------------------------------------
+function toBase64Url(bytes) {
+  let text = "";
+  for (const byte of bytes) text += String.fromCharCode(byte);
+  return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromBase64Url(text) {
+  const padded = text.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((text.length + 3) % 4);
+  return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+}
+
+// VCTHEME-<base64url of: 1, the skin's length and id, 18 colours, the name>.
+export function themeCode(theme) {
+  const encode = (text) => [...new TextEncoder().encode(text)];
+  const skin = encode(String(theme.skin || "")).slice(0, 20);
+  const bytes = [1, skin.length, ...skin];
+  for (const key of CODE_KEYS) bytes.push(...rgb(HEX.test(theme.palette?.[key] || "") ? theme.palette[key] : "#000000"));
+  bytes.push(...encode(String(theme.name || "").trim().slice(0, 60)));
+  return CODE_PREFIX + toBase64Url(bytes);
+}
+
+// {name, skin, palette} from a code, or null. A skin this app doesn't have is left off.
+export function readThemeCode(text, skins = []) {
+  const raw = String(text || "").replace(/\s+/g, "");
+  const body = raw.toUpperCase().startsWith(CODE_PREFIX) ? raw.slice(CODE_PREFIX.length) : raw;
+  if (!body || !/^[A-Za-z0-9_-]+$/.test(body)) return null;
+  let bytes;
+  try {
+    bytes = fromBase64Url(body);
+  } catch (_error) {
+    return null;
+  }
+  if (bytes[0] !== 1 || bytes.length < 2 || bytes[1] > 20) return null;
+  let at = 2;
+  const skin = new TextDecoder().decode(bytes.slice(at, at + bytes[1]));
+  at += bytes[1];
+  if (bytes.length < at + CODE_KEYS.length * 3) return null;
+  const palette = {};
+  for (const key of CODE_KEYS) {
+    palette[key] = `#${[...bytes.slice(at, at + 3)].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+    at += 3;
+  }
+  let name = "";
+  try {
+    name = new TextDecoder("utf-8", {fatal: true}).decode(bytes.slice(at)).trim().slice(0, 60);
+  } catch (_error) {
+    return null;
+  }
+  return {name: name || "Shared theme", skin: skins.includes(skin) ? skin : "", palette};
 }
 
 // -- what the deck wears ------------------------------------------------------------
@@ -141,7 +200,8 @@ function picker(data) {
   ].filter(([, , rows]) => rows.length);
   const launch = open
     ? `<p class="tw-launch-note"><b>WORKSHOP OPEN</b> Click any theme to start from it.</p>`
-    : `<button type="button" class="tw-launch-button" data-tw-op="open"><b>THEME WORKSHOP</b><span>${(box.custom || []).includes(box.name) ? `Edit ${esc(box.name)}` : `Make your own from ${esc(box.name || "this theme")}`}: colours, and any skin's fonts and shapes</span></button>`;
+    : `<button type="button" class="tw-launch-button" data-tw-op="open"><b>THEME WORKSHOP</b><span>${(box.custom || []).includes(box.name) ? `Edit ${esc(box.name)}` : `Make your own from ${esc(box.name || "this theme")}`}: colours, and any skin's fonts and shapes</span></button>
+      <button type="button" class="tw-launch-paste" data-tw-op="paste" title="Someone shared a theme code: paste it in the workshop">PASTE A SHARED THEME</button>`;
   return `<div class="tw-launch">${launch}</div>` + sets.map(([title, note, rows]) => `<section class="theme-set"><header><b>${title}</b><span>${note}</span><em>${rows.length}</em></header><div class="theme-options">${rows.map((theme) => card(theme, box)).join("")}</div></section>`).join("");
 }
 
@@ -175,6 +235,12 @@ function workshop(data) {
         <p class="tw-warn" id="tw-name-warn"${taken ? "" : " hidden"}>That's a built-in theme's name: give yours another.</p>
         <label class="tw-field"><span>START FROM<small>Its colours and skin, replacing yours</small></span><select data-tw-field="base">${bases}</select></label>
         <label class="tw-field"><span>SKIN<small>Fonts, corners and panel styling</small></span><select data-tw-field="skin">${skins}</select></label>
+        <div class="tw-share">
+          <span>SHARE<small>Your theme as a code to post anywhere. A code pasted here loads its theme for you to try, then save.</small></span>
+          <button type="button" data-tw-op="copy_code">COPY SHARE CODE</button>
+          <div class="tw-paste"><input data-tw-field="code" placeholder="Paste a VCTHEME- code" spellcheck="false" autocomplete="off"><button type="button" data-tw-op="load_code">LOAD</button></div>
+          <p class="tw-code-note${codeNote.bad ? " bad" : ""}" id="tw-code-note"${codeNote.text ? "" : " hidden"}>${esc(codeNote.text)}</p>
+        </div>
         <div class="tw-quick">
           <span>QUICK START<small>Pick these three, then blend the panels, lines and text shades from them.</small></span>
           <div>${[["bg", "Background"], ["text", "Text"], ["accent", "Accent"]].map(([key, label]) => `<label><input type="color" data-tw-color="${key}" value="${esc(draft.palette[key])}"><small>${label}</small></label>`).join("")}</div>
@@ -201,6 +267,10 @@ export function themeSettings(data) {
 function redraw(ui) {
   const host = document.getElementById("theme-settings");
   if (host) host.innerHTML = picker(last) + workshop(last);
+  if (wantPaste) {
+    wantPaste = false;
+    document.querySelector('#theme-workshop [data-tw-field="code"]')?.focus();
+  }
   ui?.refreshTheme?.();
 }
 
@@ -238,8 +308,10 @@ export function handleThemeWorkshopClick(event, ui) {
   if (!control || !control.closest("#theme-settings")) return false;
   const op = control.dataset.twOp;
   const box = editor(last);
-  if (op === "open") {
+  if (op === "open" || op === "paste") {
     startFrom(last, box.name || "Void Cyan");
+    wantPaste = op === "paste";
+    codeNote = {text: "", bad: false};
   } else if (op === "edit") {
     startFrom(last, control.dataset.name, true);
   } else if (op === "close") {
@@ -251,6 +323,25 @@ export function handleThemeWorkshopClick(event, ui) {
     }
   } else if (op === "undo") {
     draft = JSON.parse(original);
+  } else if (op === "copy_code") {
+    const code = themeCode({...draft, name: draft.name.trim()});
+    ui.command("workspace", {page: "settings", operation: "copy", text: code}).then((done) => {
+      codeNote = done ? {text: "Copied. Anyone with Void Compass can paste it under PASTE A SHARED THEME.", bad: false}
+        : {text: "Couldn't reach the clipboard: try again.", bad: true};
+      const note = document.getElementById("tw-code-note");
+      if (note) { note.hidden = false; note.textContent = codeNote.text; note.classList.toggle("bad", codeNote.bad); }
+    });
+    return true;
+  } else if (op === "load_code") {
+    const input = document.querySelector('#theme-workshop [data-tw-field="code"]');
+    const found = readThemeCode(input?.value, (box.skin_choices || []).map(([id]) => id));
+    if (!found) {
+      codeNote = {text: "That isn't a theme code: it should start VCTHEME-.", bad: true};
+    } else {
+      const builtin = (last.themes || []).some((theme) => !theme.custom && theme.name === found.name);
+      Object.assign(draft, {name: builtin ? `${found.name} (shared)` : found.name, previous: "", skin: found.skin, palette: found.palette});
+      codeNote = {text: `Loaded ${draft.name}: the deck shows it now. SAVE & APPLY keeps it.`, bad: false};
+    }
   } else if (op === "blend") {
     for (const [key, value] of Object.entries(blended(draft.palette))) draft.palette[key] = value;
   } else if (op === "save") {
@@ -316,6 +407,8 @@ export function handleThemeWorkshopInput(event, ui) {
   } else if (target.dataset.twField === "base") {
     rebase(last, target.value);
     redraw(ui);
+    return true;
+  } else if (target.dataset.twField === "code") {
     return true;
   } else if (target.dataset.twField === "skin") {
     draft.skin = target.value;

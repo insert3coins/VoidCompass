@@ -26,7 +26,6 @@ import {renderSystemTable, setSystemMode, systemModes} from "./explore-system.js
 import {renderSearch} from "./explore-search.js";
 import {renderFirsts} from "./explore-firsts.js";
 import {renderChecklist} from "./explore-checklist.js";
-import {renderJournalLog} from "./explore-log.js";
 
 const VIEWS = [
   {id: "overview", label: "OVERVIEW", idle: ""},
@@ -55,7 +54,6 @@ const RANK = {targeted: 0, pinned: 1, pending: 2, awaiting: 3, listed: 3, skippe
 let prefs = {profile: null, view: "overview", filter: "all", sort: "bio"};
 // SYSTEM shows the system you're in, or one opened from another tab.
 let systemViewing = null;
-let archiveMode = "archive";
 let directive = null;
 let uiRef = null;
 let selection = null;
@@ -160,9 +158,8 @@ function skeletonMarkup() {
       <section id="system-map-workspace" aria-label="Live system map"></section>
     </section>
     <section class="explore-view explore-archive" role="tabpanel" id="explore-view-archive" data-explore-panel="archive" aria-labelledby="explore-tab-archive" hidden>
-      <div class="explore-archive-bar"><span class="xn-modes" role="group"><button type="button" data-archive-mode="archive">ARCHIVE</button><button type="button" data-archive-mode="log">JOURNAL LOG</button></span></div>
+      <div class="explore-archive-bar"><span class="xn-modes" role="group"><button type="button" data-page="journal-log" title="The Journal Log has a page of its own">JOURNAL LOG ↗</button></span></div>
       <div id="analytics-workspace" class="workspace-shell">${pending("OPENING THE ARCHIVE", "Retained flight sessions, scan evidence and region stamps load with the survey workspace.")}</div>
-      <div id="explore-journal-log" hidden></div>
     </section>`;
 }
 
@@ -178,12 +175,6 @@ function bind(root, ui) {
     const systemMode = event.target.closest("[data-system-mode]");
     if (systemMode) {
       setSystemMode(ui.profileKey(), systemMode.dataset.systemMode);
-      renderActive(root, ui);
-      return;
-    }
-    const archive = event.target.closest("[data-archive-mode]");
-    if (archive) {
-      archiveMode = archive.dataset.archiveMode;
       renderActive(root, ui);
       return;
     }
@@ -325,13 +316,7 @@ function renderActive(root, ui) {
   } else if (view === "checklist") {
     renderChecklist(root.querySelector("[data-explore-panel=checklist]"), mui, `${slowKey("checklist")}:${surveyState.system}`, codexMarkup(workspaceData || {}, ui));
   } else if (view === "archive") {
-    for (const button of root.querySelectorAll("[data-archive-mode]")) button.setAttribute("aria-pressed", String(button.dataset.archiveMode === archiveMode));
-    const archive = root.querySelector("#analytics-workspace");
-    const log = root.querySelector("#explore-journal-log");
-    if (archive) archive.hidden = archiveMode === "log";
-    if (log) log.hidden = archiveMode !== "log";
-    if (archiveMode === "log") renderJournalLog(log, mui);
-    else if (workspaceData?.archive) ui.renderArchive?.(workspaceData.archive);
+    if (workspaceData?.archive) ui.renderArchive?.(workspaceData.archive);
   }
 }
 

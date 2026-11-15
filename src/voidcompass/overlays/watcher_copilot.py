@@ -1495,6 +1495,13 @@ REPLIES = {
     "overlay_waiting": ("{label} is on. It shows itself when there's something to show.",),
     "overlay_curtain": ("All the overlays are hidden. Ask me to show the overlays first.",),
     "overlay_self": ("I'll keep out of sight. You'll still hear me, if my voice is on.",),
+    # Overlay groups by name (5.8.3).
+    "group_on": ("The {name} group, on.", "{name} group: showing.", "There. The {name} group."),
+    "group_off": ("The {name} group, off.", "{name} group: hidden.", "Put away: the {name} group."),
+    "group_already_on": ("The {name} group is already on.",),
+    "group_already_off": ("The {name} group is already off.",),
+    "group_unknown": ("There's no {name} group. Yours are: {names}.",),
+    "group_none": ("You haven't made any overlay groups yet. Overlay Studio, under OVERLAY GROUPS.",),
     "copy_next": ("{system} is on your clipboard.", "Copied: {system}.", "{system}. It's on the clipboard."),
     "copy_none": ("There's no next system to copy.", "Nothing is plotted to copy."),
     "hush": ("I'll keep quiet for a while.", "Quiet, then.", "I'll keep my voice down."),

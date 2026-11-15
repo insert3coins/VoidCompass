@@ -1,6 +1,8 @@
 /* Rig Tracker (5.5.10), in the cockpit overlays' language. Sizes grow with
    --scale (the overlay's text size); names wrap rather than being cut off
-   (overlayfix.md). Colours are theme tokens; these are only fallbacks. */
+   (overlayfix.md). Colours are theme tokens; these are only fallbacks.
+   5.8.3: made to be read at a glance: a row for each rig, and nothing smaller
+   than 11px before the text size is applied. */
 :root {
   color-scheme: dark;
   --bg: #070b10; --panel: #0d141c; --inset: #0a1118; --border: #243746;
@@ -44,49 +46,61 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
   padding: calc(2px * var(--scale)) calc(8px * var(--scale)); border-left: 3px solid var(--hud);
   background: linear-gradient(90deg, color-mix(in srgb, var(--hud) 18%, transparent), transparent 70%);
 }
-.notice-tag { padding: 2px 5px 1px; border: 1px solid var(--hud-soft); color: var(--hud); font: 700 calc(8px * var(--scale)) var(--font-wide); letter-spacing: .16em; }
-#rigs-body { min-width: 0; overflow-wrap: anywhere; color: var(--hud); font: 700 calc(14px * var(--scale))/1.15 var(--font-hud); letter-spacing: .05em; }
-#rigs-count { color: var(--text); font: 700 calc(9.5px * var(--scale)) var(--font-wide); letter-spacing: .12em; white-space: nowrap; }
+.notice-tag { padding: 2px 6px 1px; border: 1px solid var(--hud-soft); color: var(--hud); font: 700 calc(11px * var(--scale)) var(--font-wide); letter-spacing: .16em; }
+#rigs-body { min-width: 0; overflow-wrap: anywhere; color: var(--hud); font: 700 calc(15px * var(--scale))/1.15 var(--font-hud); letter-spacing: .05em; }
+#rigs-count { color: var(--text); font: 700 calc(12px * var(--scale)) var(--font-wide); letter-spacing: .12em; white-space: nowrap; }
 
-.dials { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(4px * var(--scale)); margin: 0; padding: 0; list-style: none; }
-.dial { display: grid; justify-items: center; gap: calc(1px * var(--scale)); min-width: 0; overflow: hidden; }
-.dial .slot { color: var(--hud-soft); font: 700 calc(9px * var(--scale)) var(--font-wide); letter-spacing: .08em; }
-.dial svg { width: calc(40px * var(--scale)); height: calc(40px * var(--scale)); overflow: visible; }
-.dial .ring { fill: none; stroke: var(--hud); stroke-width: 2.4; }
-/* The ready countdown round the dial, green and full when it's ready. */
-.dial .timer { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; opacity: .85; }
-.dial.ready .timer { stroke: var(--green); opacity: 1; }
-.dial.ready .ring { stroke: var(--green); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--green) 60%, transparent)); }
-.dial.ready .slot, .dial.ready .age { color: var(--green); }
-.dial .needle { fill: var(--hud); stroke: var(--hud); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
-.dial .hub { fill: var(--hud); }
-.dial .distance { max-width: 100%; color: var(--text); font: 700 calc(11px * var(--scale)) var(--font-wide); letter-spacing: .02em; white-space: nowrap; }
-/* Each line wraps inside its own dial (it used to run across the next one). */
-.dial .working, .dial .age { max-width: 100%; min-height: 1.15em; font: 600 calc(8.5px * var(--scale))/1.1 var(--font-hud); text-align: center; overflow-wrap: anywhere; }
-.dial .working { color: var(--text); font-size: calc(8px * var(--scale)); letter-spacing: 0; }
-.dial .age { color: var(--muted); }
-.dial.idle .ring { stroke: var(--dim); stroke-dasharray: 3 3; opacity: .5; }
-.dial.idle .slot, .dial.idle .distance { color: var(--dim); }
-.dial.nearest .ring, .dial.nearest .needle, .dial.nearest .hub { stroke: var(--accent); fill: var(--accent); }
-.dial.nearest .ring { fill: none; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 60%, transparent)); }
-.dial.nearest .slot, .dial.nearest .distance { color: var(--accent); }
-.dial.at .ring { stroke: var(--green); fill: color-mix(in srgb, var(--green) 14%, transparent); }
-.dial.at .here-dot { fill: var(--green); }
-.dial.at .distance { color: var(--green); }
+/* A card for each rig out, two to a line (5.8.3): its ring, what it's
+   working, which way and how far, and its clock. */
+.rig-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(5px * var(--scale)); margin: 0; padding: 0; list-style: none; }
+.rig { display: grid; grid-template-columns: calc(44px * var(--scale)) minmax(0, 1fr); grid-template-rows: auto auto auto; align-items: center;
+  column-gap: calc(8px * var(--scale)); min-width: 0; padding: calc(4px * var(--scale)) calc(6px * var(--scale)) calc(4px * var(--scale)) calc(4px * var(--scale));
+  border-left: 3px solid var(--hud-faint); background: color-mix(in srgb, var(--inset) 70%, transparent); }
+.rig-ring { grid-row: 1 / 4; width: calc(44px * var(--scale)); height: calc(44px * var(--scale)); overflow: visible; }
+/* which way the rig lies: the marker round the ring */
+.rig-ring .bug { fill: var(--hud); stroke: color-mix(in srgb, var(--bg) 70%, transparent); stroke-width: 1; }
+.rig.nearest .rig-ring .bug { fill: var(--accent); }
+.rig.ready .rig-ring .bug { fill: var(--green); }
+.rig-ring .track { fill: none; stroke: var(--hud-soft); stroke-width: 2.5; }
+.rig-ring .fill { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; }
+.rig-ring .here { fill: color-mix(in srgb, var(--green) 18%, transparent); stroke: none; }
+.rig-ring .num { fill: var(--text); font: 700 17px var(--font-wide); }
+.rig-name { min-width: 0; color: var(--text); font: 700 calc(12.5px * var(--scale))/1.2 var(--font-wide); letter-spacing: .03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rig-where { display: flex; align-items: center; gap: calc(4px * var(--scale)); min-width: 0; white-space: nowrap; }
+.rig-where b { color: var(--text); font: 700 calc(13px * var(--scale)) var(--font-wide); }
+.rig-where small { color: var(--muted); font: 600 calc(11px * var(--scale)) var(--font-hud); }
+.rig-clock { display: flex; align-items: baseline; gap: calc(5px * var(--scale)); min-width: 0; white-space: nowrap; }
+.rig-clock b { color: var(--text); font: 700 calc(16px * var(--scale))/1.15 var(--font-wide); letter-spacing: .02em; }
+.rig-clock small { color: var(--muted); font: 600 calc(11px * var(--scale)) var(--font-hud); letter-spacing: .03em; }
+/* ready: green all through, the ring full and glowing */
+.rig.ready { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
+.rig.ready .rig-ring .fill, .rig.ready .rig-ring .track { stroke: var(--green); }
+.rig.ready .rig-ring { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--green) 60%, transparent)); }
+.rig.ready .rig-clock b { color: var(--green); }
+/* collecting from it: the clock waits for you to drive off */
+.rig.collecting { border-left-color: var(--yellow); }
+.rig.collecting .rig-clock b { color: var(--yellow); font-size: calc(13px * var(--scale)); letter-spacing: .06em; }
+.rig.learning .rig-clock b { color: var(--muted); }
+.rig.collecting .rig-clock .haul { color: var(--text); font: 700 calc(14px * var(--scale)) var(--font-wide); }
+/* the nearest, and the one you're at */
+.rig.nearest { border-left-color: var(--accent); }
+.rig.nearest .rig-where b { color: var(--accent); }
+.rig.at .rig-where b { color: var(--green); }
+.free { margin: 0; color: var(--dim); font: 700 calc(11px * var(--scale)) var(--font-wide); letter-spacing: .14em; white-space: pre-wrap; }
 
-.hint { margin: 0; color: var(--muted); font: 700 calc(9px * var(--scale)) var(--font-wide); letter-spacing: .08em; overflow-wrap: anywhere; }
-.order { margin: 0; color: var(--accent); font: 700 calc(9.5px * var(--scale)) var(--font-wide); letter-spacing: .1em; overflow-wrap: anywhere; }
+.hint { margin: 0; color: var(--muted); font: 700 calc(12px * var(--scale)) var(--font-wide); letter-spacing: .08em; overflow-wrap: anywhere; }
+.order { margin: 0; color: var(--accent); font: 700 calc(12px * var(--scale)) var(--font-wide); letter-spacing: .1em; overflow-wrap: anywhere; }
 /* 5.7.6: the survey, the best patch and the next rig spot. */
-.survey { display: grid; gap: calc(2px * var(--scale)); margin: 0; padding: 0; list-style: none; color: var(--text); font: 700 calc(9px * var(--scale)) var(--font-wide); letter-spacing: .08em; overflow-wrap: anywhere; }
+.survey { display: grid; gap: calc(2px * var(--scale)); margin: 0; padding: 0; list-style: none; color: var(--text); font: 700 calc(11.5px * var(--scale))/1.3 var(--font-wide); letter-spacing: .05em; overflow-wrap: anywhere; }
 .holds { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; column-gap: calc(8px * var(--scale)); row-gap: calc(4px * var(--scale)); margin: 0; padding: calc(6px * var(--scale)) 0 0; list-style: none; border-top: 1px solid var(--hud-faint); }
 /* one grid for every hold, so the bars line up */
 .hold { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }
 .hold-used { text-align: right; }
-.hold-name { color: var(--hud); font: 700 calc(9px * var(--scale)) var(--font-wide); letter-spacing: .14em; }
-.hold .bar { position: relative; height: calc(8px * var(--scale)); border: 1px solid var(--hud-soft); background: color-mix(in srgb, var(--hud) 8%, transparent); overflow: hidden; }
+.hold-name { color: var(--hud); font: 700 calc(11px * var(--scale)) var(--font-wide); letter-spacing: .14em; }
+.hold .bar { position: relative; height: calc(10px * var(--scale)); border: 1px solid var(--hud-soft); background: color-mix(in srgb, var(--hud) 8%, transparent); overflow: hidden; }
 .hold .bar i { position: absolute; inset: 1px auto 1px 1px; width: calc((100% - 2px) * var(--fill, 0)); background: var(--hud); }
-.hold-used { color: var(--text); font: 700 calc(10.5px * var(--scale)) var(--font-wide); white-space: nowrap; }
-.hold-free { color: var(--muted); font: 700 calc(8.5px * var(--scale)) var(--font-wide); letter-spacing: .08em; text-align: right; white-space: nowrap; }
+.hold-used { color: var(--text); font: 700 calc(13px * var(--scale)) var(--font-wide); white-space: nowrap; }
+.hold-free { color: var(--muted); font: 700 calc(11px * var(--scale)) var(--font-wide); letter-spacing: .08em; text-align: right; white-space: nowrap; }
 .hold.nearly .bar i { background: var(--yellow); }
 .hold.nearly .hold-free { color: var(--yellow); }
 .hold.full .bar { border-color: var(--red); }
@@ -96,19 +110,19 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 .hold.partial .bar i { opacity: .55; }
 .rigs.reduced-motion * { animation: none !important; transition: none !important; }
 
-/* The Rhino sections (from 5.8.1): guide, deposit, targets, status. */
-.part { display: grid; gap: calc(3px * var(--scale)); min-width: 0; padding: calc(5px * var(--scale)) 0 calc(6px * var(--scale)); border-top: 1px solid var(--hud-faint); font: 600 calc(10.5px * var(--scale))/1.3 var(--font-hud); }
+/* The Rhino sections (from 5.8.1): guide, deposit. */
+.part { display: grid; gap: calc(3px * var(--scale)); min-width: 0; padding: calc(5px * var(--scale)) 0 calc(6px * var(--scale)); border-top: 1px solid var(--hud-faint); font: 600 calc(12.5px * var(--scale))/1.3 var(--font-hud); }
 .part header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
-.part h4 { margin: 0; color: var(--muted); font: 700 calc(9px * var(--scale)) var(--font-wide); letter-spacing: .16em; white-space: nowrap; }
-.part header em { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--yellow); font: 700 calc(10px * var(--scale)) var(--font-wide); font-style: normal; letter-spacing: .06em; }
+.part h4 { margin: 0; color: var(--muted); font: 700 calc(11px * var(--scale)) var(--font-wide); letter-spacing: .16em; white-space: nowrap; }
+.part header em { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--yellow); font: 700 calc(12px * var(--scale)) var(--font-wide); font-style: normal; letter-spacing: .06em; }
 .pips { display: flex; gap: 3px; }
-.pips i { width: calc(6px * var(--scale)); height: calc(6px * var(--scale)); background: var(--border); }
+.pips i { width: calc(8px * var(--scale)); height: calc(8px * var(--scale)); background: var(--border); }
 .pips i.done { background: var(--hud); }
 .pips i.now { background: var(--yellow); }
-.guide-title { color: var(--hud); font: 700 calc(14px * var(--scale))/1.15 var(--font-wide); letter-spacing: .06em; overflow-wrap: anywhere; }
+.guide-title { color: var(--hud); font: 700 calc(16px * var(--scale))/1.15 var(--font-wide); letter-spacing: .06em; overflow-wrap: anywhere; }
 .guide-detail { color: var(--text); overflow-wrap: anywhere; }
-.guide-key { justify-self: start; max-width: 100%; padding: 1px 6px; border: 1px solid var(--hud-soft); color: var(--hud); font: 700 calc(10px * var(--scale)) Consolas, monospace; overflow-wrap: anywhere; }
-.guide-next { color: var(--dim); }
+.guide-key { justify-self: start; max-width: 100%; padding: 1px 6px; border: 1px solid var(--hud-soft); color: var(--hud); font: 700 calc(12.5px * var(--scale)) Consolas, monospace; overflow-wrap: anywhere; }
+.guide-next { color: var(--muted); }
 .rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1px 10px; margin: 0; min-width: 0; }
 /* Two to a line across the box's width (the deposit card and the status). */
 .rows.pairs { grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); column-gap: calc(8px * var(--scale)); }
@@ -121,17 +135,14 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 .list li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list li b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .list li.mined { opacity: .45; }
-.bars { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; align-items: end; height: calc(30px * var(--scale)); margin-top: 3px; }
-.bars div { display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; height: 100%; min-width: 0; }
-.bars i { display: block; background: var(--hud); min-height: 2px; }
-.bars small { color: var(--dim); font-size: calc(8px * var(--scale)); letter-spacing: .06em; overflow: hidden; white-space: nowrap; }
 .line { font-weight: 700; letter-spacing: .04em; overflow-wrap: anywhere; }
 .line.green { color: var(--green); }
 .line.yellow { color: var(--yellow); }
 .line.red { color: var(--red); }
 .line.accent { color: var(--accent); }
-.dim { color: var(--dim); }
+.dim { color: var(--muted); }
 .rows dd .yellow { color: var(--yellow); }
 .part.aboard { border-top: 0; }
 .part.aboard header h4 { color: var(--green); }
-.hazard { padding: 3px 8px; background: var(--red); color: #fff; font: 700 calc(10px * var(--scale)) var(--font-wide); letter-spacing: .1em; text-align: center; overflow-wrap: anywhere; }
+.hazard { padding: 4px 8px; background: var(--red); color: #fff; font: 700 calc(12.5px * var(--scale)) var(--font-wide); letter-spacing: .1em; text-align: center; overflow-wrap: anywhere; }
+.line.rig-word { margin: 0; font: 700 calc(13px * var(--scale))/1.25 var(--font-wide); letter-spacing: .05em; }

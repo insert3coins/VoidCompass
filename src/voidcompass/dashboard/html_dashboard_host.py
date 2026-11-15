@@ -654,6 +654,20 @@ class DashboardApi:
             return ""
         return str(selected[0] if isinstance(selected, (list, tuple)) else selected)
 
+    def choose_pad_files(self):
+        """Choose other commanders' pad layout exports to pool with yours (5.8.3)."""
+        window = self._host.window
+        if window is None:
+            return []
+        try:
+            import webview
+
+            selected = window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=True,
+                                                 file_types=("Pad layouts (*.json)", "All files (*.*)"))
+        except Exception:
+            return []
+        return [str(path) for path in selected or ()]
+
     def choose_folder(self):
         """Choose a local directory for profile backup/restore and paths."""
         window = self._host.window
