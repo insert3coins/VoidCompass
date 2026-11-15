@@ -567,6 +567,7 @@ PROFILE_VALUE_SETTINGS = (
     "station_info_timeout_s",
     "station_info_timeout_semantics_version",
     "survey_codex_flags_version",
+    "overlay_hide_when_game_closed_version",
     "survey_status_hud_x",
     "survey_status_hud_y",
     "survey_spotlight_threshold",
@@ -933,6 +934,16 @@ def apply_profile_config(config, profile_key=None):
     if codex_flags_version < 1:
         profile["survey_codex_flags"] = True
         profile["survey_codex_flags_version"] = 1
+    # v5.8.2 hides the overlays with the game closed (or at its main menu) by
+    # default. Switched on once for profiles saved while it was off by default;
+    # a commander who turns it off afterwards keeps that choice.
+    try:
+        closed_version = int(profile.get("overlay_hide_when_game_closed_version") or 0)
+    except (TypeError, ValueError):
+        closed_version = 0
+    if closed_version < 1:
+        profile["overlay_hide_when_game_closed"] = True
+        profile["overlay_hide_when_game_closed_version"] = 1
     # Replace the implicit "0 means persistent" control with an explicit switch.
     # Existing positive timeouts remain enabled; persistent profiles remain
     # persistent and receive a useful delay ready for the switch to be turned on.
@@ -1174,7 +1185,7 @@ def apply_profile_config(config, profile_key=None):
         "controller_hotkeys_enabled": True,
         "overlay_hide_on_maps": True,
         "overlay_hide_in_menus": False,
-        "overlay_hide_when_game_closed": False,
+        "overlay_hide_when_game_closed": True,
         "edsm_upload_enabled": False,
         "inara_upload_enabled": False,
         "edsm_backfill_on_cache_rebuild": True,
@@ -1584,6 +1595,7 @@ def load_config():
         'survey_spansh_bodies': True,
         'survey_species_lists': True,
         'survey_codex_flags_version': 1,
+        'overlay_hide_when_game_closed_version': 1,
         'raven_sync_enabled': True,
         'bgs_online_enabled': True,
         'trading_online_enabled': True,
@@ -1961,7 +1973,7 @@ def load_config():
         'overlay_text_scale_percent': 100,
         'overlay_hide_on_maps': True,
         'overlay_hide_in_menus': False,
-        'overlay_hide_when_game_closed': False,
+        'overlay_hide_when_game_closed': True,
         'overlay_frame_rate': 30,
         'overlay_transparency_fix': False,
         'overlay_classic_windows': False,

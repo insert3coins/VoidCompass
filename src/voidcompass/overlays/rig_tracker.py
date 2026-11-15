@@ -38,10 +38,13 @@ WARN_RANGE_M = (0, 4900)
 LOST_M = 5000.0
 LAST_WARNING_M = 4800.0
 # How long a rig takes isn't published and the journal doesn't say; it's
-# learnt from your own: each collected rig's time down, by the density of the
-# deposit it was on. The lower quartile, so rigs left a while don't stretch it.
-MIN_TIMED = 3
+# learnt from your own: from a rig's key down to the first tonne refined round
+# it (you only start collecting once it's ready), by the density of the
+# deposit it was on. The lower quartile, so a rig left a while doesn't stretch
+# it. Key down to key up is no measure: a rig often stays down all run.
+MIN_TIMED = 2
 TIMED_RANGE_S = (30, 1800)
+MAX_TIMINGS = 60
 # Rigs left untouched this long are forgotten.
 FORGET_S = 7 * 86400
 # The rig lands behind the Rhino's cockpit, which is where Status.json puts you.
@@ -118,6 +121,7 @@ class RigStore:
         self.lock = threading.RLock()
         self.bodies = {}
         self.yields = []
+        self.timings = []
         self.load()
 
     def load(self):
@@ -136,10 +140,15 @@ class RigStore:
         if isinstance(yields, list):
             with self.lock:
                 self.yields = [row for row in yields if isinstance(row, dict)][-MAX_YIELDS:]
+        timings = data.get("timings") if isinstance(data, dict) else None
+        if isinstance(timings, list):
+            with self.lock:
+                self.timings = [row for row in timings if isinstance(row, dict)][-MAX_TIMINGS:]
 
     def _payload(self):
         with self.lock:
-            return {"schema": 1, "bodies": json.loads(json.dumps(self.bodies)), "yields": list(self.yields)}
+            return {"schema": 1, "bodies": json.loads(json.dumps(self.bodies)), "yields": list(self.yields),
+                    "timings": list(self.timings)}
 
     def save(self):
         if self.path:
@@ -189,7 +198,7 @@ class RigStore:
         self.save()
         return outcome
 
-    def book(self, system, body, slot, commodity):
+    def book(self, system, body, slot, commodity, now=None):
         """A refined tonne the rig threw up."""
         name = str(commodity or "").strip()[:40]
         if not name:
@@ -199,7 +208,14 @@ class RigStore:
             if not isinstance(rig, dict):
                 return False
             tonnes = rig.setdefault("tonnes", {})
+            first = not any(int(value or 0) for value in tonnes.values())
             tonnes[name] = int(tonnes.get(name) or 0) + 1
+            if first and rig.get("at") is not None:
+                # Its first tonne: collecting started, so it was ready by now.
+                now = time.time() if now is None else now
+                rig["ready_at"] = round(now, 1)
+                self.timings = (self.timings + [{"s": round(now - float(rig["at"])), "density": str(rig.get("density") or ""),
+                                                 "at": round(now, 1)}])[-MAX_TIMINGS:]
         self.save()
         return True
 
@@ -209,8 +225,8 @@ class RigStore:
         else on any; None before there are MIN_TIMED."""
         low, high = TIMED_RANGE_S
         with self.lock:
-            timed = [(int(row["down_s"]), str(row.get("density") or "")) for row in self.yields
-                     if row.get("down_s") is not None and low <= int(row["down_s"]) <= high]
+            timed = [(int(row["s"]), str(row.get("density") or "")) for row in self.timings
+                     if row.get("s") is not None and low <= int(row["s"]) <= high]
         same = sorted(seconds for seconds, kind in timed if density and kind.casefold() == str(density).casefold())
         values = same if len(same) >= MIN_TIMED else sorted(seconds for seconds, _kind in timed)
         if len(values) < MIN_TIMED:

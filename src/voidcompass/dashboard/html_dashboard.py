@@ -299,7 +299,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         for custom_name in (self.config.get("ui_custom_themes") or {}):
             if custom_name not in available:
                 available.append(custom_name)
-        return {"name": name, "palette": palette, "available": available, "skin": themes.theme_skin(name),
+        return {"name": name, "palette": palette, "available": available,
+                "skin": themes.theme_skin(name, self.config.get("ui_custom_themes")),
                 "skins": {theme: skin for theme, (skin, _palette) in themes.SKIN_THEMES.items()}}
 
     def _html_dashboard_sources(self):
@@ -2536,7 +2537,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             theme_cards.append({
                 "name": name,
                 "custom": name not in themes.BUILTIN_THEMES,
-                "skin": themes.theme_skin(name),
+                "skin": themes.theme_skin(name, custom_themes),
                 "swatch": {key: palette.get(key, "") for key in (
                     "bg", "panel", "border", "accent", "orange", "green", "yellow", "red", "text",
                 )},
@@ -2572,6 +2573,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 "palette": theme_palette,
                 "custom": sorted((self.config.get("ui_custom_themes") or {}).keys()),
                 "keys": list(themes.THEME_KEYS),
+                # 5.8.2: the workshop starts from any theme, and can give yours a skin.
+                "palettes": {card["name"]: themes.resolve_theme(card["name"], custom_themes)[1] for card in theme_cards},
+                "skins": {card["name"]: card["skin"] for card in theme_cards},
+                "skin_choices": [list(item) for item in themes.SKIN_CHOICES],
             },
             "tools": {
                 # Note: the page puts the result beside the button that ran
@@ -4038,7 +4043,14 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 if not isinstance(supplied, dict):
                     return False
                 palette = themes.normalize_theme(supplied, base=current_palette)
+                # 5.8.2: a custom theme can wear a skin, and be renamed as it's saved.
+                skin = _text(payload.get("skin"), 20)
+                if skin in themes.SKIN_IDS:
+                    palette["skin"] = skin
                 custom = dict(self.config.get("ui_custom_themes") or {})
+                previous = _text(payload.get("previous"), 80)
+                if previous and previous != name and previous in custom:
+                    custom.pop(previous, None)
                 custom[name] = palette
                 self.config["ui_custom_themes"] = custom
                 self.config["ui_theme_name"] = name

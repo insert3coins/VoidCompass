@@ -118,7 +118,9 @@ def pick_page(state, facts, enabled):
         page = first("rhino")
         if page:
             return page
-    if motion in _SURFACE_MOTIONS or facts.get("on_planet"):
+    # A planet waypoint set for the body below counts from the ship too: the
+    # page shows its compass, and the waypoint overlay it covers stays off.
+    if motion in _SURFACE_MOTIONS or facts.get("on_planet") or facts.get("waypoint"):
         page = first("planet")
         if page:
             return page

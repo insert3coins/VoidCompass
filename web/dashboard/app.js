@@ -47,6 +47,7 @@ import {handleBgsChange, handleBgsClick, handleBgsSubmit, renderBgs} from "./bgs
 import {handleTradingClick, handleTradingInput, handleTradingSubmit, renderTrading, resetTrading} from "./trading.js";
 import {handleMiningClick, handleMiningInput, handleMiningSubmit, renderMining, resetMining} from "./mining.js";
 import {handleRhinoClick, handleRhinoInput, handleRhinoSubmit, renderRhino, resetRhino} from "./rhino.js";
+import {handleThemeWorkshopClick, handleThemeWorkshopInput, themeSettings, themeWorkshopOpen, workshopTheme} from "./theme-workshop.js";
 import {groupChips, groupChipsFingerprint, handleOverlayGroupsClick, handleOverlayGroupsInput, handleOverlayGroupsSubmit,
   renderOverlayGroups} from "./overlay-groups.js";
 import {handleExpeditionsChange, handleExpeditionsClick, handleExpeditionsInput, handleExpeditionsSubmit, renderExpeditions, resetExpeditions} from "./expeditions.js";
@@ -661,6 +662,8 @@ async function resetPageLayout() {
 }
 
 function applyTheme(theme = {}) {
+  // The Theme Workshop's draft, while it's open (5.8.2).
+  theme = workshopTheme(theme);
   const keys = ["bg", "panel", "panel_alt", "panel_raised", "header", "input", "inset", "border", "border_soft", "selection", "accent", "orange", "text", "muted", "dim", "green", "yellow", "red"];
   for (const key of keys) {
     const value = theme.palette?.[key];
@@ -836,6 +839,8 @@ function announceBoot(detail) {
 }
 
 // First commissioning lives in setup.js.
+const THEME_UI = {command: (...args) => command(...args), showToast: (...args) => showToast(...args),
+  refreshTheme: () => applyTheme(model.theme || {})};
 const SETUP_UI = {command: (...args) => command(...args), showToast: (...args) => showToast(...args), applyTheme: (...args) => applyTheme(...args)};
 function renderCommissioning(onboarding) {
   renderSetup(onboarding, SETUP_UI);
@@ -846,7 +851,7 @@ function renderHeader(state) {
   const source = String(state.sources?.overall || "CACHED").toUpperCase();
   text("header-system", flight.system, "---");
   text("header-context", flight.context, "WAITING FOR LIVE JOURNAL");
-  text("header-region", state.tiles?.where?.region || state.intelligence?.region, "REGION UNKNOWN");
+  text("header-region", regionName(state), "REGION UNKNOWN");
   text("header-state", flight.state, "STANDBY");
   text("header-link", source);
   byId("header-link").dataset.source = source.toLowerCase();
@@ -861,6 +866,13 @@ function renderHeader(state) {
 // The header switchboard: one switch per overlay (its Overlay Studio on/off)
 // and ALL, the show/hide-all curtain, reachable from every page.
 let overlayQuickFingerprint = "";
+// The region you're in: from your coordinates (always known once the system
+// is), else the exploration summary's, which only learns it on a jump.
+function regionName(state) {
+  const known = (value) => (value && !/^unknown$/i.test(String(value)) ? String(value) : "");
+  return known(state?.tiles?.where?.region) || known(state?.intelligence?.region);
+}
+
 function renderOverlaySwitchboard(studio = {}) {
   const host = byId("overlay-quick");
   if (!host) return;
@@ -1722,9 +1734,9 @@ function renderIntelligence(state) {
     ["Valuable bodies", String(number(survey.valuable_count))],
     ["Unsold exploration", formatCredits(data.unsold_exploration)],
     ["Unsold biology", formatCredits(data.unsold_bio)],
-    ["Galactic region", intel.region || "UNKNOWN"],
+    ["Galactic region", regionName(state) || "UNKNOWN"],
   ]);
-  text("footer-region", `REGION ${(intel.region || "UNKNOWN").toUpperCase()}`);
+  text("footer-region", `REGION ${(regionName(state) || "UNKNOWN").toUpperCase()}`);
 }
 
 function renderExpedition(state) {
@@ -2772,7 +2784,6 @@ const SETTINGS_SECTIONS = [
 let settingsSection = "journal";
 let settingsSaveSequence = 0;
 const settingsPendingSaves = new Map();
-let settingsWorkshopOpen = false;
 
 const settingSearchText = (...parts) => escapeHtml(parts.filter(Boolean).join(" ").toLocaleLowerCase());
 
@@ -3095,17 +3106,8 @@ function settingsSectionBody(id, data) {
       + settingGroup("SCREENSHOTS", `${settingText({key: "screenshots_path", id: "setting-screenshots", label: "Screenshot folder", detail: "Where Elite saves its BMP screenshots.", value: value.screenshots_path, browse: true, status: shotsStatus})}${settingSwitch({key: "screenshots_enabled", label: "Convert screenshots to PNG", detail: "Watch the screenshot folder and convert each new BMP.", checked: value.screenshots_enabled})}<p class="setting-note">How postcards look, keeping them as pictures, their folder and caption files: the Postcards page.</p>${settingActions(`<button type="button" data-command="open_screenshots">OPEN SCREENSHOTS</button><button type="button" data-command="open_postcards">OPEN POSTCARDS</button><button type="button" data-page="screenshots">SCREENSHOTS</button><button type="button" data-page="postcards">POSTCARDS</button>`, "open screenshots postcards album caption style gallery")}`);
   }
   if (id === "appearance") {
-    const cards = (data.themes || []).map((theme) => {
-      const swatch = theme.swatch || {};
-      const style = ["bg", "panel", "border", "accent", "orange", "green", "yellow", "red", "text"]
-        .filter((key) => /^#[0-9a-f]{6}$/i.test(swatch[key] || "")).map((key) => `--t-${key}:${swatch[key]}`).join(";");
-      const active = theme.name === editor.name;
-      return `<button type="button" class="theme-option${active ? " active" : ""}" data-theme-name="${escapeHtml(theme.name)}" style="${escapeHtml(style)}" aria-pressed="${active}"><span class="theme-preview" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b>${escapeHtml(theme.name)}</b><small>${active ? "ACTIVE" : theme.custom ? "CUSTOM" : theme.skin ? "SKIN · FONTS AND SHAPES" : "BUILT IN"}</small></button>`;
-    }).join("");
-    const colors = (editor.keys || []).map((key) => `<label><span>${escapeHtml(key.replaceAll("_", " "))}</span><input type="color" data-theme-color="${escapeHtml(key)}" value="${escapeHtml(editor.palette?.[key] || "#000000")}"></label>`).join("");
-    return settingGroup("THEME", `<div class="theme-options" data-search="${settingSearchText("theme palette colour color", (data.themes || []).map((theme) => theme.name).join(" "))}">${cards}</div>`)
-      + settingGroup("DISPLAY", `${settingSelect({key: "ui_text_scale_percent", label: "Text size", detail: "Makes all the deck's text bigger, keeping the layout as it is.", value: number(value.ui_text_scale_percent, 100), options: [[100, "Standard"], [110, "110%"], [120, "120%"], [135, "135%"], [150, "150%"]], type: "number"})}${settingSelect({key: "ui_text_min_px", label: "Smallest text", detail: "Raises the small labels to at least this size and leaves the headings alone. The easiest fix if the fine print is hard to read.", value: number(value.ui_text_min_px, 0), options: [[0, "As designed"], [10, "10 px"], [11, "11 px"], [12, "12 px"], [13, "13 px"], [14, "14 px"]], type: "number"})}${settingSelect({key: "overlay_text_scale_percent", label: "Overlay text size", detail: "Text on every cockpit overlay. Overlays grow to fit it; one overlay can have its own size in Overlay Studio.", value: number(value.overlay_text_scale_percent, 100), options: [75, 90, 100, 110, 125, 140, 160, 180, 200].map((item) => [item, item === 100 ? "Standard" : `${item}%`]), type: "number"})}${settingSelect({key: "ui_scale_percent", label: "Command deck scale", detail: "Zooms everything in this window, text, panels and maps, as Ctrl+ does in a browser. Less fits on screen.", value: number(value.ui_scale_percent, 100), options: [90, 100, 110, 125, 140, 160].map((item) => [item, `${item}%`]), type: "number"})}${settingSwitch({key: "reduced_motion_enabled", label: "Reduced motion", detail: "Still frames instead of animation on the deck and every overlay.", checked: value.reduced_motion_enabled})}${settingSelect({key: "start_page", label: "Start page", detail: "The page the deck opens on.", value: value.start_page || "last", options: [["last", "The page you last had open"], ["overview", "Dashboard"], ["explore", "Explore & Survey"]]})}`)
-      + `<details class="settings-group theme-workshop"${settingsWorkshopOpen ? " open" : ""} data-search="${settingSearchText("theme workshop custom palette colours colors")}"><summary><span class="theme-workshop-label"><h4>THEME WORKSHOP</h4><small>Build a palette of your own.</small></span><span>${numeric((editor.custom || []).length)} CUSTOM</span></summary><div class="theme-workshop-body"><div class="theme-workshop-head"><label>NAME<input id="custom-theme-name" value="${escapeHtml((editor.custom || []).includes(editor.name) ? editor.name : `${editor.name || "Void"} Custom`)}"></label><label>DELETE A CUSTOM THEME<select id="custom-theme-existing"><option value="">CHOOSE ONE</option>${(editor.custom || []).map((name) => `<option>${escapeHtml(name)}</option>`).join("")}</select></label></div><p class="setting-note">Starts from the active theme. Change any colour, then save it as your own.</p><div class="theme-colour-grid">${colors}</div><div class="setting-row actions"><button type="button" data-ws-page="settings" data-ws-op="save_theme">SAVE & APPLY</button><button type="button" class="danger-action" data-ws-page="settings" data-ws-op="delete_theme">DELETE SELECTED</button></div></div></details>`;
+    return settingGroup("THEME", `<div data-search="${settingSearchText("theme palette colour color skin font workshop custom", (data.themes || []).map((theme) => theme.name).join(" "))}">${themeSettings(data)}</div>`)
+      + settingGroup("DISPLAY", `${settingSelect({key: "ui_text_scale_percent", label: "Text size", detail: "Makes all the deck's text bigger, keeping the layout as it is.", value: number(value.ui_text_scale_percent, 100), options: [[100, "Standard"], [110, "110%"], [120, "120%"], [135, "135%"], [150, "150%"]], type: "number"})}${settingSelect({key: "ui_text_min_px", label: "Smallest text", detail: "Raises the small labels to at least this size and leaves the headings alone. The easiest fix if the fine print is hard to read.", value: number(value.ui_text_min_px, 0), options: [[0, "As designed"], [10, "10 px"], [11, "11 px"], [12, "12 px"], [13, "13 px"], [14, "14 px"]], type: "number"})}${settingSelect({key: "overlay_text_scale_percent", label: "Overlay text size", detail: "Text on every cockpit overlay. Overlays grow to fit it; one overlay can have its own size in Overlay Studio.", value: number(value.overlay_text_scale_percent, 100), options: [75, 90, 100, 110, 125, 140, 160, 180, 200].map((item) => [item, item === 100 ? "Standard" : `${item}%`]), type: "number"})}${settingSelect({key: "ui_scale_percent", label: "Command deck scale", detail: "Zooms everything in this window, text, panels and maps, as Ctrl+ does in a browser. Less fits on screen.", value: number(value.ui_scale_percent, 100), options: [90, 100, 110, 125, 140, 160].map((item) => [item, `${item}%`]), type: "number"})}${settingSwitch({key: "reduced_motion_enabled", label: "Reduced motion", detail: "Still frames instead of animation on the deck and every overlay.", checked: value.reduced_motion_enabled})}${settingSelect({key: "start_page", label: "Start page", detail: "The page the deck opens on.", value: value.start_page || "last", options: [["last", "The page you last had open"], ["overview", "Dashboard"], ["explore", "Explore & Survey"]]})}`);
   }
   if (id === "flight") {
     return settingGroup("FLIGHT", `${settingSelect({key: "low_fuel_threshold_pct", label: "Low fuel warning", detail: "Warn when the main tank falls below this.", value: String(number(value.low_fuel_threshold_pct, .25)), options: [.1, .15, .2, .25, .3, .4, .5].map((item) => [String(item), `${Math.round(item * 100)}%`]), type: "number"})}${settingSwitch({key: "auto_copy_waypoint", label: "Auto-copy the next waypoint", detail: "As you arrive in a system, your next saved waypoint goes on the clipboard, ready to paste into the galaxy map. Also on the Command Deck, under COPY NEXT DESTINATION.", checked: value.auto_copy_waypoint})}`)
@@ -3621,7 +3623,7 @@ function settingsCanRerender() {
   const root = byId("settings-workspace");
   if (!root) return false;
   if (hotkeyCaptureAction || settingsPendingSaves.size) return false;
-  if (root.querySelector(".theme-workshop[data-dirty]")) return false;
+  if (themeWorkshopOpen()) return false;
   const focused = document.activeElement;
   return !(focused && root.contains(focused) && focused.matches("input, select, textarea, button"));
 }
@@ -3967,7 +3969,7 @@ function renderDashboard(state) {
     renderEvents(model);
   }
   renderGalnet(model);
-  text("footer-region", `REGION ${(model.intelligence?.region || "UNKNOWN").toUpperCase()}`);
+  text("footer-region", `REGION ${(regionName(model) || "UNKNOWN").toUpperCase()}`);
   renderSources(model);
   renderUpdateNotice(model.update || {});
   renderWorkspace(model);
@@ -4452,6 +4454,7 @@ document.addEventListener("click", async (event) => {
     settingsTab.closest(".pages")?.scrollTo({top: 0, behavior: "instant"});
     return;
   }
+  if (handleThemeWorkshopClick(event, THEME_UI)) return;
   const themeOption = event.target.closest("[data-theme-name]");
   if (themeOption) {
     const name = themeOption.dataset.themeName;
@@ -4786,13 +4789,6 @@ document.addEventListener("click", async (event) => {
       payload.destination = byId("carrier-discord-destination")?.value.trim() || "";
       payload.note = byId("carrier-discord-note")?.value.trim() || "";
       payload.departure = byId("carrier-discord-departure")?.value.trim() || "";
-    } else if (page === "settings" && operation === "save_theme") {
-      payload.name = byId("custom-theme-name")?.value.trim() || "";
-      payload.colors = Object.fromEntries([...document.querySelectorAll("[data-theme-color]")].map((input) => [input.dataset.themeColor, input.value]));
-      if (!payload.name) return;
-    } else if (page === "settings" && operation === "delete_theme") {
-      payload.name = byId("custom-theme-existing")?.value || "";
-      if (!payload.name) return;
     } else if (page === "settings" && operation === "test_edsm") {
       payload.commander = byId("setting-edsm-name")?.value.trim() || "";
       payload.api_key = byId("setting-edsm-key")?.value.trim() || "";
@@ -4904,27 +4900,16 @@ document.addEventListener("change", async (event) => {
     const accepted = await saveSettings({[target.dataset.setting]: settingValue(target)}, [row], {revert});
     if (accepted && target.tagName === "SELECT") [...target.options].forEach((option) => { option.defaultSelected = option.selected; });
     else if (accepted && target.type !== "checkbox") target.defaultValue = target.value;
-  } else if (target.matches("[data-theme-color], #custom-theme-name")) {
-    target.closest(".theme-workshop")?.setAttribute("data-dirty", "");
   }
 });
 
 document.addEventListener("input", (event) => {
   if (event.target.id === "settings-search") applySettingsView();
+  else if (handleThemeWorkshopInput(event, THEME_UI)) return;
   else if (handleOverlayGroupsInput(event)) return;
   else if (!handleMiningInput(event, WORKSHOP_UI) && !handleRhinoInput(event, WORKSHOP_UI) && !handleExpeditionsInput(event) && !handlePlanetaryInput(event, PLANETARY_UI)) handleTradingInput(event, WORKSHOP_UI);
 });
 
-document.addEventListener("toggle", (event) => {
-  if (event.target.matches?.(".theme-workshop")) settingsWorkshopOpen = event.target.open;
-}, true);
-
-// Saving or deleting a custom theme settles the workshop's edits.
-document.addEventListener("click", (event) => {
-  if (event.target.closest('[data-ws-page="settings"][data-ws-op="save_theme"], [data-ws-page="settings"][data-ws-op="delete_theme"]')) {
-    event.target.closest(".theme-workshop")?.removeAttribute("data-dirty");
-  }
-}, true);
 
 document.addEventListener("change", async (event) => {
   if (event.target.id === "achievement-sort") {

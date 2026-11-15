@@ -269,6 +269,39 @@ def rig_plan(anchor, rigs, spacing, you=None, slots=SLOTS, warn_m=0.0):
     return out
 
 
+
+def _empty_site(site):
+    """Kept by itself with nothing there: no survey, deposits, runs or note."""
+    return not site.get("survey") and not (site.get("deposits") or {}).get("ids") and not site.get("runs") \
+        and not str(site.get("note") or "").strip()
+
+
+def tidy_sites(sites):
+    """Saved sites without the empty ones and with duplicates folded together:
+    two sites holding the same deposits are one place (the first saved keeps
+    its name and note, and gains the other's runs and survey)."""
+    out = []
+    for site in (row for row in sites or () if isinstance(row, dict)):
+        if _empty_site(site):
+            continue
+        ids = set((site.get("deposits") or {}).get("ids") or ()) - {None}
+        twin = next((row for row in out if ids & set((row.get("deposits") or {}).get("ids") or ())), None)
+        if twin is None:
+            out.append(site)
+            continue
+        runs = {run.get("launched"): run for run in (twin.get("runs") or []) + (site.get("runs") or []) if isinstance(run, dict)}
+        if runs:
+            twin["runs"] = sorted(runs.values(), key=lambda run: float(run.get("docked") or 0))[-MAX_RUNS:]
+        if not twin.get("survey") and site.get("survey"):
+            twin["survey"], twin["centre"] = site["survey"], site.get("centre") or twin.get("centre")
+        if not str(twin.get("note") or "").strip() and str(site.get("note") or "").strip():
+            twin["note"] = site["note"]
+        if float(site.get("updated") or 0) > float(twin.get("updated") or 0):
+            for key in ("deposits", "tonnes", "plans", "updated"):
+                if site.get(key) is not None:
+                    twin[key] = site[key]
+    return out
+
 class SurveyStore:
     """Surveys, refining pulses, rig plans and the planning circle per body:
     ``{key: {"system", "body", "centre": [lat, lon], "radius_m", "edge", "grid", "bits", "said": [...],
@@ -297,6 +330,9 @@ class SurveyStore:
                 # A planet with saved sites is kept for good; the rest go after a month.
                 self.bodies = {str(key): value for key, value in bodies.items()
                                if isinstance(value, dict) and (value.get("sites") or now - float(value.get("at") or 0) < FORGET_S)}
+                for entry in self.bodies.values():
+                    if entry.get("sites"):
+                        entry["sites"] = tidy_sites(entry["sites"])
 
     def _payload(self):
         with self.lock:
@@ -507,7 +543,13 @@ class SurveyStore:
             sites = [row for row in entry.get("sites") or () if isinstance(row, dict)]
             centre = record.get("centre") or (0.0, 0.0)
 
+            ids = {item for item in (record.get("deposits") or {}).get("ids") or () if item is not None}
+
             def same(row):
+                # The same deposits are the same place, wherever the middle of
+                # them has moved to.
+                if ids & set((row.get("deposits") or {}).get("ids") or ()):
+                    return True
                 # The same signal number at the same location: a number alone
                 # isn't enough, as the game can still have the last one targeted.
                 middle = row.get("centre") or ()
@@ -522,6 +564,9 @@ class SurveyStore:
                 match = {"id": f"{int(now * 1000):x}", "saved": round(now, 1), "name": record.get("name") or "", "note": ""}
                 sites.append(match)
             keep = {key: match.get(key) for key in ("id", "saved", "name", "note", "runs") if match.get(key) is not None}
+            if match.get("survey") and not record.get("survey"):
+                # A visit without a survey doesn't lose the one saved here.
+                keep.update(survey=match["survey"], centre=match.get("centre") or record.get("centre"))
             match.clear()
             match.update({**record, **keep, "updated": round(now, 1)})
             if not match.get("name"):

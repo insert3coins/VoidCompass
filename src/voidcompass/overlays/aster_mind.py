@@ -378,7 +378,10 @@ class AsterMind(watcher_mind.WatcherMind):
 
     def session_start(self, *, login=False):
         now = self.clock()
-        if not login and self._session_start is not None and now - (getattr(self, "_last_event_at", now) or now) < 900:
+        if self._session_start is not None and (login or now - (getattr(self, "_last_event_at", now) or now) < 900):
+            # A later login (the main menu and back, a mode switch) carries on the same watch.
+            if login:
+                self._aster_game_session = True
             return None
         self._session_start = self._counted_until = now
         self._aster_game_session = login
@@ -391,6 +394,10 @@ class AsterMind(watcher_mind.WatcherMind):
             self.memory["session_started"] = now
             self.memory["first_seen"] = self.memory.get("first_seen") or now
             watcher_name.count_session(self.memory, now)
+        # One welcome a run of the app (5.8.2).
+        if getattr(self, "_welcomed", False):
+            return None
+        self._welcomed = True
         return self.consider("greet_new" if first else "greet_away", force=True)
 
     def _persona_extras(self, now):

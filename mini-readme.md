@@ -1,5 +1,17 @@
 # VoidCompass // UPDATE LOG
 
+## v5.8.2 // Ready When You Are
+**Release Date:** 15 NOV 3312 *(Galactic Standard Time)*
+
+* **The Theme Workshop, rebuilt.** Settings › Appearance now groups the themes into SKINS (their own fonts and shapes), PALETTES and YOURS, and the workshop opens from a button under them, or EDIT on one of yours, instead of a drop-down at the bottom. The whole deck shows your theme as you change it, until you save it or close the workshop. Start from any theme (or click one while the workshop's open), give yours any skin's fonts and shapes, set each colour by name or hex, pick a background, text and accent and BLEND THE REST, and see how readable the text is as you go. Rename or delete one of yours from the workshop too.
+* **Rig ready times that learn.** The READY ring on each rig dial never appeared: a rig was timed from its key down to its key up, and a rig often stays down all run, so every time was thrown out as too long. A rig is now timed to the first tonne refined round it (you start collecting once it's ready), as it happens, and two timed rigs are enough to start.
+* **Saved sites without the clutter.** Driving about a planet with deposits on it could save an empty site wherever you were, and the same deposits came back as a second site when their middle moved. A site is now only kept by itself with a survey or deposits in it, the same deposits are always the same site, and a visit without a survey no longer drops the one a site was saved with. Empty sites you already have are cleared out, and doubles are folded together, keeping the first one's name.
+* **Each site's runs, kept.** Runs often weren't kept, as the game can drop your position for a moment while the Rhino docks. The Rhino's last position is used then, and a run goes to the nearest saved site within the mining location rather than only one within 2 km of its centre.
+* **One welcome a session.** Your companion said welcome back again every time you went to the main menu and back, and a companion coming on watch greeted you once more. It's now once each time the app starts.
+* **The planet waypoint while you fly in.** With Navigation HUD pages on, the HUD shows the Planet Waypoint for you, but only brought its PLANET page up once you'd landed, so flying in to a target nothing showed it. A waypoint on the body below now brings the page up from the ship too.
+* **Overlays hide when you leave the game.** Overlay Studio's Hide with the game closed is now on for everyone (switch it off there if you'd rather keep them), and the main menu counts as well as a shutdown: exit to the menu or the desktop and every overlay but the music player goes, and they're back as you load into the game. A crash is still noticed within 20 seconds.
+* **The region in the status bar.** The status bar at the bottom of the deck said REGION UNKNOWN until your first jump of the session. It now reads your region from where you are, as the top bar does.
+
 ## v5.8.1 // Kings of the Crust
 **Release Date:** 15 NOV 3312 *(Galactic Standard Time)*
 

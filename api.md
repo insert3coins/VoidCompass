@@ -1491,7 +1491,7 @@ Everything the command deck shows is yours to read: one page at a time, or the w
 | POST | `/api/v1/dashboard/page` | Open a page on the deck: `{"page": "explore"}` |
 | GET | `/api/v1/dashboard/feed` | The deck's event feed, newest first (`limit`, default 50) |
 | POST | `/api/v1/dashboard/feed` | Add a line to the feed: `{"message": "Hello from the API", "tag": "BOT", "severity": "info"}` |
-| GET | `/api/v1/themes` | The active theme, its colours, and every theme you can use |
+| GET | `/api/v1/themes` | The active theme, its colours, its `skin` (the fonts and shapes it wears, or empty), and every theme you can use |
 | POST | `/api/v1/dashboard/theme` | Switch theme: `{"name": "Void Cyan"}` |
 
 The pages you can read are: `achievements`, `bgs`, `capsules`, `carrier`, `chronicle`, `colonisation`, `constellation`, `explore`, `ground`, `ledger`, `mining`, `mission`, `planet-materials`, `postcards`, `powerplay`, `profile`, `recon`, `screenshots`, `trading`, `watcher` and `wrapped`. Their data has the same shape the deck uses, so the easiest way to find a value is to look at the page first: press **TRY** on `/api/v1/dashboard/pages/{page}` above, or open `http://127.0.0.1:7380/api/v1/dashboard/pages/explore` in your browser.

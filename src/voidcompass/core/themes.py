@@ -119,10 +119,21 @@ SKIN_THEMES = {
 BUILTIN_THEMES.update({name: palette for name, (_skin, palette) in SKIN_THEMES.items()})
 
 
-def theme_skin(theme_name):
-    """The skin a theme carries ("" for a palette-only theme, custom ones included)."""
-    entry = SKIN_THEMES.get(str(theme_name or ""))
-    return entry[0] if entry else ""
+# The skins a custom theme can wear (5.8.2): (id, the theme it comes from).
+SKIN_CHOICES = tuple((skin, name) for name, (skin, _palette) in SKIN_THEMES.items())
+SKIN_IDS = frozenset(skin for skin, _name in SKIN_CHOICES)
+
+
+def theme_skin(theme_name, custom_themes=None):
+    """The skin a theme carries: a skin theme's own, or the one a custom theme
+    was given in the workshop ("" for a palette-only theme)."""
+    name = str(theme_name or "")
+    entry = SKIN_THEMES.get(name)
+    if entry:
+        return entry[0]
+    custom = custom_themes.get(name) if isinstance(custom_themes, dict) else None
+    skin = str(custom.get("skin") or "") if isinstance(custom, dict) else ""
+    return skin if skin in SKIN_IDS else ""
 
 
 def normalize_theme(colors, base=None):

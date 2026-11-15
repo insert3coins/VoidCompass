@@ -342,7 +342,7 @@ class HtmlOverlayStudioMixin:
                 "overlay_frame_rate": overlay_frame_rate(self.config),
                 "overlay_hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
                 "overlay_hide_in_menus": bool(self.config.get("overlay_hide_in_menus", False)),
-                "overlay_hide_when_game_closed": bool(self.config.get("overlay_hide_when_game_closed", False)),
+                "overlay_hide_when_game_closed": bool(self.config.get("overlay_hide_when_game_closed", True)),
                 # The page redraws every switch from these (5.5.3.4: the Dark
                 # box fix's switch went back to off without it).
                 "overlay_transparency_fix": bool(self.config.get("overlay_transparency_fix", False)),
@@ -617,7 +617,7 @@ class HtmlOverlayStudioMixin:
         if menu == getattr(self, "_menu_music", ""):
             return
         self._menu_music = menu
-        if bool(self.config.get("overlay_hide_in_menus", False)):
+        if bool(self.config.get("overlay_hide_in_menus", False)) or bool(self.config.get("overlay_hide_when_game_closed", True)):
             self._apply_map_overlay_hiding()
 
     def _apply_map_overlay_hiding(self):
@@ -632,8 +632,9 @@ class HtmlOverlayStudioMixin:
         if bool(self.config.get("overlay_hide_in_menus", False)) and self._in_game_menu():
             keep = self._menu_keep_visible()
             hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in keep}
-        if bool(self.config.get("overlay_hide_when_game_closed", False)) and getattr(self, "_game_closed", False):
-            # The game is shut down (or gone): only the music player stays.
+        if bool(self.config.get("overlay_hide_when_game_closed", True)) and (
+                getattr(self, "_game_closed", False) or getattr(self, "_menu_music", "") == "MainMenu"):
+            # The game is shut down (or gone), or back at its main menu: only the music player stays.
             hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in self.GAME_CLOSED_KEEP}
         # Overlay groups (5.8.1): what the groups that are on (and off) leave hidden.
         groups_hidden = getattr(self, "_overlay_groups_hidden", None)
@@ -655,14 +656,14 @@ class HtmlOverlayStudioMixin:
         if closed == bool(getattr(self, "_game_closed", False)):
             return
         self._game_closed = closed
-        if bool(self.config.get("overlay_hide_when_game_closed", False)):
+        if bool(self.config.get("overlay_hide_when_game_closed", True)):
             self._apply_map_overlay_hiding()
 
     def _tick_game_process(self):
         """A crash writes no Shutdown, so look for the game itself now and then."""
         if not getattr(self, "is_running", False):
             return
-        if bool(self.config.get("overlay_hide_when_game_closed", False)) and not getattr(self, "_game_closed", False):
+        if bool(self.config.get("overlay_hide_when_game_closed", True)) and not getattr(self, "_game_closed", False):
             from voidcompass.core.elite_binds import game_running
 
             def worker():

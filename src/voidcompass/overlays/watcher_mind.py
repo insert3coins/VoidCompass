@@ -676,6 +676,8 @@ class WatcherMind:
         self._serial = 0
         self._last_spoke = 0.0
         self._session_start = None
+        # One welcome a run of the app (5.8.2); a reset meets you afresh.
+        self._welcomed = False
         self._first_streak = 0
         self._in_danger = False
         # 5.5.7: when the last threat was, shields down, the hull warning
@@ -1024,7 +1026,8 @@ class WatcherMind:
                 "_remarked_world_names", "_codex_bodies", "_record_said", "_first_streak", "_route_left",
                 "_route_total", "_route_said", "_route_target", "_route_jump_to", "_route_new", "_next_star",
                 "_on_foot", "_fuel_warned", "_hull_warned", "_srv_full_said", "_hold_full_said", "_cargo_capacity",
-                "_limpets", "_last_interesting", "_loaded_at", "_mined_at")
+                "_limpets", "_last_interesting", "_loaded_at", "_mined_at", "_session_start", "_counted_until",
+                "_aster_game_session", "_welcomed")
 
     def take_watch_from(self, previous):
         """Carry on from the companion that had the watch (same commander)."""
@@ -1475,8 +1478,8 @@ class WatcherMind:
         now = self.clock()
         died_since = self.memory.get("last_death") and (
             not self._session_start or float(self.memory["last_death"]) > float(self._session_start))
-        if self._session_start and now - self._session_start < 1800 and not died_since                 and now - (getattr(self, "_last_event_at", None) or now) <= 900:
-            # A reload mid-session (or a second sign of life): already greeted.
+        if self._session_start and not died_since:
+            # A reload, or the main menu and back: the same session.
             return None
         self._session_start = now
         self._counted_until = now
@@ -1503,7 +1506,13 @@ class WatcherMind:
         # Died since the last session began: that comes first.
         death = self.memory.get("last_death")
         if death and (not previous_start or float(death) > float(previous_start)):
+            self._welcomed = True
             return self.consider("after_death", force=True)
+        # One welcome a run of the app (5.8.2): a break that starts a new
+        # session later on, or another companion's watch, isn't a new arrival.
+        if getattr(self, "_welcomed", False):
+            return None
+        self._welcomed = True
         if not last:
             return self.consider("greet_new", force=True)
         if self.bond() >= 2 and self.random.random() < .35:

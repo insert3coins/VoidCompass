@@ -1006,7 +1006,7 @@ class MainDashboard(
         # theme has fallen back to the built-in default.
         self.config["ui_theme_name"] = theme_name
         try:
-            apply_theme_live(self.root, theme_name, palette)
+            apply_theme_live(self.root, theme_name, palette, skin=themes.theme_skin(theme_name, custom_themes))
         except Exception as exc:
             logging.warning("Could not apply profile theme %s: %s", theme_name, exc)
             return False
@@ -5261,7 +5261,7 @@ class MainDashboard(
         from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
 
         HtmlOverlayServer.frame_rate = overlay_frame_rate(self.config)
-        HtmlOverlayServer.set_skin(themes.theme_skin(self.config.get("ui_theme_name")))
+        HtmlOverlayServer.set_skin(themes.theme_skin(self.config.get("ui_theme_name"), self.config.get("ui_custom_themes")))
         HtmlOverlayServer.set_opacity(overlay_opacity_ratio(self.config))
         # The Watcher's own frame rate (5.5.7).
         from voidcompass.overlays.heartbeat_hud import frame_rate_setting

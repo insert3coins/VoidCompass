@@ -10,14 +10,14 @@ def apply_ui_scale(runtime, percent=100):
     runtime.ui_scale_percent = percent
     return percent
 
-def apply_theme_live(runtime, theme_name, palette):
+def apply_theme_live(runtime, theme_name, palette, skin=None):
     palette = themes.normalize_theme(palette)
     themes.ACTIVE_PALETTE = dict(palette)
     themes.ACTIVE_THEME_NAME = theme_name
     try:
         # A skin theme's whole look reaches every overlay with its next snapshot.
         from voidcompass.overlays.html_overlay_server import HtmlOverlayServer
-        HtmlOverlayServer.set_skin(themes.theme_skin(theme_name))
+        HtmlOverlayServer.set_skin(themes.theme_skin(theme_name) if skin is None else skin)
     except Exception:
         pass
     for key, value in palette.items():

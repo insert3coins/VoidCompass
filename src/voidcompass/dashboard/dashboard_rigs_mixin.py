@@ -97,7 +97,20 @@ class DashboardRigsMixin:
         body = getattr(self, "current_body_name", None)
         if not getattr(self, "on_planet", False) or lat is None or lon is None or not radius or not body:
             return None
-        return str(getattr(self, "current_sys", "") or ""), str(body), float(lat), float(lon), float(radius)
+        place = str(getattr(self, "current_sys", "") or ""), str(body), float(lat), float(lon), float(radius)
+        self._rig_last_place = (place, time.monotonic())
+        return place
+
+    def _rig_place_recent(self, within_s=120.0):
+        """Where you are, or where you last were on a surface a moment ago:
+        the game's Status can drop its position for a moment as the Rhino docks."""
+        place = self._rig_place()
+        if place is not None:
+            return place
+        last = getattr(self, "_rig_last_place", None)
+        if last and time.monotonic() - last[1] <= within_s:
+            return last[0]
+        return None
 
     def _rig_say(self, title, message, severity="info"):
         toast = getattr(self, "toast_hud", None)
@@ -244,16 +257,17 @@ class DashboardRigsMixin:
         the journals are read at startup: kept, nothing redrawn."""
         if "RHINO" not in str(vehicle_name or "").upper():
             return None
-        place = self._rig_place()
+        place = self._rig_place_recent()
         body = place[1] if place else str(getattr(self, "current_body_name", "") or "")
         system = place[0] if place else str(getattr(self, "current_sys", "") or "")
         if not body:
             return None
         self._rhino_aboard = {"system": system, "body": body, "docked": self._journal_seconds(when),
-                              "launched": getattr(self, "_rhino_run_started", None)}
+                              "launched": getattr(self, "_rhino_run_started", None),
+                              "at": [place[2], place[3]] if place else None, "radius": place[4] if place else None}
         if quiet:
             return self._rhino_aboard
-        self._rhino_site_keep()
+        self._rhino_site_keep(place=place)
         self._rhino_run_kept()
         self._rig_update_overlay()
         self._rhino_page_refresh(now=True)
@@ -270,7 +284,9 @@ class DashboardRigsMixin:
         taken = self.rig_store().tonnes_on(system, body, since=aboard["launched"])
         run = self._rhino_run() if callable(getattr(self, "_rhino_run", None)) else None
         refined = int(round(float((run or {}).get("refined_t") or 0))) or sum(taken.values())
-        site = self._rhino_site_here()
+        where = aboard.get("at")
+        site = self._rhino_site_here(place=(system, body, where[0], where[1], aboard.get("radius"))
+                                     if where and aboard.get("radius") else None)
         if not refined or not site:
             return None
         minutes = max(1, round((aboard["docked"] - aboard["launched"]) / 60))
@@ -1175,11 +1191,11 @@ class DashboardRigsMixin:
                                 "trail": survey.get("trail") or []}
         return record
 
-    def _rhino_site_keep(self, force=True):
+    def _rhino_site_keep(self, force=True, place=None):
         """Keep the site you're working saved as you go, so it's in SITES
         however you leave (or if the game closes): after each piece of work,
         and at least every SITE_KEEP_S while you sweep."""
-        place = self._rig_place()
+        place = place or self._rig_place()
         if place is None:
             return None
         key = (place[0].casefold(), place[1].casefold())
@@ -1215,6 +1231,8 @@ class DashboardRigsMixin:
         if auto and not self.survey_store().survey(system, body) and not self._deposit_rows(system, body):
             return None
         record = self._rhino_site_snapshot(system, body, radius, here)
+        if record is not None and auto and not record.get("survey") and not record["deposits"]["ids"]:
+            record = None
         if record is None:
             if not auto:
                 self._rig_say("RHINO SITE", "Nothing to save here yet: mark the survey centre or a deposit", severity="warn")
@@ -1235,24 +1253,30 @@ class DashboardRigsMixin:
             self._rhino_after_change()
         return site
 
-    def _rhino_site_here(self):
-        """The saved site you're at, if any."""
-        place = self._rig_place()
+    def _rhino_site_here(self, place=None):
+        """The saved site you're at, if any: the one of this signal, else the
+        nearest within the mining location's reach (a Rhino works a few km
+        round its site's centre)."""
+        place = place or self._rig_place()
         if place is None:
             return None
         system, body, lat, lon, radius = place
         signal = self._rhino_signal_here()
+        near = []
         for site in self.survey_store().sites(system, body):
             centre = site.get("centre") or ()
             if len(centre) != 2:
                 continue
             apart = surface_distance_m(lat, lon, centre[0], centre[1], radius)
-            if signal is not None and site.get("signal") is not None and int(site["signal"]) == int(signal) \
-                    and apart <= rhino_survey.LOCATION_REACH_M:
-                return site
-            if apart <= rhino_survey.SITE_SAME_M:
-                return site
-        return None
+            if apart > rhino_survey.LOCATION_REACH_M:
+                continue
+            if signal is not None and site.get("signal") is not None:
+                if int(site["signal"]) == int(signal):
+                    return site
+                if apart > rhino_survey.SITE_SAME_M:
+                    continue
+            near.append((apart, site))
+        return min(near, key=lambda item: item[0])[1] if near else None
 
     def _rig_left_body(self, body):
         """Leaving a planet takes you far past 5 km, so any rigs left on it are

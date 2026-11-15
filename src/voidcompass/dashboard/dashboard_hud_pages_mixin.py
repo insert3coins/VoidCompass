@@ -88,8 +88,13 @@ class DashboardHudPagesMixin:
         own_carrier = bool(docked and carrier.get("carrier_id") is not None
                            and str(getattr(self, "current_station_market_id", "")) == str(carrier.get("carrier_id")))
         route = getattr(self, "trading_route", None)
+        try:
+            waypoint = bool(getattr(self, "on_planet", False) and self._ground_target_configured()
+                            and self._ground_target_matches_current_body())
+        except Exception:
+            waypoint = False
         return {
-            "docked": docked, "on_planet": surface, "in_rhino": self._rig_in_rhino(), "rigs_here": rigs_here,
+            "docked": docked, "on_planet": surface, "waypoint": waypoint, "in_rhino": self._rig_in_rhino(), "rigs_here": rigs_here,
             "at_colony": colony, "on_own_carrier": own_carrier,
             "prospecting": bool(prospect and time.monotonic() - prospect["at"] < hold),
             "target": bool(getattr(self, "_hud_target", None)),

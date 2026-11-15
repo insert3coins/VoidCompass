@@ -99,7 +99,7 @@ class HtmlDashboardRuntime:
                 "name": theme_name,
                 "palette": palette,
                 "available": theme_names,
-                "skin": themes.theme_skin(theme_name),
+                "skin": themes.theme_skin(theme_name, config.get("ui_custom_themes")),
             },
         }
         self._commissioning_callback = None

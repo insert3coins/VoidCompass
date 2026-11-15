@@ -387,7 +387,7 @@ class DashboardApiMixin(ApiRecordsMixin):
     def api_themes(self):
         custom = self.config.get("ui_custom_themes") or {}
         name, colors = themes.resolve_theme(self.config.get("ui_theme_name"), custom)
-        return {"active": name, "colors": colors,
+        return {"active": name, "colors": colors, "skin": themes.theme_skin(name, custom),
                 "builtin": sorted(themes.BUILTIN_THEMES), "custom": sorted(custom)}
 
     def api_set_theme(self, name):
