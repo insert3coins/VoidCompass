@@ -42,8 +42,9 @@ def _body_read(handler):
 
 # Every overlay page's policy. No inline styles: a page sets styles through
 # element.style (allowed), never a style attribute (refused: only a console warning says so).
+# Images from Twitch's and BetterTTV's emote servers too, for the Stream Chat overlay (5.8.3).
 OVERLAY_CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; "
-               "connect-src 'self'; img-src 'self' data:; object-src 'none'; "
+               "connect-src 'self'; img-src 'self' data: https://static-cdn.jtvnw.net https://cdn.betterttv.net; object-src 'none'; "
                "frame-ancestors 'none'; base-uri 'none'")
 
 

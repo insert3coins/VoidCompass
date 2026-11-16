@@ -63,10 +63,10 @@ PROVIDER_CALLS = (
     "api_missions", "api_fleet", "api_achievements", "api_trading", "api_colonisation", "api_carriers",
     "api_mining", "api_mining_run", "api_combat", "api_engineering", "api_powerplay", "api_route",
     "api_copy_next", "api_capsules", "api_leave_capsule",
-    "api_target_system", "api_add_waypoint", "api_change_waypoint", "api_delete_waypoint", "api_clear_waypoints", "api_return_later",
+    "api_add_waypoint", "api_change_waypoint", "api_delete_waypoint", "api_clear_waypoints", "api_return_later",
     "api_return_later_action", "api_neutron_route", "api_import_neutron_route",
     "api_wrapped_years", "api_wrapped", "api_recorder_sessions", "api_recorder_tape",
-    "api_surface_pads", "api_rigs", "api_rig_mark", "api_rigs_clear", "api_rhino", "api_rhino_action", "api_mining_record",
+    "api_surface_pads", "api_rhino_site_report", "api_stream", "api_stream_credits", "api_stream_mute", "api_rigs", "api_rig_mark", "api_rigs_clear", "api_rhino", "api_rhino_action", "api_mining_record",
     "api_orders", "api_orders_ask", "api_orders_answer", "api_orders_abandon",
 )
 
@@ -399,7 +399,6 @@ class LocalApi:
             ("GET", r"/powerplay", lambda req: self._call("api_powerplay"), False),
             ("GET", r"/route", lambda req: self._call("api_route"), False),
             ("POST", r"/route/copy-next", lambda req: self._call("api_copy_next"), True),
-            ("POST", r"/route/target", self._target_system, True),
             ("POST", r"/route/waypoints", self._add_waypoint, True),
             ("POST", r"/route/waypoints/clear", self._clear_waypoints, True),
             ("POST", r"/route/waypoints/([0-9]{1,4})", self._change_waypoint, True),
@@ -426,6 +425,10 @@ class LocalApi:
             ("POST", r"/rigs/([1-6])", lambda req, slot: self._call("api_rig_mark", int(slot)), True),
             # Rhino mining: the survey, marked deposits, the rig plan and the planning circle.
             ("GET", r"/rhino", lambda req: self._call("api_rhino"), False),
+            ("GET", r"/stream", lambda req: self._call("api_stream"), False),
+            ("POST", r"/stream/credits", lambda req: self._call("api_stream_credits"), True),
+            ("POST", r"/stream/mute", lambda req: self._call("api_stream_mute"), True),
+            ("GET", r"/rhino/sites/([0-9A-Za-z]{1,32})/report", lambda req, site: self._call("api_rhino_site_report", site), False),
             ("POST", r"/rhino/(deposit|mined-out|trace|circle|save)", lambda req, action: self._call("api_rhino_action", action), True),
             # Crew Orders (5.7.7): the officers' orders, and your answers.
             ("GET", r"/orders", lambda req: self._call("api_orders"), False),
@@ -444,7 +447,7 @@ class LocalApi:
             path = path.replace("([a-z0-9-]{1,48})", "{group}")
             path = path.replace("([a-z0-9-]{1,40})", "{page}").replace("([a-z0-9_-]{1,40})", "{overlay}")
             path = path.replace("([^/]{1,240})", "{name}").replace("([0-9]{1,20})", "{address}")
-            path = path.replace("([a-z]{1,20})", "{id}").replace("([0-9]{1,4})", "{n}").replace("([0-9]{4})", "{year}").replace("([1-6])", "{n}")
+            path = path.replace("([a-z]{1,20})", "{id}").replace("([0-9A-Za-z]{1,32})", "{id}").replace("([0-9]{1,4})", "{n}").replace("([0-9]{4})", "{year}").replace("([1-6])", "{n}")
             path = re.sub(r"\(([a-z|-]+)\)", r"{\1}", path)
             out.append({"method": method, "path": path or PREFIX, "control": control})
         return out
@@ -727,15 +730,6 @@ class LocalApi:
         if not changes:
             raise ApiError(400, "Nothing to change: send enabled, x, y and/or opacity")
         return self._call("api_set_overlay", overlay_id, changes)
-
-    def _target_system(self, req):
-        system = " ".join(str(req.body.get("system") or "").split())[:80]
-        if not system:
-            raise ApiError(400, 'Send the system: {"system": "Colonia"}')
-        address = req.body.get("address")
-        if address is not None and not isinstance(address, int):
-            raise ApiError(400, "address must be the system's id64, a whole number")
-        return self._call("api_target_system", system, address)
 
     def _toggle_overlay_group(self, req, group_id):
         on = req.body.get("on") if isinstance(req.body, dict) else None

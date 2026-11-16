@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Void Compass Stream Chat</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/assets/cursor.css">
+</head>
+<body>
+  <!-- Stream Chat (5.8.3): your companion answering stream chat, the game
+       chat is playing, a banner for raids and promotions, and the credits. -->
+  <main id="stream" class="stream empty">
+    <div class="frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="scanlines"></div><div class="vignette"></div>
+    <div id="content" class="content">
+      <header id="stream-head" class="stream-head"></header>
+      <section id="stream-banner" class="stream-banner" hidden></section>
+      <section id="stream-game" class="stream-game" hidden></section>
+      <section id="stream-cards" class="stream-cards"></section>
+      <section id="stream-lines" class="list" aria-live="polite"></section>
+      <footer id="stream-hint" class="stream-hint" hidden></footer>
+      <section id="stream-credits" class="stream-credits" hidden></section>
+    </div>
+  </main>
+  <script src="/assets/frame-cap.js"></script>
+  <script src="/assets/overlay-layout.js"></script>
+  <script src="/assets/overlay-client.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

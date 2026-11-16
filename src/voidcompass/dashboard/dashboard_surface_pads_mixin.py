@@ -103,6 +103,54 @@ class DashboardSurfacePadsMixin:
             logging.debug("Pad not put on the planet compass", exc_info=True)
         return {"words": words + source, "say": f"Pad {pad}: {words}{source}. The planet compass is on it."}
 
+    def _surface_settlement_approach(self, raw, now=None):
+        """Coming in to a settlement or surface port (ApproachSettlement): how
+        far it is, and which of its pads are known already, before docking's
+        even asked for. Its words to say, or None: a settlement without a
+        landing pad, or one said in the last half hour."""
+        import time
+        market = raw.get("MarketID")
+        if market is None or raw.get("Latitude") is None or raw.get("Longitude") is None:
+            return None
+        name = str(raw.get("Name_Localised") or raw.get("Name") or "The settlement")
+        body = str(raw.get("BodyName") or getattr(self, "current_body_name", "") or "")
+        on_it = body.casefold() == str(getattr(self, "current_body_name", "") or "").casefold()
+        store = self.surface_pad_store()
+        store.note_settlement(market, raw["Latitude"], raw["Longitude"], name=name, body=body,
+                              system=str(getattr(self, "current_sys", "") or ""),
+                              radius_m=getattr(self, "current_planet_radius", None) if on_it else None)
+        known = store.known_pads(market) or {"landed": [], "worked_out": [], "pads": None}
+        services = {str(item).casefold() for item in raw.get("StationServices") or ()}
+        if not known["landed"] and not known["worked_out"] and "dock" not in services:
+            return None
+        said = self.__dict__.setdefault("_settlement_said", {})
+        now = time.time() if now is None else now
+        if now - said.get(str(market), -1e9) < 1800:
+            return None
+        said[str(market)] = now
+        here = self._surface_here() if on_it else None
+        where = ""
+        if here is not None:
+            lat, lon, radius, heading = here
+            target = (float(raw["Latitude"]), float(raw["Longitude"]))
+            where = surface_pads.way_words(surface_pads.distance_m(lat, lon, target[0], target[1], radius),
+                                           surface_pads.bearing_deg(lat, lon, target[0], target[1]), heading)
+        head = f"{name}, {where}" if where else name
+        pads = lambda numbers: ", ".join(str(number) for number in numbers[:-1]) + (" and " if len(numbers) > 1 else "") + str(numbers[-1])
+        if known["landed"] or known["worked_out"]:
+            parts = []
+            if known["landed"]:
+                parts.append(f"you've landed on pad{'s' if len(known['landed']) > 1 else ''} {pads(known['landed'])}")
+            if known["worked_out"]:
+                count = len(known["worked_out"])
+                parts.append(f"{count} more {'is' if count == 1 else 'are'} worked out from its design")
+            total = len(known["landed"]) + len(known["worked_out"])
+            of = f" of {known['pads']}" if known["pads"] else ""
+            words = f"{head}. I know {total}{of} pad{'s' if total != 1 else ''} here: {' and '.join(parts)}."
+        else:
+            words = f"{head}. I don't know its pads yet: they're learnt as you land."
+        return {"words": words, "say": words}
+
     def _surface_pad_docked(self, raw):
         """Docked on a surface pad: learn where it is, and clear the compass
         if it was pointing at it."""

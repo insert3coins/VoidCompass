@@ -228,6 +228,7 @@ HOTKEY_GROUP_OF = {
     **{f"group_{slot}": "controls" for slot in range(1, 9)},
     "field_bookmark": "field", "colony_fold": "field", "colony_refresh": "field",
     "orders_accept": "watcher", "orders_decline": "watcher",
+    "stream_mute": "watcher", "stream_credits": "watcher",
 }
 
 
@@ -2478,6 +2479,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "home_system", "start_page", "target_remarks", "crew_warnings", "pad_location", "mining_recap",
             "canonn_reports", "leave_behind_cr", "rhino_commodities_hidden",
             "api_enabled", "api_port", "api_allow_lan", "api_allow_control",
+            "stream_chat_enabled", "stream_chat_channel", "stream_chat_voice", "stream_chat_welcomes", "stream_chat_naming", "stream_chat_where", "stream_chat_cooldown_s", "stream_chat_game_gap_min", "stream_chat_blocked",
         ):
             value = self.config.get(key)
             values[key] = value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
@@ -2494,6 +2496,9 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             ("orders_campaigns", True),
             ("orders_kind_exobiology", True), ("orders_kind_exploration", True), ("orders_kind_travel", True), ("orders_kind_trade", True), ("orders_kind_colonisation", True), ("orders_kind_powerplay", True),
             ("orders_watcher", True), ("orders_copy_target", True), ("orders_open_map", False),
+            ("stream_chat_enabled", False), ("stream_chat_channel", ""), ("stream_chat_voice", True), ("stream_chat_welcomes", True),
+            ("stream_chat_naming", True), ("stream_chat_where", "region"),
+            ("stream_chat_cooldown_s", 20), ("stream_chat_game_gap_min", 3), ("stream_chat_blocked", ""),
         ):
             if values.get(key) is None:
                 values[key] = default
@@ -2560,6 +2565,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "galnet": self._html_dashboard_galnet(),
             # The local API (5.5.7): listening where, or why not.
             "api": self._api_state(),
+            "stream": self._stream_chat_settings() if hasattr(self, "_stream_chat_settings") else {},
             "profile": {
                 "key": profile,
                 "name": _text(self.config.get("active_commander_name") or "Unknown Commander", 120),
@@ -2696,6 +2702,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             self.update_hud()
         if changed & {"api_enabled", "api_port", "api_allow_lan", "api_allow_control"}:
             self._api_sync()
+        if any(key.startswith("stream_chat_") for key in changed) and hasattr(self, "_stream_chat_sync"):
+            self._stream_chat_sync()
         self._html_settings_paths_cache = None
 
     def _planet_materials_store(self):
@@ -4071,6 +4079,12 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                 self._persist_config()
                 self._apply_active_profile_theme()
                 changed = True
+            elif operation == "stream_test":
+                self._stream_chat_test(str(payload.get("text") or "!where"))
+                changed = True
+            elif operation == "stream_credits":
+                self._stream_credits()
+                changed = True
             elif operation == "export_pads":
                 written = self._surface_pads_export(payload.get("path")) if hasattr(self, "_surface_pads_export") else None
                 if written is None:
@@ -4273,6 +4287,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     "adaptive_command_enabled": bool,
                     "api_enabled": bool, "api_port": int,
                     "api_allow_lan": bool, "api_allow_control": bool,
+                    "stream_chat_enabled": bool, "stream_chat_channel": str, "stream_chat_voice": bool,
+                    "stream_chat_welcomes": bool, "stream_chat_naming": bool,
+                    "stream_chat_where": str, "stream_chat_cooldown_s": int, "stream_chat_game_gap_min": int,
+                    "stream_chat_blocked": str,
                 }
                 updates = {}
                 if "rhino_commodities_hidden" in values:
@@ -4344,6 +4362,17 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                         updates[key] = value
                     elif key == "watcher_listen_mode":
                         updates[key] = "tap" if value == "tap" else "hold"
+                    elif key == "stream_chat_channel":
+                        from voidcompass.core.stream_chat import channel_name
+                        updates[key] = channel_name(value) or _text(value, 80)
+                    elif key == "stream_chat_where":
+                        updates[key] = value if value in ("exact", "region", "delay10", "delay30") else "region"
+                    elif key == "stream_chat_cooldown_s":
+                        updates[key] = max(5, min(120, _integer(value, 20)))
+                    elif key == "stream_chat_game_gap_min":
+                        updates[key] = max(0, min(30, _integer(value, 3)))
+                    elif key == "stream_chat_blocked":
+                        updates[key] = ", ".join(word.strip() for word in str(value or "").split(",") if word.strip())[:1000]
                     else:
                         updates[key] = _text(value, 1000)
                 changed_keys = {key for key, value in updates.items() if self.config.get(key) != value}
@@ -4468,9 +4497,6 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         if action == "copy_next":
             self._dashboard_copy_next()
             return True
-        if action == "target_system":
-            # 5.8.3: 🎯 plots a route to it in the game's galaxy map.
-            return self._html_target_system(payload)
         if action == "set_auto_copy":
             self.config["auto_copy_waypoint"] = bool(payload.get("enabled"))
             self._persist_config()

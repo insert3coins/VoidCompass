@@ -412,10 +412,11 @@ class DashboardRigsMixin:
         del spots["spots"][:-2000]
         rigs = self.rig_store().rigs(system, body)
         here_m = rig_here_m(getattr(self, "config", None) or {})
-        slot = booking_rig(rigs, lat, lon, _radius, here_m=here_m)
+        refined_at = self._journal_seconds((raw or {}).get("timestamp"))
+        slot = booking_rig(rigs, lat, lon, _radius, here_m=here_m, now=refined_at)
         if slot is not None:
             at_rig = surface_distance_m(lat, lon, rigs[slot]["lat"], rigs[slot]["lon"], _radius) <= here_m
-            self.rig_store().book(system, body, slot, material, at_rig=at_rig)
+            self.rig_store().book(system, body, slot, material, now=refined_at, at_rig=at_rig)
             self._deposit_named_by_rig(system, body, slot, _radius)
             self._deposit_regrown_by_rig(system, body, slot, _radius, material)
         # 5.7.6: kept per planet too, for the best patch after a restart.
@@ -1112,7 +1113,7 @@ class DashboardRigsMixin:
         """A rig getting too far away: said once a trip, as the game destroys
         it at 5 km. Said again only after you've been back near."""
         self._rig_circle_watch()
-        # Driven off from rigs you were collecting from: they fill again from now.
+        # Leaving ends the collection; the clock counts from its last tonne.
         place = self._rig_place()
         if place and self.rig_store().left_behind(*place, here_m=rig_here_m(getattr(self, "config", None) or {})):
             self._rig_update_overlay()

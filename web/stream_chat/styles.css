@@ -1,0 +1,308 @@
+/* Stream Chat (5.8.3), in the Navigation HUD's language: frame and corner
+   brackets, Bahnschrift, the companion's own hue on its edge. Colours are
+   theme tokens; the values here are only the fallbacks before the first
+   snapshot. */
+:root {
+  color-scheme: dark;
+  --bg: #070b10; --panel: #0d141c; --inset: #0a1118; --border: #243746;
+  --accent: #00d1ff; --orange: #ff7a18; --green: #4ee59b; --yellow: #ffd166;
+  --red: #ff6075; --text: #dce8ef; --muted: #85939d; --dim: #52616c;
+  --scale: 1;
+  --hud: var(--orange);
+  --hud-soft: color-mix(in srgb, var(--hud) 62%, transparent);
+  --hud-faint: color-mix(in srgb, var(--hud) 22%, transparent);
+  --hud-ghost: color-mix(in srgb, var(--hud) 8%, transparent);
+  --font-hud: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI", sans-serif;
+  --font-wide: "Bahnschrift", "Segoe UI", sans-serif;
+  --who: var(--accent);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
+body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
+
+/* ---------------------------------------------------------------- frame -- */
+.by-watcher { --who: #e0574f; } .by-aster { --who: #d9a441; } .by-axiom { --who: #8f9bff; }
+.by-meridian { --who: #3fbf8f; } .by-lyra { --who: #74ddff; }
+.stream {
+  position: relative; width: 100%; color: var(--text); font-variant-numeric: tabular-nums;
+  background:
+    radial-gradient(ellipse at 12% -40%, color-mix(in srgb, var(--who) 16%, transparent), transparent 60%),
+    linear-gradient(0deg, var(--hud-ghost) 1px, transparent 1px) 0 0 / 100% 4px,
+    linear-gradient(160deg, color-mix(in srgb, var(--inset) 94%, var(--hud)), var(--panel) 48%, var(--bg));
+  isolation: isolate;
+}
+.stream.empty { opacity: 0; }
+.stream::before {
+  content: ""; position: absolute; inset: 2px; z-index: -1; border: 1px solid var(--hud-faint);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+  box-shadow: inset 0 0 26px rgba(0, 0, 0, .8);
+}
+.frame-corners { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.frame-corners i { position: absolute; width: 18px; height: 12px; border: 0 solid var(--hud-soft); }
+.frame-corners i:nth-child(1) { left: 4px; top: 4px; border-left-width: 2px; border-top-width: 2px; }
+.frame-corners i:nth-child(2) { right: 4px; top: 4px; border-right-width: 2px; border-top-width: 2px; }
+.frame-corners i:nth-child(3) { right: 4px; bottom: 4px; border-right-width: 2px; border-bottom-width: 2px; }
+.frame-corners i:nth-child(4) { left: 4px; bottom: 4px; border-left-width: 2px; border-bottom-width: 2px; }
+.scanlines { position: absolute; inset: 0; z-index: 30; pointer-events: none; opacity: .18; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .32) 3px); }
+.vignette { position: absolute; inset: 0; z-index: 29; pointer-events: none; box-shadow: inset 0 0 22px rgba(0, 0, 0, .78); }
+.stream.no-crt .scanlines, .stream.no-crt .vignette { display: none; }
+.content { position: relative; zoom: var(--scale); display: flex; flex-direction: column; gap: 7px; padding: 10px 13px 11px; }
+
+/* ----------------------------------------------------------------- head -- */
+/* Who's on watch on the left; the chips on the right, never wrapping. */
+.stream-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding-left: 7px; border-left: 3px solid var(--who); }
+.stream-chips { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.stream-state { padding: 2px 6px 1px; border: 1px solid currentColor; font: 700 8px var(--font-wide); letter-spacing: .18em; white-space: nowrap; }
+.stream-state.live { color: var(--green); }
+.stream-state.live::before { content: "● "; animation: pulse 1.6s ease-in-out infinite; }
+.stream-state.wait { color: var(--yellow); }
+.stream-state.off { color: var(--dim); }
+.stream-who { min-width: 0; overflow: hidden; color: var(--who); font: 700 12px var(--font-wide); letter-spacing: .12em; text-overflow: ellipsis; white-space: nowrap; }
+.stream-flag { padding: 2px 5px 1px; border: 1px solid currentColor; font: 700 8px var(--font-wide); font-style: normal; letter-spacing: .14em; }
+.stream-flag.muted { color: var(--red); }
+.stream-flag.holding { color: var(--yellow); }
+@keyframes pulse { 50% { opacity: .35; } }
+
+/* --------------------------------------------------------------- banner -- */
+.stream-banner {
+  --tone: var(--who); position: relative; display: grid; gap: 3px; padding: 7px 10px 8px 10px;
+  border-left: 3px solid var(--tone);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--tone) 22%, transparent), color-mix(in srgb, var(--tone) 4%, transparent) 70%, transparent);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+  animation: banner-in .45s cubic-bezier(.2, .9, .3, 1.2);
+}
+.stream-banner.kind-raid { --tone: var(--orange); }
+.stream-banner.kind-sub, .stream-banner.kind-named { --tone: var(--yellow); }
+.stream-banner.kind-rank, .stream-banner.kind-win { --tone: var(--green); }
+.stream-banner.kind-muted { --tone: var(--red); }
+.banner-tag { color: var(--tone); font: 700 8.5px var(--font-wide); letter-spacing: .2em; }
+.stream-banner p { margin: 0; color: var(--text); font: 600 13px/1.3 var(--font-hud); letter-spacing: .02em; overflow-wrap: anywhere; }
+@keyframes banner-in { from { opacity: 0; transform: translateX(-14px); } }
+
+/* ----------------------------------------------------------------- game -- */
+.stream-game { display: grid; gap: 6px; padding: 8px 10px 9px; border: 1px solid color-mix(in srgb, var(--who) 40%, transparent); background: color-mix(in srgb, var(--who) 7%, var(--inset)); }
+.game-head { display: grid; gap: 2px; }
+.game-tag { color: var(--who); font: 700 8px var(--font-wide); letter-spacing: .2em; }
+.stream-game.done .game-tag { color: var(--green); }
+.game-head strong { color: var(--text); font: 700 16px/1.1 var(--font-hud); letter-spacing: .05em; overflow-wrap: anywhere; }
+.game-prompt { margin: 0; color: var(--muted); font: 600 10.5px/1.35 var(--font-hud); letter-spacing: .03em; }
+.game-timer { position: relative; display: flex; align-items: center; gap: 8px; height: 12px; }
+.game-timer i { flex: 1; height: 3px; background: var(--hud-faint); position: relative; }
+.game-timer i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--left, 0%); background: var(--who); transition: width .9s linear; }
+.game-timer b { color: var(--text); font: 700 10px var(--font-wide); }
+.game-tally, .game-choices { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.game-tally li { display: grid; grid-template-columns: 54px minmax(0, 1fr) 26px; align-items: center; gap: 7px; }
+.game-tally li b { color: var(--text); font: 700 11px var(--font-wide); letter-spacing: .06em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-tally li i { height: 7px; background: var(--hud-faint); position: relative; }
+.game-tally li i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); background: color-mix(in srgb, var(--who) 75%, transparent); }
+.game-tally li em { color: var(--muted); font: 700 10px var(--font-wide); font-style: normal; text-align: right; }
+.game-tally li.won b, .game-tally li.won em { color: var(--green); }
+.game-tally li.won i::after { background: var(--green); }
+.game-choices li { position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; padding: 3px 6px 6px; }
+.game-choices li b { color: var(--who); font: 700 12px var(--font-wide); }
+.game-choices li span { color: var(--text); font: 700 13px var(--font-hud); overflow-wrap: anywhere; }
+.game-choices li small { grid-column: 2; color: var(--dim); font: 600 9.5px var(--font-hud); }
+.game-choices li em { grid-column: 3; grid-row: 1; color: var(--muted); font: 700 11px var(--font-wide); font-style: normal; }
+.game-choices li i { position: absolute; left: 6px; right: 6px; bottom: 1px; height: 2px; background: var(--hud-faint); }
+.game-choices li i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); background: var(--who); }
+.game-choices li.won span { color: var(--yellow); }
+.game-foot { display: flex; justify-content: space-between; align-items: baseline; padding-top: 5px; border-top: 1px solid var(--hud-faint); }
+.game-foot span { color: var(--hud-soft); font: 700 8.5px var(--font-wide); letter-spacing: .16em; }
+.game-foot b { color: var(--text); font: 700 13px var(--font-wide); letter-spacing: .04em; }
+.stream-game.done .game-foot b { color: var(--green); }
+
+/* ---------------------------------------------------------------- cards -- */
+.stream-cards { display: flex; flex-direction: column; gap: 5px; }
+.stream-cards:empty { display: none; }
+.stream-card { display: grid; gap: 2px; padding: 5px 8px 6px; border-left: 2px solid var(--hud-faint); background: color-mix(in srgb, var(--inset) 70%, transparent); }
+.stream-card.newest { border-left-color: var(--who); animation: card-in .35s ease-out; }
+.stream-card:not(.newest) { opacity: .72; }
+.stream-card header { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.stream-card header b { min-width: 0; overflow: hidden; font: 700 11.5px var(--font-wide); letter-spacing: .03em; text-overflow: ellipsis; white-space: nowrap; }
+.stream-card .asked { color: var(--dim); font: 700 9px var(--font-wide); letter-spacing: .1em; }
+.stream-card p { margin: 0; color: var(--text); font: 600 12.5px/1.35 var(--font-hud); letter-spacing: .015em; overflow-wrap: anywhere; }
+@keyframes card-in { from { opacity: 0; transform: translateY(6px); } }
+
+.stream-hint { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 9px; padding: 1px 0 0 10px; }
+.stream-hint span { color: var(--hud-soft); font: 700 8px var(--font-wide); letter-spacing: .2em; }
+.stream-hint b { color: var(--muted); font: 700 10px var(--font-wide); letter-spacing: .06em; }
+
+/* -------------------------------------------------------------- credits -- */
+.stream.rolling .stream-cards, .stream.rolling .stream-hint, .stream.rolling .stream-game, .stream.rolling .stream-banner { display: none; }
+.stream-credits { position: relative; height: 560px; overflow: hidden; mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent); }
+.reel { position: absolute; left: 0; right: 0; top: 78%; display: grid; justify-items: center; gap: 18px; padding: 0 10px; text-align: center; animation: roll var(--roll, 60s) linear forwards; }
+@keyframes roll { to { top: 0; transform: translateY(-100%); } }
+.reel h2 { margin: 0; color: var(--who); font: 700 22px/1.15 var(--font-wide); letter-spacing: .12em; }
+.reel-sub { margin: -10px 0 6px; color: var(--muted); font: 700 10px var(--font-wide); letter-spacing: .22em; }
+.reel-block { display: grid; gap: 4px; width: 100%; }
+.reel-block h3 { margin: 0 0 4px; color: var(--hud-soft); font: 700 9.5px var(--font-wide); letter-spacing: .26em; }
+.reel-block p { margin: 0; color: var(--text); font: 600 14px/1.35 var(--font-hud); letter-spacing: .03em; }
+.reel-block p.pair { display: flex; justify-content: center; gap: 10px; }
+.reel-block p.pair span { color: var(--muted); }
+.reel-block p.pair b { color: var(--text); font-weight: 700; }
+.reel-block p.named { display: grid; }
+.reel-block p.named b { color: var(--yellow); font-size: 16px; }
+.reel-block p.named span { color: var(--muted); font-size: 11px; }
+.reel-block p.crew { font-size: 13px; color: color-mix(in srgb, var(--text) 85%, var(--who)); }
+.reel-signoff { margin: 16px 0 0; color: var(--text); font: italic 600 14px/1.4 "Segoe UI", sans-serif; }
+.reel-made { margin: 26px 0 40px; color: var(--who); font: 700 10px var(--font-wide); letter-spacing: .4em; }
+.stream.reduced-motion * { animation: none !important; transition: none !important; }
+.stream.reduced-motion .reel { position: static; }
+
+/* ================================================================ NEON ====
+   The chat box looks (5.8.3): Rajdhani, a dark translucent panel per line
+   with a glowing accent rail, the viewer's own colour, role badges, emotes
+   and chips. --na is the accent chosen in Overlay Studio; --who the
+   companion's own colour. */
+@font-face { font-family: "Neon Rajdhani"; font-weight: 500; src: url("/assets/fonts/Rajdhani-Medium.ttf") format("truetype"); }
+@font-face { font-family: "Neon Rajdhani"; font-weight: 600 800; src: url("/assets/fonts/Rajdhani-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "Neon Mono"; src: url("/assets/fonts/ShareTechMono-Regular.ttf") format("truetype"); }
+
+.stream.neon { --na: #FF2BD6; --nbg: rgba(11, 10, 22, .55); --nbg-strong: rgba(11, 10, 22, .82); background: none; color: #fff; }
+.stream.neon::before, .stream.neon .frame-corners, .stream.neon .scanlines, .stream.neon .vignette { display: none; }
+.stream.neon .content {
+  height: var(--box-h, 480px); padding: 8px 6px 10px; gap: 8px;
+  font: 600 19px/1.35 "Neon Rajdhani", "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .01em;
+}
+.stream.neon.rolling .content { height: auto; }
+.list[hidden] { display: none !important; }
+
+/* The strip along the top: who's on watch, live, muted. */
+.stream.neon .stream-head { display: flex; align-items: center; gap: 8px; padding: 0 2px; border: 0; }
+.stream.neon .stream-who { flex: 1 1 auto; }
+.stream.neon .stream-state { border-radius: 999px; padding: 1px 9px; font: 700 10px "Neon Rajdhani", sans-serif; letter-spacing: .16em; }
+.stream.neon .stream-state.live { color: #39FF88; box-shadow: 0 0 10px -2px #39FF88; }
+.stream.neon .stream-who { color: var(--who); font: 700 13px "Neon Rajdhani", sans-serif; letter-spacing: .14em; text-shadow: 0 0 8px var(--who); }
+.stream.neon .stream-flag { border-radius: 999px; padding: 1px 8px; font: 700 10px "Neon Rajdhani", sans-serif; letter-spacing: .14em; }
+
+/* The lines: newest at the bottom, the oldest fading out at the top. */
+.stream.neon .list {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 44px); mask-image: linear-gradient(to bottom, transparent 0, #000 44px);
+}
+.msg { flex: 0 0 auto; overflow-wrap: anywhere; }
+.msg .meta { white-space: nowrap; }
+.msg .name { font-weight: 800; }
+.msg .badge { display: inline-grid; place-items: center; width: 1.3em; height: 1.3em; margin-right: 4px; border-radius: 3px; color: #fff;
+  font-size: .68em; font-weight: 800; vertical-align: .12em; }
+.msg .emote { height: 28px; width: auto; vertical-align: middle; margin: -4px 1px; }
+.msg .chip { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--na); color: #0b0916;
+  font-size: .6em; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; vertical-align: .18em; white-space: nowrap; }
+.msg .chip.back { background: rgba(255, 255, 255, .85); }
+.msg .chip.to { background: transparent; color: rgba(255, 255, 255, .62); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28); text-transform: none; letter-spacing: .02em; }
+.msg.first { box-shadow: 0 0 0 1px var(--na), 0 0 18px -4px var(--na); }
+.msg.evt .name, .msg.crew .name { text-shadow: 0 0 10px var(--name-color); }
+.msg.arrive { animation: neon-in .35s ease-out both; }
+@keyframes neon-in { from { opacity: 0; transform: translateX(-22px); } }
+
+/* Neon rail. */
+.look-neon .msg { padding: 6px 12px; background: var(--nbg); border-left: 3px solid var(--na); border-radius: 4px 10px 10px 4px; box-shadow: -4px 0 14px -6px var(--na); }
+.look-neon .msg .name { text-shadow: 0 0 8px var(--name-color); }
+.look-neon .msg.first { box-shadow: -4px 0 14px -6px var(--na), 0 0 0 1px var(--na), 0 0 18px -4px var(--na); }
+.look-neon .msg.crew { border-left-color: var(--crew); background: var(--nbg-strong); box-shadow: -4px 0 16px -5px var(--crew), inset 0 0 22px -12px var(--crew); }
+.look-neon .msg.evt { border-left-color: var(--ec); box-shadow: -4px 0 14px -6px var(--ec); }
+.look-neon .name::after, .look-clean .name::after, .look-boxed .name::after { content: ":"; color: #fff; text-shadow: none; }
+/* Bubbles. */
+.look-bubbles .msg { display: flex; flex-direction: column; align-items: flex-start; }
+.look-bubbles .msg .meta { margin: 0 8px 2px; font-size: .8em; }
+.look-bubbles .msg .sep { display: none; }
+.look-bubbles .msg .body { padding: 8px 14px; border-radius: 16px 16px 16px 4px; background: var(--nbg); box-shadow: 0 0 0 1px color-mix(in srgb, var(--na) 35%, transparent); }
+.look-bubbles .msg.crew .body { background: var(--nbg-strong); box-shadow: 0 0 0 1px var(--crew), 0 0 16px -6px var(--crew); }
+.look-bubbles .msg.first { box-shadow: none; }
+.look-bubbles .msg.first .body { box-shadow: 0 0 0 1px var(--na), 0 0 18px -4px var(--na); }
+/* Clean: no background, shadowed text. */
+.look-clean .msg { text-shadow: 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, .8); }
+.look-clean .msg.first { box-shadow: none; }
+/* Boxed: one panel round them all. */
+.look-boxed .list { padding: 10px 12px; border-radius: 14px; background: var(--nbg); -webkit-mask-image: none; mask-image: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--na) 40%, transparent), 0 0 24px -8px var(--na); }
+.look-boxed .msg { padding: 2px 4px; }
+
+/* Cards, in sixteen styles: colours, font and radius from the style chosen. */
+.stream.neon.look-card .content { font-family: var(--c-font, "Trebuchet MS"), sans-serif; font-size: 17px; color: var(--c-text, #fff); }
+.look-card .list { -webkit-mask-image: none; mask-image: none; padding: 6px 4px; }
+.look-card .msg { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 2px;
+  padding: 10px 14px 11px 18px; border: 2px solid var(--c-line); border-radius: var(--c-radius); box-shadow: 0 10px 26px var(--c-shadow);
+  background: linear-gradient(135deg, var(--c-surface), var(--c-soft)); }
+.look-card .msg::before { content: ""; position: absolute; left: 6px; top: 12px; bottom: 12px; width: 3px; border-radius: 3px;
+  background: linear-gradient(var(--c-accent), var(--c-secondary)); box-shadow: 0 0 10px var(--c-accent); }
+.look-card .msg .meta { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: .78em; letter-spacing: .02em; }
+.look-card .msg .name { overflow: hidden; text-overflow: ellipsis; }
+.look-card .msg .sep { display: none; }
+.look-card .msg .chip { background: var(--c-secondary); }
+.look-card .msg.first { border-color: var(--c-secondary); box-shadow: 0 0 22px var(--c-shadow), 0 0 0 1px var(--c-secondary); }
+.look-card .msg.crew { border-color: var(--crew); }
+.look-card .msg.crew::before { background: var(--crew); box-shadow: 0 0 12px var(--crew); }
+.look-card .msg.evt { border-color: var(--ec); background: linear-gradient(135deg, color-mix(in srgb, var(--ec) 28%, var(--c-surface)), var(--c-soft)); }
+.look-card .msg.evt::before { background: var(--ec); box-shadow: 0 0 12px var(--ec); }
+.look-card.v-neon .msg { box-shadow: 0 0 18px var(--c-shadow), inset 0 0 18px color-mix(in srgb, var(--c-accent) 10%, transparent); }
+.look-card.v-tech .msg, .look-card.v-glitch .msg { border-radius: 0; clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
+.look-card.v-tech .msg::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--c-accent) 6%, transparent) 3px 4px); }
+.look-card.v-glitch .msg .name { text-shadow: 2px 0 var(--c-secondary), -2px 0 var(--c-accent); }
+.look-card.v-glass .msg { border-color: rgba(255, 255, 255, .18); }
+.look-card.v-glass .msg::after { content: ""; position: absolute; left: 14px; right: 14px; top: -1px; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--c-accent), var(--c-secondary), transparent); }
+.look-card.v-minimal .msg { border-width: 1px; background: var(--c-surface); box-shadow: none; }
+.look-card.v-soft .msg { border-bottom-left-radius: 4px; }
+.look-card.v-petal .msg::after, .look-card.v-frost .msg::after, .look-card.v-romance .msg::after { position: absolute; right: 10px; top: 4px;
+  color: var(--c-accent); font-size: .9em; opacity: .75; text-shadow: 0 0 8px var(--c-accent); }
+.look-card.v-petal .msg::after { content: "✿"; }
+.look-card.v-frost .msg::after { content: "❄"; }
+.look-card.v-romance .msg::after { content: "♥"; }
+.look-card.v-esports .msg { border-width: 0; border-top: 3px solid var(--c-accent); border-radius: 0; }
+.look-card.v-esports .msg .name { padding: 1px 10px; background: var(--c-accent); color: #111 !important; font-style: italic; transform: skewX(-12deg); }
+.look-card.v-frame .msg { border-radius: 2px; }
+.look-card.v-grunge .msg { border-style: dashed; transform: rotate(-.4deg); }
+.look-card.v-grunge .msg:nth-child(even) { transform: rotate(.4deg); }
+.look-card.v-sticker .msg { border: 0; margin: 4px 6px; box-shadow: 0 0 0 3px #fff, 0 8px 0 3px color-mix(in srgb, var(--c-secondary) 60%, #000), 0 14px 26px var(--c-shadow); transform: rotate(-.8deg); }
+.look-card.v-sticker .msg:nth-child(even) { transform: rotate(.8deg); }
+.look-card.v-pixel .msg { border: 0; border-radius: 0; margin: 4px; box-shadow: 4px 0 0 var(--c-line), -4px 0 0 var(--c-line), 0 4px 0 var(--c-line), 0 -4px 0 var(--c-line), 8px 8px 0 var(--c-shadow); }
+
+/* The game and the banners, as neon cards above the chat. */
+.stream.neon .stream-banner, .stream.neon .stream-game {
+  flex: 0 0 auto; clip-path: none; border: 0; border-left: 3px solid var(--tone, var(--na)); border-radius: 4px 12px 12px 4px;
+  background: var(--nbg-strong); box-shadow: -4px 0 18px -5px var(--tone, var(--na)), inset 0 0 26px -14px var(--tone, var(--na));
+}
+.stream.neon .stream-banner { --tone: var(--na); padding: 7px 12px 8px; }
+.stream.neon .stream-banner.kind-raid, .stream.neon .stream-banner.kind-named { --tone: #FFC53D; }
+.stream.neon .stream-banner.kind-sub { --tone: #9B5CFF; }
+.stream.neon .stream-banner.kind-win, .stream.neon .stream-banner.kind-rank { --tone: #39FF88; }
+.stream.neon .banner-tag { color: var(--tone); font: 800 11px "Neon Rajdhani", sans-serif; letter-spacing: .2em; text-shadow: 0 0 8px var(--tone); }
+.stream.neon .stream-banner p { color: #fff; font: 700 17px/1.25 "Neon Rajdhani", sans-serif; }
+.stream.neon .stream-game { --tone: var(--na); padding: 9px 12px 10px; }
+.stream.neon .game-tag { color: var(--na); font: 800 11px "Neon Rajdhani", sans-serif; letter-spacing: .2em; }
+.stream.neon .game-head strong { color: #fff; font: 700 20px/1.1 "Neon Rajdhani", sans-serif; letter-spacing: .04em; text-shadow: 0 0 10px color-mix(in srgb, var(--na) 60%, transparent); }
+.stream.neon .game-prompt { color: rgba(255, 255, 255, .72); font: 600 13px/1.3 "Neon Rajdhani", sans-serif; }
+.stream.neon .game-timer i, .stream.neon .game-tally li i, .stream.neon .game-choices li i { background: rgba(255, 255, 255, .12); }
+.stream.neon .game-timer i::after, .stream.neon .game-tally li i::after, .stream.neon .game-choices li i::after { background: var(--na); box-shadow: 0 0 8px var(--na); }
+.stream.neon .game-tally li b, .stream.neon .game-choices li b, .stream.neon .game-timer b { color: #fff; font: 700 14px "Neon Rajdhani", sans-serif; }
+.stream.neon .game-tally li em, .stream.neon .game-choices li em { color: rgba(255, 255, 255, .7); font: 700 13px "Neon Rajdhani", sans-serif; }
+.stream.neon .game-choices li span { color: #fff; font: 700 16px "Neon Rajdhani", sans-serif; }
+.stream.neon .game-choices li small { color: rgba(255, 255, 255, .5); font: 600 11.5px "Neon Rajdhani", sans-serif; }
+.stream.neon .game-foot { border-top-color: rgba(255, 255, 255, .14); }
+.stream.neon .game-foot span { color: color-mix(in srgb, var(--na) 80%, white); font: 800 10.5px "Neon Rajdhani", sans-serif; }
+.stream.neon .game-foot b { color: #fff; font: 700 16px "Neon Rajdhani", sans-serif; }
+.stream.neon .game-tally li.won b, .stream.neon .game-tally li.won em, .stream.neon .stream-game.done .game-foot b { color: #39FF88; text-shadow: 0 0 8px #39FF88; }
+.stream.neon .stream-hint { margin-top: auto; padding: 4px 12px; border-radius: 999px; background: var(--nbg); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--na) 40%, transparent); }
+.stream.neon .stream-hint span { color: var(--na); font: 800 10.5px "Neon Rajdhani", sans-serif; }
+.stream.neon .stream-hint b { color: rgba(255, 255, 255, .8); font: 700 13px "Neon Rajdhani", sans-serif; }
+
+/* The credits in neon. */
+.stream.neon .stream-credits { height: 600px; }
+.stream.neon .reel h2 { color: #fff; font: 700 28px/1.1 "Neon Rajdhani", sans-serif; letter-spacing: .1em; text-shadow: 0 0 6px var(--na), 0 0 18px var(--na); }
+.stream.neon .reel-sub { color: var(--who); font: 700 12px "Neon Rajdhani", sans-serif; letter-spacing: .24em; }
+.stream.neon .reel-block h3 { color: var(--na); font: 800 12px "Neon Rajdhani", sans-serif; letter-spacing: .28em; text-shadow: 0 0 8px var(--na); }
+.stream.neon .reel-block p { color: #fff; font: 600 18px/1.3 "Neon Rajdhani", sans-serif; text-shadow: 0 1px 3px #000; }
+.stream.neon .reel-block p.named b { color: #FFC53D; text-shadow: 0 0 10px #FFC53D; }
+.stream.neon .reel-signoff { color: #fff; font: italic 600 17px/1.4 "Neon Rajdhani", sans-serif; }
+.stream.neon .reel-made { color: var(--na); text-shadow: 0 0 10px var(--na); }
+
+/* On air or not, beside the chat state (5.8.3). */
+.stream-air { padding: 2px 6px 1px; border: 1px solid currentColor; font: 700 8px var(--font-wide); letter-spacing: .18em; white-space: nowrap; }
+.stream-air.on { color: var(--red); background: color-mix(in srgb, var(--red) 16%, transparent); }
+.stream-air.off { color: var(--dim); }
+.stream.neon .stream-air { border-radius: 999px; padding: 1px 9px; font: 700 10px "Neon Rajdhani", sans-serif; letter-spacing: .16em; }
+.stream.neon .stream-air.on { color: #fff; background: #E91916; border-color: #E91916; box-shadow: 0 0 12px -2px #E91916; }
+.stream.neon .stream-air.off { color: rgba(255, 255, 255, .5); }

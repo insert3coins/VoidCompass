@@ -52,6 +52,8 @@ OVERLAY_SPECS = (
     OverlaySpec("expedition_hud", "expedition", "Void Compass Expedition", "expedition_overlay_enabled", "expedition_hud_x", "expedition_hud_y", (40, 560), (380, 220), "Expedition", "EXPEDITION", True, "expedition", "overlay_hotkey_expedition", "Expedition"),
     OverlaySpec("trade_route_hud", "trade-route", "Void Compass Trade Route", "trade_route_overlay_enabled", "trade_route_hud_x", "trade_route_hud_y", (1520, 480), (360, 150), "Trade Route", "TRADE", True, "trade_route", "overlay_hotkey_trade_route", "Trade Route"),
     # 5.7.7: the order waiting for your answer, or the one you're on.
+    # 5.8.3: your companion answering your stream's chat, its games and the credits.
+    OverlaySpec("stream_chat_hud", "stream-chat", "Void Compass Stream Chat", "stream_chat_overlay_enabled", "stream_chat_hud_x", "stream_chat_hud_y", (40, 300), (420, 240), "Stream Chat", "STREAM", True, "stream_chat", "overlay_hotkey_stream_chat", "Stream Chat"),
     OverlaySpec("orders_hud", "crew-orders", "Void Compass Crew Orders", "crew_orders_overlay_enabled", "orders_hud_x", "orders_hud_y", (1520, 640), (360, 170), "Crew Orders", "ORDERS", True, "crew_orders", "overlay_hotkey_crew_orders", "Crew Orders"),
     # 5.5.3.7: the Milky Way in a corner, with you on it; and a Polaroid of
     # each screenshot taken in game.
@@ -99,6 +101,10 @@ OVERLAY_HOTKEY_SPECS = (
     _overlay_hotkey("colony_needs"),
     _overlay_hotkey("trade_route"),
     _overlay_hotkey("crew_orders"),
+    _overlay_hotkey("stream_chat"),
+    # 5.8.3: stream chat's replies off and on again, and the end credits.
+    ("stream_mute", "overlay_hotkey_stream_mute", "Stream chat: mute / unmute replies", None),
+    ("stream_credits", "overlay_hotkey_stream_credits", "Stream chat: roll the credits", None),
     # 5.7.7: answer the order waiting on the board without leaving the cockpit.
     ("orders_accept", "overlay_hotkey_orders_accept", "Crew Orders: accept the waiting order", None),
     ("orders_decline", "overlay_hotkey_orders_decline", "Crew Orders: decline the waiting order", None),
@@ -188,6 +194,7 @@ TEXT_SIZE_KEYS = {
     "colony_needs_hud": "colony_needs_text_scale_percent",
     "trade_route_hud": "trade_route_text_scale_percent",
     "orders_hud": "crew_orders_text_scale_percent",
+    "stream_chat_hud": "stream_chat_text_scale_percent",
     "expedition_hud": "expedition_text_scale_percent",
     "rig_tracker_hud": "rig_tracker_text_scale_percent",
     "rhino_map_hud": "rhino_map_text_scale_percent",

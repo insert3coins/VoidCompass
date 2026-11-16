@@ -55,6 +55,7 @@ from voidcompass.overlays.jump_info_hud import JumpInfoHUD
 from voidcompass.overlays.colony_needs_hud import ColonyNeedsHUD
 from voidcompass.overlays.trade_route_hud import TradeRouteHUD
 from voidcompass.overlays.orders_hud import OrdersHUD
+from voidcompass.overlays.stream_chat_hud import StreamChatHUD
 from voidcompass.overlays.expedition_hud import ExpeditionHUD
 from voidcompass.overlays.rig_tracker import RigTrackerHUD
 from voidcompass.overlays.rhino_map_hud import RhinoMapHUD
@@ -82,6 +83,7 @@ from voidcompass.overlays.html_jump_info_overlay import attach_html_jump_info_ov
 from voidcompass.overlays.html_colony_needs_overlay import attach_html_colony_needs_overlay
 from voidcompass.overlays.html_trade_route_overlay import attach_html_trade_route_overlay
 from voidcompass.overlays.html_orders_overlay import attach_html_orders_overlay
+from voidcompass.overlays.html_stream_chat_overlay import attach_html_stream_chat_overlay
 from voidcompass.overlays.html_expedition_overlay import attach_html_expedition_overlay
 from voidcompass.overlays.html_rig_tracker_overlay import attach_html_rig_tracker_overlay
 from voidcompass.overlays.html_galaxy_minimap_overlay import attach_html_galaxy_minimap_overlay
@@ -107,8 +109,8 @@ from voidcompass.dashboard.dashboard_journey_mixin import DashboardJourneyMixin
 from voidcompass.dashboard.dashboard_expedition_mixin import DashboardExpeditionMixin
 from voidcompass.dashboard.dashboard_rigs_mixin import DashboardRigsMixin
 from voidcompass.dashboard.dashboard_overlay_groups_mixin import DashboardOverlayGroupsMixin
-from voidcompass.dashboard.dashboard_target_mixin import DashboardTargetMixin
 from voidcompass.dashboard.dashboard_surface_pads_mixin import DashboardSurfacePadsMixin
+from voidcompass.dashboard.dashboard_stream_chat_mixin import DashboardStreamChatMixin
 from voidcompass.dashboard.dashboard_hud_pages_mixin import DashboardHudPagesMixin
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
 from voidcompass.dashboard.dashboard_watcher_listen_mixin import DashboardWatcherListenMixin
@@ -322,8 +324,8 @@ class MainDashboard(
     DashboardExpeditionMixin,
     DashboardRigsMixin,
     DashboardOverlayGroupsMixin,
-    DashboardTargetMixin,
     DashboardSurfacePadsMixin,
+    DashboardStreamChatMixin,
     DashboardHudPagesMixin,
     DashboardWatcherVoiceMixin,
     DashboardWatcherListenMixin,
@@ -1036,6 +1038,7 @@ class MainDashboard(
             "colony_needs_hud",
             "trade_route_hud",
             "orders_hud",
+            "stream_chat_hud",
             "expedition_hud",
             "rig_tracker_hud",
             "galaxy_minimap_hud",
@@ -1127,7 +1130,7 @@ class MainDashboard(
             "gravity_warning_hud", "station_info_hud",
             "survey_status_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud",
             "music_player_hud", "contact_scope_hud", "jump_info_hud", "colony_needs_hud", "trade_route_hud", "orders_hud",
-            "expedition_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud", "postcard_hud",
+            "stream_chat_hud", "expedition_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud", "postcard_hud",
         ):
             overlay = getattr(self, attr, None)
             try:
@@ -2854,6 +2857,7 @@ class MainDashboard(
             on_unlock=self._on_achievement_unlocked,
         )
 
+        self._init_game_visibility()
         if self._overlay_enabled("hud"):
             self.hud = TacticalHUD(self.root, self.config, on_widget_click=self._on_hud_widget_click)
             try:
@@ -2997,6 +3001,11 @@ class MainDashboard(
         else:
             self.orders_hud = None
 
+        if self._overlay_enabled("stream_chat_hud"):
+            self.stream_chat_hud = StreamChatHUD(self.root, self.config)
+        else:
+            self.stream_chat_hud = None
+
         if self._overlay_enabled("expedition_hud"):
             self.expedition_hud = ExpeditionHUD(self.root, self.config)
             # Saved expeditions are already loaded from the active profile.
@@ -3103,6 +3112,8 @@ class MainDashboard(
         self.watcher.prime_market_file()
         # The local API (5.5.7) hears the journal too, and starts if it's on.
         self._api_attach()
+        # 5.8.3: stream chat, if it's switched on.
+        self._stream_chat_sync()
         # Let the HTML cockpit publish its cached state before journal startup
         # replay begins reducing the recent live tail.
         self.root.call_later(75, self.watcher.start)
@@ -3890,6 +3901,12 @@ class MainDashboard(
         if action == "hud_pages_mode":
             self._hud_pages_mode_key()
             return
+        if action == "stream_mute":
+            self._stream_mute_toggle()
+            return
+        if action == "stream_credits":
+            self._stream_credits()
+            return
         if action == "field_bookmark":
             self._field_bookmark()
             return
@@ -4381,6 +4398,7 @@ class MainDashboard(
         self._watcher_voice_close()
         clock.mark("Watcher voice")
         self._api_close()
+        self._stream_chat_close()
         clock.mark("Local API")
         inara = getattr(self, "inara", None)
         if inara is not None:
@@ -4426,7 +4444,7 @@ class MainDashboard(
         clock.mark("Trading")
         for attr in tuple(name for name, _x, _y in self._OVERLAY_POSITION_SPECS) + (
             "gravity_warning_hud", "toast_hud", "achievement_hud", "heartbeat_hud", "galnet_ticker_hud", "music_player_hud",
-            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "orders_hud", "expedition_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
+            "jump_info_hud", "colony_needs_hud", "trade_route_hud", "orders_hud", "stream_chat_hud", "expedition_hud", "rig_tracker_hud", "galaxy_minimap_hud", "rhino_map_hud",
             "postcard_hud",
         ):
             window = self._overlay_window(getattr(self, attr, None))
@@ -5279,6 +5297,7 @@ class MainDashboard(
         HtmlOverlayServer.set_shape_windows(bool(self.config.get("overlay_transparency_fix", False)))
         # Classic overlay windows (5.5.3.4.1): the host reads it when it starts.
         HtmlOverlayServer.set_classic_windows(bool(self.config.get("overlay_classic_windows", False)))
+        self._apply_map_overlay_hiding()
 
     def _apply_runtime_feature_toggles(self):
         self._apply_overlay_server_settings()
@@ -5484,6 +5503,15 @@ class MainDashboard(
             self.orders_hud.destroy()
             self.orders_hud = None
 
+        if self._overlay_enabled("stream_chat_hud"):
+            if getattr(self, "stream_chat_hud", None) is None:
+                self.stream_chat_hud = StreamChatHUD(self.root, self.config)
+                self._stream_overlay_last = None
+                self._stream_overlay_update()
+        elif getattr(self, "stream_chat_hud", None):
+            self.stream_chat_hud.destroy()
+            self.stream_chat_hud = None
+
         if self._overlay_enabled("expedition_hud"):
             if getattr(self, "expedition_hud", None) is None:
                 self.expedition_hud = ExpeditionHUD(self.root, self.config)
@@ -5611,6 +5639,10 @@ class MainDashboard(
                 )
             elif attr == "orders_hud":
                 attach_html_orders_overlay(
+                    overlay, overlay_id, title, enabled_key, x_key, y_key,
+                )
+            elif attr == "stream_chat_hud":
+                attach_html_stream_chat_overlay(
                     overlay, overlay_id, title, enabled_key, x_key, y_key,
                 )
             elif attr == "expedition_hud":
@@ -8434,6 +8466,8 @@ class MainDashboard(
             ev, raw, d,
         )
         startup_replay = bool(data.get("startup_catchup"))
+        if ev in {"LoadGame", "Shutdown"}:
+            self._observe_game_session(ev, startup_replay=startup_replay)
         if startup_replay:
             self._startup_restore_active = True
             self._startup_restore_ui_pending = True
@@ -8458,6 +8492,8 @@ class MainDashboard(
             self._hotspot_observe(raw, startup_replay)
         # The smaller moments from Outrider: target remarks, pads, crew warnings (5.7.8).
         self._smalls_event(ev, raw if isinstance(raw, dict) else d, startup_replay)
+        # 5.8.3: stream chat's games, its figures and where you are.
+        self._stream_chat_event(ev, raw if isinstance(raw, dict) else d, startup_replay)
         if ev in ("StartJump", "FSDJump", "SupercruiseEntry", "SupercruiseExit"):
             # The game sets "in danger" on every jump and supercruise entry for
             # 16-26 s with no threat (ED-Outrider's JOURNAL_REFERENCE): not a fight.
@@ -8585,10 +8621,6 @@ class MainDashboard(
                     self._stamp_session_companion()
             except Exception as exc:
                 logging.debug("Captain's Log event skipped [%s]: %s", ev, exc)
-        if ev in {"LoadGame", "Shutdown"}:
-            # Out of the main menu, or the game closed: no menu is open.
-            self._observe_menu_music("")
-            self._observe_game_session(ev)
         if ev == "Shutdown" and not startup_replay:
             self._watcher_sign_off()
             # Tonight's flight log is written (5.5.3.8).
@@ -11105,6 +11137,15 @@ class MainDashboard(
             if self._restore_current_system_bio_completions():
                 self._request_db_commit(reason="startup_biology_recovery")
             self._mark_startup_journal_live()
+            # Plot Route: jumps made while the deck was closed (Elite crashed
+            # and both came back, or the deck was started late) were read as
+            # catch-up, which doesn't move the route. Catch it up with where
+            # you are now, quietly.
+            if str(getattr(self, "current_sys", "") or "") and hasattr(self, "_route_on_arrival"):
+                try:
+                    self._route_on_arrival(str(self.current_sys), live=False)
+                except Exception:
+                    logging.debug("Route not caught up after the journal restore", exc_info=True)
 
         # Docked/Location rendering is deliberately suppressed while a batch
         # is being reduced.  Reconcile once from the final state so Station

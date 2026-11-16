@@ -536,6 +536,11 @@ class DashboardSmallsMixin:
                 self._smalls_on_scan(raw)
             elif event == "DockingGranted":
                 self._smalls_on_docking_granted(raw)
+            elif event == "ApproachSettlement" and hasattr(self, "_surface_settlement_approach"):
+                # 5.8.3: how far it is, and the pads already known there.
+                info = self._surface_settlement_approach(raw)
+                if info and self.config.get("pad_location", True):
+                    self._small_say(info["say"], heading="APPROACH", topic="pad")
             elif event == "FSDJump":
                 self._smalls_on_jump(raw)
             elif event == "FuelScoop":

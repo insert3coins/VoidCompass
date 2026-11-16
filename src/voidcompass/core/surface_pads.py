@@ -266,6 +266,39 @@ class SurfacePadStore:
             entry = self.stations.get(str(market_id))
             return self._predict(entry, pad) if isinstance(entry, dict) else None
 
+    def note_settlement(self, market_id, lat, lon, *, name="", system="", body="", radius_m=None):
+        """Approaching it (ApproachSettlement): where the settlement is."""
+        try:
+            lat, lon = float(lat), float(lon)
+        except (TypeError, ValueError):
+            return
+        with self.lock:
+            entry = self.stations.setdefault(str(market_id), {"pads": {}})
+            entry.update({key: value for key, value in (("name", name), ("system", system), ("body", body)) if value})
+            entry["centre"] = [round(lat, 7), round(lon, 7)]
+            if radius_m and not entry.get("radius"):
+                entry["radius"] = float(radius_m)
+        self.save()
+
+    def known_pads(self, market_id):
+        """What's known of a station's pads before you're given one:
+        {"landed": [pad numbers], "worked_out": [pad numbers its design
+        places here], "pads": how many it has, if known}, or None if it's
+        never been seen."""
+        with self.lock:
+            entry = self.stations.get(str(market_id))
+            if not isinstance(entry, dict):
+                return None
+            landed = sorted(int(key) for key in entry.get("pads") or {})
+            design = entry.get("design") or ""
+            layout = (self.designs.get(design) or {}).get("pads") or {}
+            worked = []
+            if design and layout and self.design_ok(design) and self._placement(entry, layout) is not None:
+                worked = sorted(int(key) for key in layout if int(key) not in landed)
+            counts = entry.get("counts") or {}
+            total = sum(int(counts.get(size) or 0) for size in ("Small", "Medium", "Large")) or None
+            return {"landed": landed, "worked_out": worked, "pads": total}
+
     def note_counts(self, market_id, counts):
         """The station's pads by size, from the Docked event's LandingPads."""
         if not isinstance(counts, dict):

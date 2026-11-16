@@ -60,6 +60,13 @@ def overlay_frame_rate(config):
     return rate if rate in OVERLAY_FRAME_RATES else 30
 
 class HtmlOverlayStudioMixin:
+    def _stream_studio_look(self):
+        """The Stream Chat overlay's look, for the inspector (5.8.3)."""
+        look = self._stream_look() if hasattr(self, "_stream_look") else {}
+        return {"stream_chat_style": look.get("style", "neon"), "stream_chat_card": look.get("card", "synthwave"),
+                "stream_chat_accent": look.get("accent", "#FF2BD6"), "stream_chat_height": look.get("height", 480),
+                "stream_chat_show_chat": bool(look.get("show_chat", True))}
+
     def _html_overlay_desktop(self):
         """Return the complete Windows virtual desktop in screen coordinates."""
         try:
@@ -306,6 +313,13 @@ class HtmlOverlayStudioMixin:
             "overlays": overlays,
             "presets": preset_names,
             "groups": self._overlay_groups_studio(),
+            "visibility": {
+                "game_running": getattr(self, "_game_process_running", None),
+                "session_closed": getattr(self, "_game_closed", None),
+                "main_menu": getattr(self, "_menu_music", "") in {"MainMenu", "CQCMenu"},
+                "in_map": getattr(self, "current_gui_focus", -1) in self._MAP_GUI_FOCUS or bool(getattr(self, "_map_music", False)),
+                "in_menu": self._in_game_menu(),
+            },
             "ground_target": {
                 "active": ground_configured,
                 "lat": _number(getattr(self, "target_lat", None)) if ground_configured else None,
@@ -337,6 +351,10 @@ class HtmlOverlayStudioMixin:
                 "hud_pages_takeover": hud_pages.pages_options(self.config)["takeover"],
                 "hud_pages_text_percent": hud_pages.page_text_percent(self.config),
                 "hud_hold_lists": bool(self.config.get("hud_hold_lists", True)),
+                # 5.8.3: the Stream Chat overlay's commands strip.
+                "stream_chat_hint": bool(self.config.get("stream_chat_hint", True)),
+                "stream_chat_show_chat": bool(self.config.get("stream_chat_show_chat", True)),
+                **self._stream_studio_look(),
                 **{f"hud_page_{page}": page in hud_pages.pages_options(self.config)["enabled"] for page in hud_pages.PAGES[1:]},
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
                 "overlay_frame_rate": overlay_frame_rate(self.config),
@@ -351,7 +369,7 @@ class HtmlOverlayStudioMixin:
                 # The show/hide-all curtain (the header's ALL switch and the
                 # all-overlays hotkey share it).
                 "all_hidden": bool(getattr(self, "_overlay_hotkey_global_hidden", False)),
-                "overlay_opacity_percent": _integer(self.config.get("overlay_opacity_percent"), 100),
+                "overlay_opacity_percent": round(overlay_opacity_ratio(self.config) * 100),
                 "rebuy_warnings_enabled": bool(self.config.get("rebuy_warnings_enabled", True)),
                 "toast_fss_signals_enabled": bool(self.config.get("toast_fss_signals_enabled", True)),
                 "toast_dss_signals_enabled": bool(self.config.get("toast_dss_signals_enabled", True)),
@@ -631,10 +649,11 @@ class HtmlOverlayStudioMixin:
         if bool(self.config.get("overlay_hide_in_menus", False)) and self._in_game_menu():
             keep = self._menu_keep_visible()
             hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in keep}
-        if bool(self.config.get("overlay_hide_when_game_closed", True)) and (
-                getattr(self, "_game_closed", False) or getattr(self, "_menu_music", "") == "MainMenu"):
-            # The game is shut down (or gone), or back at its main menu: only the music player stays.
-            hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in self.GAME_CLOSED_KEEP}
+        if bool(self.config.get("overlay_hide_when_game_closed", True)):
+            if getattr(self, "_game_process_running", None) is False:
+                hidden |= {spec.overlay_id for spec in OVERLAY_SPEC_BY_ATTR.values()}
+            elif getattr(self, "_game_closed", False) or getattr(self, "_menu_music", "") in {"MainMenu", "CQCMenu"}:
+                hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in self.GAME_CLOSED_KEEP}
         # Overlay groups (5.8.1): what the groups that are on (and off) leave hidden.
         groups_hidden = getattr(self, "_overlay_groups_hidden", None)
         if callable(groups_hidden):
@@ -647,29 +666,73 @@ class HtmlOverlayStudioMixin:
 
     GAME_CLOSED_KEEP = frozenset({"music_player_hud"})
 
-    def _observe_game_session(self, event):
-        """Shutdown closes the game for the overlays, LoadGame opens it. During
-        startup catch-up this lands before any overlay is shown, so the last
-        journal event decides with no flash."""
-        closed = event == "Shutdown"
-        if closed == bool(getattr(self, "_game_closed", False)):
+    def _init_game_visibility(self):
+        from voidcompass.core.elite_binds import game_running
+
+        self._game_closed = True
+        self._game_process_running = None
+        self._game_session_revision = 0
+        self._game_process_pending = False
+        self._observe_game_process(game_running())
+        self._apply_map_overlay_hiding()
+
+    def _observe_game_session(self, event, startup_replay=False):
+        if event not in {"LoadGame", "Shutdown"}:
             return
-        self._game_closed = closed
-        if bool(self.config.get("overlay_hide_when_game_closed", True)):
-            self._apply_map_overlay_hiding()
+        self._game_session_revision = getattr(self, "_game_session_revision", 0) + 1
+        self._game_closed = event == "Shutdown"
+        if event == "LoadGame":
+            if startup_replay:
+                # Old journal state cannot reopen overlays with no game running.
+                self._game_closed = getattr(self, "_game_process_running", None) is False
+            else:
+                self._game_process_running = True
+        if not startup_replay:
+            self.current_gui_focus = -1
+        self._menu_music = ""
+        self._map_music = False
+        self._apply_map_overlay_hiding()
+
+    def _observe_game_process(self, running):
+        if running is None:
+            return
+        before = (getattr(self, "_game_process_running", None), getattr(self, "_game_closed", None))
+        self._game_process_running = bool(running)
+        if not running:
+            self._game_closed = True
+        # Launching the executable alone doesn't mean a commander has loaded.
+        self._apply_map_overlay_hiding()
+        if before != (self._game_process_running, getattr(self, "_game_closed", None)):
+            publish = getattr(self, "_schedule_html_dashboard_publish", None)
+            if callable(publish):
+                publish(immediate=True)
 
     def _tick_game_process(self):
-        """A crash writes no Shutdown, so look for the game itself now and then."""
+        """Keep watching through exits and launches, including crashes."""
         if not getattr(self, "is_running", False):
             return
-        if bool(self.config.get("overlay_hide_when_game_closed", True)) and not getattr(self, "_game_closed", False):
+        if not getattr(self, "_game_process_pending", False):
             from voidcompass.core.elite_binds import game_running
 
+            self._game_process_pending = True
+            revision = getattr(self, "_game_session_revision", 0)
+
+            def deliver(running):
+                self._game_process_pending = False
+                if (getattr(self, "is_running", False)
+                        and revision == getattr(self, "_game_session_revision", 0)):
+                    self._observe_game_process(running)
+
             def worker():
-                if game_running() is False:
-                    self._ui_post(lambda: self._observe_game_session("Shutdown"), key="game-process")
+                try:
+                    running = game_running()
+                except Exception:
+                    running = None
+                if self._ui_post(lambda: deliver(running), key="game-process") is False:
+                    self._game_process_pending = False
+
             threading.Thread(target=worker, name="GameProcessCheck", daemon=True).start()
-        self.root.call_later(20000, self._tick_game_process)
+        self.root.call_later(2000, self._tick_game_process)
 
     def _overlay_groups_studio(self):
         """The groups for Overlay Studio and the header: theirs, the activities
@@ -731,7 +794,7 @@ class HtmlOverlayStudioMixin:
             "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion", "lyra_hud_motion",
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "galaxy_minimap_orders", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
-            "rig_tracker_show_holds", "rig_tracker_guide", "rig_tracker_deposit",
+            "rig_tracker_show_holds", "rig_tracker_guide", "rig_tracker_deposit", "stream_chat_hint", "stream_chat_show_chat",
             "hud_pages_takeover", "hud_hold_lists", "hud_page_expedition", "hud_page_jump", "hud_page_survey", "hud_page_planet", "hud_page_rhino", "hud_page_mining", "hud_page_combat", "hud_page_station", "hud_page_colony", "hud_page_carrier", "hud_page_trade", "hud_page_powerplay",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
             "overlay_hide_on_maps", "overlay_hide_in_menus", "overlay_hide_when_game_closed", "overlay_transparency_fix", "overlay_classic_windows",
@@ -785,6 +848,10 @@ class HtmlOverlayStudioMixin:
             music = getattr(self, "music_player_hud", None)
             if music is not None:
                 music.apply_settings()
+        elif key in ("stream_chat_hint", "stream_chat_show_chat"):
+            update_stream = getattr(self, "_stream_overlay_update", None)
+            if callable(update_stream):
+                update_stream()
         elif key.startswith("rig_tracker_"):
             update_rigs = getattr(self, "_rig_update_overlay", None)
             if callable(update_rigs):
@@ -898,6 +965,24 @@ class HtmlOverlayStudioMixin:
         if "hud_label_size" in payload:
             labels = _text(payload.get("hud_label_size"), 20).casefold()
             self.config["hud_label_size"] = labels if labels in HUD_LABEL_SIZES else "standard"
+        # 5.8.3: the Stream Chat overlay's look.
+        from voidcompass.dashboard.dashboard_stream_chat_mixin import ACCENTS, CARD_STYLES, HEIGHTS, STYLES
+        looked = False
+        for key, allowed, default in (("stream_chat_style", STYLES, "neon"), ("stream_chat_card", CARD_STYLES, "synthwave"),
+                                      ("stream_chat_accent", ACCENTS, "#FF2BD6")):
+            if key in payload:
+                value = _text(payload.get(key), 40)
+                self.config[key] = value if value in allowed else default
+                looked = True
+        if "stream_chat_height" in payload:
+            height = _integer(payload.get("stream_chat_height"), 480)
+            self.config["stream_chat_height"] = height if height in HEIGHTS else 480
+            looked = True
+        if looked:
+            self._stream_overlay_last = None
+            update_stream = getattr(self, "_stream_overlay_update", None)
+            if callable(update_stream):
+                update_stream()
         # Galnet ticker: its length, scroll speed and how much it reads.
         if "galnet_ticker_width" in payload:
             low, high = TICKER_WIDTH_RANGE

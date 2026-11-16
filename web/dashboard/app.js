@@ -1296,12 +1296,9 @@ function renderRoute(state) {
   text("route-remaining", `${number(route.remaining)} ${number(route.remaining) === 1 ? "JUMP" : "JUMPS"} LEFT`);
   percentWidth("route-progress", route.percent);
   byId("copy-next").disabled = !route.next;
-  const target = byId("route-target");
-  if (target) {
-    target.hidden = !route.next;
-    target.dataset.targetSystem = route.next || "";
-    target.title = route.next ? `Plot a route to ${route.next} in the galaxy map (presses your Elite keys)` : "";
-  }
+  // 5.8.3: the name itself copies it too.
+  const nextName = byId("route-next");
+  if (nextName) nextName.disabled = !route.next;
   const autoCopy = byId("auto-copy");
   if (autoCopy) {
     autoCopy.textContent = `AUTO-COPY NEXT WAYPOINT ON ARRIVAL · ${route.auto_copy ? "ON" : "OFF"}`;
@@ -1983,19 +1980,24 @@ function selectStudioOverlay(id, follow = false) {
   // 5.8.3: the groups it's in, a switch each.
   renderGroupMembership(studioData(), id);
   // Per overlay; the All overlays switch turns map hiding on or off for all.
+  // Each overlay's own choice can always be set: with the All overlays switch
+  // off it's kept for when it's on (a switch that couldn't move looked stuck).
+  const layoutOn = Boolean((studioData().options || {}).layout_mode);
   const mapsOn = Boolean((studioData().options || {}).overlay_hide_on_maps ?? true);
   const mapHide = byId("studio-selected-maphide");
   fill(mapHide, selected.hide_on_maps !== false);
-  if (mapHide) mapHide.disabled = !mapsOn;
-  text("studio-selected-maphide-note", !mapsOn ? "Off for every overlay (All overlays)"
-    : selected.hide_on_maps !== false ? "Hides on the Galaxy Map, System Map and Orrery" : "Stays on screen on the maps");
+  if (mapHide) mapHide.disabled = false;
+  text("studio-selected-maphide-note", selected.hide_on_maps === false ? "Stays on screen on the maps"
+    : !mapsOn ? "Hides on the maps once Hide on maps is on (All overlays)"
+    : layoutOn ? "Saved: hides on maps when Layout mode is off" : "Hides on the Galaxy Map, System Map and Orrery");
   // The same for the menus (5.7.1), which are off for all until switched on.
   const menusOn = Boolean((studioData().options || {}).overlay_hide_in_menus);
   const menuHide = byId("studio-selected-menuhide");
   fill(menuHide, selected.hide_in_menus !== false);
-  if (menuHide) menuHide.disabled = !menusOn;
-  text("studio-selected-menuhide-note", !menusOn ? "Off for every overlay (All overlays)"
-    : selected.hide_in_menus !== false ? "Hides on ship panels, station services and menus" : "Stays on screen in the menus");
+  if (menuHide) menuHide.disabled = false;
+  text("studio-selected-menuhide-note", selected.hide_in_menus === false ? "Stays on screen in the menus"
+    : !menusOn ? "Hides in the menus once Hide in menus is on (All overlays)"
+    : layoutOn ? "Saved: hides in menus when Layout mode is off" : "Hides on ship panels, station services and menus");
   // Its own opacity (5.5.3.3), or the one set for all overlays.
   const ownOpacity = byId("studio-selected-opacity");
   if (ownOpacity && document.activeElement !== ownOpacity) ownOpacity.value = String(Number(selected.own_opacity) || 0);
@@ -2081,7 +2083,9 @@ function updateStudioOptionControls(options, groundTarget = {}) {
     if (document.activeElement !== field) field.value = options[field.dataset.studioSetting] ?? "";
   });
   const layoutMode = byId("studio-layout-mode");
-  if (layoutMode) layoutMode.checked = Boolean(options.layout_mode);
+  if (layoutMode && document.activeElement !== layoutMode) layoutMode.checked = Boolean(options.layout_mode);
+  const layoutNote = byId("studio-layout-mode-note");
+  if (layoutNote) layoutNote.hidden = !options.layout_mode;
   const savedOpacity = Math.max(40, Math.min(100, Math.round(number(options.overlay_opacity_percent, 100))));
   if (studioOpacityPending === savedOpacity || Date.now() - studioOpacityPendingAt > 3000) {
     studioOpacityPending = null;
@@ -2159,8 +2163,43 @@ function showStudioDisplay(id) {
   renderOverlayStudio(model);
 }
 
+function renderStudioVisibility(studio) {
+  const options = studio.options || {}, live = studio.visibility || {};
+  let label = "GAME STATUS UNKNOWN", detail = "Waiting for Elite Dangerous status. Your visibility choices are saved for this commander.";
+  if (options.layout_mode) {
+    label = "LAYOUT PREVIEW";
+    detail = "Layout mode shows overlays for placement. Turn it off to apply map, menu and game-closed hiding.";
+  } else if (options.all_hidden) {
+    label = "HIDDEN BY OVERLAYS SWITCH";
+    detail = "The all-overlays switch is hiding your overlays. Your individual settings are unchanged.";
+  } else if (live.game_running === false) {
+    if (options.overlay_hide_when_game_closed !== false) {
+      label = "WAITING FOR ELITE";
+      detail = "Elite Dangerous is not running. All overlays are hidden and gameplay overlays will return when you load into the game.";
+    } else {
+      label = "DESKTOP OVERLAYS ALLOWED";
+      detail = "Elite Dangerous is not running. Turn on Hide when Elite is not running to keep overlays off your desktop.";
+    }
+  } else if (options.overlay_hide_when_game_closed !== false && (live.session_closed || live.main_menu)) {
+    label = "WAITING FOR GAME LOAD";
+    detail = "Gameplay overlays are hidden until you load into the game. The music player can stay at the main menu.";
+  } else if (options.overlay_hide_on_maps && live.in_map) {
+    label = "MAP HIDING ACTIVE";
+    detail = "A map is open. Each overlay follows its own Hide on maps choice.";
+  } else if (options.overlay_hide_in_menus && live.in_menu) {
+    label = "MENU HIDING ACTIVE";
+    detail = "A reported menu is open. Each overlay follows its own Hide in menus choice.";
+  } else if (live.game_running === true) {
+    label = "ELITE RUNNING";
+    detail = "Enabled overlays follow their usual display rules, groups and individual settings.";
+  }
+  text("studio-visibility-status", label);
+  text("studio-visibility-detail", detail);
+}
+
 function renderOverlayStudio(state) {
   const studio = state.overlay_studio || {};
+  renderStudioVisibility(studio);
   renderOverlayGroups(studio);
   const overlays = Array.isArray(studio.overlays) ? studio.overlays : [];
   const monitors = studioMonitors();
@@ -3102,7 +3141,7 @@ function settingsSummaries(data) {
     hotkeys: value.overlay_hotkeys_enabled ? `${numeric(bound)} KEY${bound === 1 ? "" : "S"} · ${numeric(buttonsBound)} BUTTON${buttonsBound === 1 ? "" : "S"}` : "HOTKEYS OFF",
     voice: `${data.voice?.listen?.enabled ? "VOICE ON" : "VOICE OFF"} · ${data.voice?.ship?.enabled === false ? "COMMANDS OFF" : `${numeric(data.voice?.ship?.ready)} OF ${numeric(data.voice?.ship?.total)} COMMANDS READY`}`,
     galnet: value.galnet_enabled ? `${String(galnet.status || "standby").toUpperCase()} · ${numeric((galnet.articles || []).length)} DISPATCHES` : "RELAY OFF",
-    integrations: [value.edsm_upload_enabled ? "EDSM ON" : "EDSM OFF", value.inara_upload_enabled ? "INARA ON" : "INARA OFF", value.eddn_market_upload_enabled ? "EDDN ON" : "EDDN OFF", value.api_enabled ? "API ON" : "API OFF"].join(" · "),
+    integrations: [value.edsm_upload_enabled ? "EDSM ON" : "EDSM OFF", value.inara_upload_enabled ? "INARA ON" : "INARA OFF", value.eddn_market_upload_enabled ? "EDDN ON" : "EDDN OFF", value.api_enabled ? "API ON" : "API OFF", value.stream_chat_enabled ? "CHAT ON" : ""].filter(Boolean).join(" · "),
     diagnostics: String(data.health?.level || "NOMINAL").toUpperCase(),
     updates: "NEW RELEASES FROM GITHUB",
   };
@@ -3253,6 +3292,7 @@ function settingsSectionBody(id, data) {
       + settingGroup("Trading", `${settingSwitch({key: "trading_online_enabled", label: "Trading searches (Spansh)", detail: "Let the Trading tab ask Spansh for trade routes, prices and station markets, only when you search. Your own trading record works without it.", checked: value.trading_online_enabled})}${settingActions(`<button type="button" data-page="trading">TRADING</button>`, "trading trade routes spansh market prices commodities profit")}`)
       + settingGroup("EDDN", `${settingSwitch({key: "eddn_market_upload_enabled", label: "Share markets on EDDN", detail: "Publish the markets you visit to the community network.", checked: value.eddn_market_upload_enabled})}${settingNote(`${numeric(data.eddn?.uploads)} uploads this session${data.eddn?.last_error ? ` · last error: ${data.eddn.last_error}` : ""}`)}`)
       + settingGroup("LOCAL API", `${settingSwitch({key: "api_enabled", label: "Local API", detail: "Let your own tools read Void Compass and drive it: scripts, Stream Deck buttons, OBS scenes and widgets, Discord bots. No key needed: it answers this PC only, and web pages only when they're files on this PC (OBS browser sources too).", checked: value.api_enabled})}${settingText({key: "api_port", id: "setting-api-port", label: "Port", detail: "Where it listens, 1024 to 65535. Keep 7380 unless another program uses it.", value: String(value.api_port ?? 7380), status: apiStatus(data.api, value)})}${settingSwitch({key: "api_allow_control", label: "Allow control", detail: "Let tools change things: overlays, deck pages, the theme, your companion's thoughts and voice, music. Off, the API only reads.", checked: value.api_allow_control !== false})}${settingSwitch({key: "api_allow_lan", label: "Allow other devices", detail: "Answer other computers, tablets and phones on your network, not only this PC. There's no key, so anyone on the network can use it: only on a network you trust.", checked: value.api_allow_lan})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="api_open_docs">API DOCS</button>`, "local api port docs stream deck obs scripts bot")}`)
+      + settingGroup("STREAM CHAT", streamChatSettings(value, data.stream || {}))
       + settingGroup("DISCORD", `${settingText({key: "carrier_discord_webhook_url", id: "setting-discord", label: "Carrier webhook", detail: "One webhook for your personal and Squadron Carrier: status, jumps and expedition updates.", value: value.carrier_discord_webhook_url, secret: true})}${settingActions(`<button type="button" data-ws-page="settings" data-ws-op="test_discord">SEND TEST</button><button type="button" data-page="carrier">CARRIER COMMAND</button>`, "test discord carrier")}`)
 ;
   }
@@ -3304,6 +3344,41 @@ function carrierRemoveRow(row, armed) {
 
 // Inara (5.5.4): how this session's sync is going.
 // The local API (5.5.7): where it listens, or why it doesn't.
+// Settings › Integrations › Stream chat (5.8.3): your Twitch chat talks to your companion.
+function streamChatStatus(stream = {}, value = {}) {
+  if (!value.stream_chat_enabled) return {tone: "", text: "OFF"};
+  if (!stream.channel) return {tone: "bad", text: "NOT A CHANNEL NAME"};
+  if (stream.status === "connected") {
+    // Chat, and whether the stream itself is live (Twitch is asked once a minute).
+    const minutes = Math.floor(Number(stream.on_air_s || 0) / 60);
+    const air = stream.on_air === true ? ` · ON AIR ${minutes >= 60 ? `${Math.floor(minutes / 60)} H ${String(minutes % 60).padStart(2, "0")} MIN` : `${minutes} MIN`}`
+      : stream.on_air === false ? " · OFF AIR" : "";
+    return {tone: "good", text: `LISTENING · #${String(stream.channel).toUpperCase()}${air}`};
+  }
+  if (stream.status === "error") return {tone: "bad", text: String(stream.error || "ERROR").toUpperCase()};
+  return {tone: "", text: stream.status === "reconnecting" ? "RECONNECTING" : "CONNECTING"};
+}
+
+function streamChatSettings(value, stream) {
+  const top = (stream.top || []).map((row) => `${row.name} (${numeric(row.points)})`).join(", ");
+  const summary = Number(stream.crew) ? `${numeric(stream.crew)} crew so far · ${numeric(stream.worlds)} world${Number(stream.worlds) === 1 ? "" : "s"} named by chat${top ? ` · top: ${top}` : ""}${stream.muted ? " · REPLIES MUTED" : ""}`
+    : "No crew yet: everyone who chats while it's on is remembered, with their points and rank.";
+  return `${settingSwitch({key: "stream_chat_enabled", label: "Stream chat", detail: "Your Twitch chat talks to your companion. Viewers type !where, !ship, !route, !session, !rigs, !crew or !ask a question, and the companion on watch answers in its own voice and on the Stream Chat overlay. It only reads chat: nothing is ever posted, and no Twitch account or sign-in is needed.", checked: value.stream_chat_enabled})}`
+    + settingText({key: "stream_chat_channel", id: "setting-stream-channel", label: "Twitch channel", detail: "Yours, as in twitch.tv/yourname (the address works too).", value: value.stream_chat_channel, placeholder: "yourname", status: streamChatStatus(stream, value)})
+    + settingSwitch({key: "stream_chat_voice", label: "Say the answers", detail: "Your companion speaks its answer when a viewer uses a command, naming who asked (filtered), and never what they typed; ordinary chat and unknown commands get nothing. Welcomes, thanks and naming votes are shown, not said. Off: the overlay only. Replies wait while you're in danger, being interdicted or docking; the mute key (Settings › Hotkeys) or a moderator's !quiet silences them.", checked: value.stream_chat_voice !== false})
+    + settingSwitch({key: "stream_chat_welcomes", label: "Welcome the crew", detail: "Newcomers welcomed, regulars welcomed back by name (\"fourth stream running\"), and raids, subs, gifts and bits thanked, on the overlay.", checked: value.stream_chat_welcomes !== false})
+    + settingSwitch({key: "stream_chat_naming", label: "Chat names your first discoveries", detail: "Be first to an Earth-like, water or ammonia world (or a terraformable one) and chat suggests names with !name, then votes. The winner is shown on the overlay and kept with the world.", checked: value.stream_chat_naming !== false})
+    + settingSelect({key: "stream_chat_where", label: "Where it says you are", detail: "Against stream sniping: what !where, !route and !ask give away.", value: value.stream_chat_where || "region",
+      options: [["exact", "Exactly where"], ["region", "The galactic region only"], ["delay10", "Where you were 10 minutes ago"], ["delay30", "Where you were 30 minutes ago"]]})
+    + settingSelect({key: "stream_chat_cooldown_s", label: "A viewer can ask again after", value: number(value.stream_chat_cooldown_s, 20), type: "number",
+      options: [10, 20, 30, 60, 120].map((item) => [item, `${item} seconds`])})
+    + settingSelect({key: "stream_chat_game_gap_min", label: "A new naming vote at most every", value: number(value.stream_chat_game_gap_min, 3), type: "number",
+      options: [[0, "Whenever there's one"], [2, "2 minutes"], [3, "3 minutes"], [5, "5 minutes"], [10, "10 minutes"], [20, "20 minutes"]]})
+    + settingText({key: "stream_chat_blocked", id: "setting-stream-blocked", label: "Words never said or shown", detail: "Your own, separated by commas, on top of the built-in list. A viewer name with one in it isn't said, and a suggested world name with one isn't shown.", value: value.stream_chat_blocked, placeholder: "word, another"})
+    + settingNote(summary)
+    + settingActions(`<button type="button" data-ws-page="settings" data-ws-op="stream_test" data-text="!where">TRY !WHERE</button><button type="button" data-ws-page="settings" data-ws-op="stream_test" data-text="!session">TRY !SESSION</button><button type="button" data-ws-page="settings" data-ws-op="stream_test" data-text="!ask how many bodies are here?">TRY !ASK</button><button type="button" data-ws-page="settings" data-ws-op="stream_credits">ROLL THE CREDITS</button><button type="button" data-page="overlay-studio">OVERLAY STUDIO</button>`, "stream chat twitch obs viewers commands credits naming");
+}
+
 function apiStatus(api = {}, value = {}) {
   if (api.running) return {tone: "good", text: `LISTENING · ${String(api.url || "").replace("http://", "").toUpperCase()}${api.lan ? " · NETWORK" : ""}`};
   if (api.error && value.api_enabled) return {tone: "bad", text: String(api.error).toUpperCase()};
@@ -4328,17 +4403,6 @@ async function toggleStudioOverlay(id, wanted) {
 }
 
 document.addEventListener("click", async (event) => {
-  // 🎯 anywhere (5.8.3): plot a route to the system in the game's galaxy map.
-  const targetButton = event.target.closest("[data-target-system]");
-  if (targetButton) {
-    const system = targetButton.dataset.targetSystem;
-    if (!system) return;
-    targetButton.disabled = true;
-    const distance = targetButton.dataset.distanceLy;
-    if (await command("target_system", {system, ...(distance ? {distance_ly: Number(distance)} : {})})) showToast(`Plotting a route to ${system}… keep Elite in front`);
-    window.setTimeout(() => { targetButton.disabled = false; }, 4000);
-    return;
-  }
   const flightLogFilterButton = event.target.closest("[data-flightlog-filter]");
   if (flightLogFilterButton) {
     flightLogFilter = flightLogFilterButton.dataset.flightlogFilter || "ALL";
@@ -4720,7 +4784,7 @@ document.addEventListener("click", async (event) => {
     const page = workspaceButton.dataset.wsPage;
     const operation = workspaceButton.dataset.wsOp;
     const payload = {page, operation};
-    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["planId", "plan_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["carrierId", "carrier_id"], ["shipId", "ship_id"], ["returnLaterId", "id"], ["slot", "slot"], ["system", "system"], ["name", "name"], ["dossier", "dossier"]]) {
+    for (const [datasetKey, payloadKey] of [["expeditionId", "expedition_id"], ["objectiveId", "objective_id"], ["achievementId", "achievement_id"], ["bodyKey", "body_key"], ["pinId", "pin_id"], ["planId", "plan_id"], ["bookmarkId", "bookmark_id"], ["sessionIndex", "session_index"], ["carrierId", "carrier_id"], ["shipId", "ship_id"], ["returnLaterId", "id"], ["slot", "slot"], ["system", "system"], ["name", "name"], ["dossier", "dossier"], ["text", "text"]]) {
       if (workspaceButton.dataset[datasetKey] !== undefined) payload[payloadKey] = workspaceButton.dataset[datasetKey];
     }
     if (page === "carrier" && payload.carrier_id === undefined) {
@@ -5253,8 +5317,10 @@ document.querySelectorAll("[data-studio-setting]").forEach((field) => {
   });
 });
 
-byId("studio-layout-mode")?.addEventListener("change", (event) => {
-  command("overlay_studio", {operation: "layout_mode", enabled: event.target.checked});
+byId("studio-layout-mode")?.addEventListener("change", async (event) => {
+  const input = event.currentTarget;
+  const requested = input.checked;
+  if (!(await command("overlay_studio", {operation: "layout_mode", enabled: requested}))) input.checked = !requested;
 });
 
 byId("studio-global-fade").addEventListener("input", (event) => queueStudioOpacity(event.target.value));

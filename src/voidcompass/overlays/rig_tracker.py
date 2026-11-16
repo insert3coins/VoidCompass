@@ -46,8 +46,9 @@ TIMED_RANGE_S = (30, 1800)
 MAX_TIMINGS = 60
 # A rig keeps working after you collect from it, and fills again. A tonne
 # refined while you're at it (its HERE distance) starts a collection; the
-# collection is over, and the fill clock starts, when you leave it (it's no
-# longer HERE). The refinery goes on turning out tonnes after you've driven
+# collection is over when you leave it (it's no longer HERE), but the fill
+# clock counts from the last tonne collected there. The refinery goes on
+# turning out tonnes after you've driven
 # off: those still count for the rig, but don't touch its clock. Only
 # collecting at it again does, and a tonne within SAME_COLLECTION_S of its
 # last is still the same collection (not a new fill to time). Waiting at the
@@ -75,7 +76,7 @@ MIN_YIELDS = 3
 
 def rig_here_m(config=None):
     """How close counts as HERE: 25 m, fixed (5.8.3; it was a Studio setting).
-    It's also where a collection ends and the rig's clock starts again."""
+    Leaving ends a collection; its clock counts from the last tonne there."""
     return int(HERE_M)
 
 
@@ -147,6 +148,17 @@ class RigStore:
         if isinstance(bodies, dict):
             with self.lock:
                 self.bodies = {str(key): value for key, value in bodies.items() if isinstance(value, dict)}
+                for entry in self.bodies.values():
+                    for rig in (entry.get("rigs") or {}).values():
+                        if not isinstance(rig, dict) or rig.get("last_tonne_at") is None or "last_collected_at" in rig:
+                            continue
+                        last = float(rig["last_tonne_at"])
+                        if not rig.get("collecting"):
+                            # Older clocks started on departure. A later refinery
+                            # tail must not restart that already-running clock.
+                            last = min(last, float(rig.get("fill_from", rig["at"])))
+                            rig["fill_from"] = last
+                        rig["last_collected_at"] = last
         yields = data.get("yields") if isinstance(data, dict) else None
         if isinstance(yields, list):
             with self.lock:
@@ -224,19 +236,28 @@ class RigStore:
             tonnes[name] = int(tonnes.get(name) or 0) + 1
             now = time.time() if now is None else now
             last = rig.get("last_tonne_at")
+            if now < float(rig["at"]) or (last is not None and now < float(last)):
+                # A late journal delivery still counts towards yield, not timing.
+                self.save()
+                return True
             same = last is not None and now - float(last) <= SAME_COLLECTION_S
+            if rig.get("collecting") and last is not None and not same:
+                rig["collecting"] = False
+                rig["fill_from"] = float(rig.get("last_collected_at", last))
             if not rig.get("collecting") and at_rig:
                 if not same and rig.get("at") is not None:
                     # A collection starting: it was full by now, since it went
-                    # down (or since you last left it after collecting), unless
+                    # down (or since its last collected tonne), unless
                     # you came for it before it was due.
-                    since = float(rig.get("fill_from") or rig["at"])
+                    since = float(rig.get("fill_from", rig["at"]))
                     expected = self.ready_s(rig.get("density") or "")
-                    if expected is None or now - since >= expected * EARLY_SHARE:
+                    if TIMED_RANGE_S[0] <= now - since <= TIMED_RANGE_S[1] and (expected is None or now - since >= expected * EARLY_SHARE):
                         self.timings = (self.timings + [{"s": round(now - since), "density": str(rig.get("density") or ""),
                                                          "at": round(now, 1)}])[-MAX_TIMINGS:]
                     rig["haul"] = 0
                 rig["collecting"] = True
+            if at_rig:
+                rig["last_collected_at"] = round(now, 1)
             # This collection's tonnes (the refinery's last ones included).
             rig["haul"] = int(rig.get("haul") or 0) + 1
             rig.pop("left_at", None)
@@ -245,26 +266,20 @@ class RigStore:
         return True
 
     def left_behind(self, system, body, lat, lon, radius_m, now=None, here_m=HERE_M):
-        """Rigs whose collection is over: you've left them (no longer HERE),
-        and their clocks start now; or you've stayed and nothing has been
-        refined for QUIET_S, and they count from the last tonne. The slots
-        that started."""
+        """End a collection after leaving HERE or QUIET_S without a tonne.
+        Both paths count from the last tonne collected at that rig."""
         now = time.time() if now is None else now
         started = []
         with self.lock:
             for slot, rig in ((self.bodies.get(_key(system, body)) or {}).get("rigs") or {}).items():
                 if not isinstance(rig, dict) or not rig.get("collecting"):
                     continue
-                last = float(rig.get("last_tonne_at") or rig["at"])
-                if surface_distance_m(lat, lon, float(rig["lat"]), float(rig["lon"]), radius_m) > here_m:
-                    fill_from = now
-                elif now - last >= QUIET_S:
-                    fill_from = last
-                else:
+                last = float(rig.get("last_collected_at", rig.get("last_tonne_at", rig["at"])))
+                if surface_distance_m(lat, lon, float(rig["lat"]), float(rig["lon"]), radius_m) <= here_m and now - last < QUIET_S:
                     continue
                 rig["collecting"] = False
                 rig.pop("left_at", None)
-                rig["fill_from"] = round(fill_from, 1)
+                rig["fill_from"] = round(last, 1)
                 started.append(int(slot))
         if started:
             self.save()
@@ -452,10 +467,10 @@ def build_rig_model(rigs, lat, lon, heading, radius_m, body="", now=None, in_rhi
         distance = surface_distance_m(lat, lon, rig["lat"], rig["lon"], radius_m)
         bearing = bearing_deg(lat, lon, rig["lat"], rig["lon"])
         relative = (bearing - heading) % 360.0 if heading is not None else bearing
-        # Filling since it went down, or since you left it after collecting;
+        # Filling since it went down, or since its last collected tonne;
         # nothing while you're still collecting from it.
         collecting = bool(rig.get("collecting"))
-        fill_from = float(rig.get("fill_from") or rig["at"])
+        fill_from = float(rig.get("fill_from", rig["at"]))
         row = {"slot": slot, "tracked": True, "distance_m": round(distance, 1), "bearing": round(bearing, 1),
                "relative": round(relative, 1), "here": distance <= here_m, "at": float(rig["at"]),
                "age_s": round(max(0.0, now - float(rig["at"]))), "fill_from": fill_from, "collecting": collecting,

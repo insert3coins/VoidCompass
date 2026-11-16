@@ -73,20 +73,8 @@ function actCell(row) {
   if (!row.system) return "";
   const copy = `<button type="button" class="${row.next ? "xr-copy-next" : ""}" data-xr-copy="${esc(row.system)}" title="${row.next ? "Copy the next stop" : "Copy this system"}">${row.next ? "⧉ NEXT" : "⧉"}</button>`;
   const ahead = !row.passed && !row.here && row.index > 0;
-  // 5.8.3: plot a route to it in the game's galaxy map, with your own keys.
-  const away = Number.isFinite(row.away_ly) ? ` data-distance-ly="${Math.round(row.away_ly)}"` : "";
-  const target = ahead ? `<button type="button" class="target-button" data-target-system="${esc(row.system)}"${away} title="Plot a route to ${esc(row.system)} in the galaxy map (presses your Elite keys)">🎯</button>` : "";
   const skip = ahead ? `<button type="button" data-xr-skip="${row.index}" aria-pressed="${Boolean(row.skipped)}" title="${row.skipped ? "Fly to this stop after all" : "Mark done: skip this stop"}">${row.skipped ? "↺" : "✓"}</button>` : "";
-  return `<span class="xn-acts">${target}${copy}${skip}</span>`;
-}
-
-// How far along the route each stop is from where you are (the TO GO
-// figures): enough for the galaxy map's flight to it when it's targeted.
-function withAway(rows) {
-  const here = rows.find((row) => row.here) || rows.find((row) => row.next);
-  const start = Number(here?.remaining);
-  if (!Number.isFinite(start)) return rows;
-  return rows.map((row) => (Number.isFinite(Number(row.remaining)) ? {...row, away_ly: Math.max(0, start - Number(row.remaining))} : row));
+  return `<span class="xn-acts">${copy}${skip}</span>`;
 }
 
 function headMarkup(data) {
@@ -228,7 +216,7 @@ function draw() {
     head.innerHTML = headHtml;
   }
   renderTable(root.querySelector("[data-xr-table]"), {
-    id: "route", profile: st.profile, columns: COLUMNS, rows: withAway(st.data.route?.rows || []), key: (row) => `${row.index}`,
+    id: "route", profile: st.profile, columns: COLUMNS, rows: st.data.route?.rows || [], key: (row) => `${row.index}`,
     rowClass: (row) => [row.passed ? "xr-passed" : "", row.here ? "xr-here" : "", row.finished ? "xr-finished" : "",
       row.skipped ? "xr-skipped" : "", row.next ? "xr-next" : ""].join(" "),
     sort: {col: "n", dir: "asc"}, empty: "No route.",

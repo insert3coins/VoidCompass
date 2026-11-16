@@ -1182,7 +1182,6 @@ Everything on Explore & Survey's ROUTE tab: your waypoints, the places worth com
 |---|---|---|
 | GET | `/api/v1/route` | Your next destination, your waypoints (each with its `index`), and the expedition you're on |
 | POST | `/api/v1/route/copy-next` | Copy the next system to the clipboard, ready to paste into the galaxy map |
-| POST | `/api/v1/route/target` | Plot a route to a system in the game: `{"system": "Colonia"}` (and its id64 as `"address"`, if you have it, to check it took). Opens the galaxy map with your own key bindings, searches, plots and closes it; `409` and why when it can't (keys missing, another screen open, the drive charging…). How it went is said in the cockpit |
 | POST | `/api/v1/route/waypoints` | Add a waypoint at the end: `{"name": "Colonia", "note": "Jaques Station"}` |
 | POST | `/api/v1/route/waypoints/{n}` | Change waypoint `n`: any of `{"visited": true, "name": "...", "note": "...", "move": "up"}` |
 | POST | `/api/v1/route/waypoints/{n}/delete` | Remove waypoint `n` |
@@ -1372,7 +1371,7 @@ The mining rigs you've set down for Rhino mining, as the Rig Tracker overlay sho
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/v1/rigs` | The rigs on the planet you're on (`slot`, `distance_m`, `bearing`, `relative` to where you face, `here`, `at`, `commodity` it's working, `tonnes` refined from it, `fill_s` seconds filling since it went down or since you drove off after collecting from it, `collecting` while you're still collecting from it, `haul` the tonnes of this collection (or the last one), `ready_s` how long your rigs take once learnt, and `ready`), the order to collect them in, any rigs left on other planets, and `holds`: how full the Rhino's hold and the ship's are (`used`, `capacity`, `free`), and `aboard`: back in the ship after a Rhino run, its summary (`minutes`, `refined_t`, `taken` by commodity, rigs still `out`, the `site`, what's `next`), else null |
+| GET | `/api/v1/rigs` | The rigs on the planet you're on (`slot`, `distance_m`, `bearing`, `relative` to where you face, `here`, `at`, `commodity` it's working, `tonnes` refined from it, `fill_from` the placement time or the journal time of the last tonne collected at the rig, `fill_s` seconds filling from that point, `collecting` while you're still collecting from it, `haul` the tonnes of this collection (or the last one), `ready_s` the estimated time learnt from collection intervals (the game does not report when a rig becomes full), and `ready`), the order to collect them in, any rigs left on other planets, and `holds`: how full the Rhino's hold and the ship's are (`used`, `capacity`, `free`), and `aboard`: back in the ship after a Rhino run, its summary (`minutes`, `refined_t`, `taken` by commodity, rigs still `out`, the `site`, what's `next`), else null |
 | GET | `/api/v1/pads` | Landing pads learnt at surface stations (planetary ports, surface outposts, settlements), as Settings › EXPORT PAD LAYOUTS writes them: `stations` (by `market_id`, each pad landed on with `lat`, `lon` and the `heading` a ship faces on it, and the `planet_radius_m`) and `designs` (each station design's pads in metres, `x_m` east and `y_m` north, with their `heading`, how many stations of it you've seen and whether it's `trusted`). `format` is `voidcompass-surface-pads`, `version` 1 |
 | POST | `/api/v1/rigs/{n}` | Rig `n` (1 to 6) where you stand: deployed, or collected if it was already down (`"done": "placed"` or `"collected"`) |
 | POST | `/api/v1/rigs/clear` | Forget the rigs on this planet: `{"confirmed": true}` |
@@ -1385,7 +1384,11 @@ The rest of the Rhino tools, the same as their keys and the Rhino page's buttons
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/v1/rhino` | Where you are with it: `facts` (the survey's `percent` swept and next stop, the rig `plan` with its next pin, the best `patch`, your marked `deposits` and the next to drive to, the planning `circle`'s room left, the `signal` number), `rig_spot` (RIG OK HERE, or where the next rig can go) `deposits` at the mining location you're at, within 8 km (`commodity`, `rigs`, `amount`, `density`, `depleted`, with `regrowth` (where a worked-out one is: worked out N days ago, recheck due, mark off in N days) and `due` when it's worth a look, `distance`, `bearing`, `n` in driving order, `value` in credits), the best `patches` (five rigs' worth or more together: `rigs`, `credits`, `cr_per_h`) and the `value` of the lot (`credits`, `unpriced`, `route_m`, `per_rig`: what your collected rigs gave). Values need a few of your rigs worked first; until then they're null. `site` is the saved mining location you're at (`id`, `name`, `signal`, `deposits`, `tonnes` your rigs took by commodity, `updated`), or null |
+| GET | `/api/v1/rhino` | Where you are with it: `facts` (the survey's `percent` swept and next stop, the rig `plan` with its next pin, the best `patch`, your marked `deposits` and the next to drive to, the planning `circle`'s room left, the `signal` number), `rig_spot` (RIG OK HERE, or where the next rig can go) `deposits` at the mining location you're at (within 8 km of you, anywhere inside the survey you're working, or saved with the site you're at: `commodity`, `rigs`, `amount`, `density`, `depleted`, with `regrowth` (where a worked-out one is: worked out N days ago, recheck due, mark off in N days) and `due` when it's worth a look, `distance`, `bearing`, `n` in driving order, `value` in credits), the best `patches` (five rigs' worth or more together: `rigs`, `credits`, `cr_per_h`) and the `value` of the lot (`credits`, `unpriced`, `route_m`, `per_rig`: what your collected rigs gave). Values need a few of your rigs worked first; until then they're null. `site` is the saved mining location you're at (`id`, `name`, `signal`, `deposits`, `tonnes` your rigs took by commodity, `updated`), or null |
+| GET | `/api/v1/rhino/sites/{id}/report` | A saved site written up, as the Rhino page's REPORT gives it: `text` (where it is, its deposits, its runs with tonnes an hour, and what each commodity took and is worth at your sale price, else the usual one; plain text with **bold** headings that fits one Discord message), with its `id`, `name`, `system` and `body`. The `id` is `site.id` from GET /api/v1/rhino; `404` for one that isn't saved |
+| GET | `/api/v1/stream` | Stream chat (Settings › Integrations): `status` of the chat connection (`off`, `connecting`, `connected`, `reconnecting`, `error`), `on_air` (whether the stream is live: `true`, `false`, or `null` until Twitch has said; asked once a minute) and `on_air_s` (seconds on air), `channel`, `muted`, the naming vote running as `game` (`kind` `name`, its `stage` `suggest` or `vote`, `title`, `prompt`, `open`, `closes_in` seconds, the `choices` with their votes, and the winning name as `answer` once settled), the crew's `top` ten by points (`name`, `points`, `rank`) and `tonight`'s, the last `worlds` chat named (`system`, `body`, `name`, `by`) and tonight's `session` figures (`jumps`, `ly`, `scans`, `firsts`, `mapped`, `bio`, `tonnes`, `earned`) |
+| POST | `/api/v1/stream/credits` | Roll the end credits on the Stream Chat overlay: tonight's crew, the top crew, raids, supporters, worlds named and the flight's figures, then your companion signs off. Gives the credits as rolled |
+| POST | `/api/v1/stream/mute` | Mute your companion's spoken replies to chat, or bring them back: `muted` |
 | POST | `/api/v1/rhino/deposit` | Mark a deposit where you stand; its commodity comes from what's refined round it |
 | POST | `/api/v1/rhino/mined-out` | The marked deposit you're on (within 100 m) is worked out |
 | POST | `/api/v1/rhino/trace` | Start tracing a deposit's edge, or close the trace where you are: up to six rig pins are worked out inside it |
@@ -1425,6 +1428,7 @@ Every event looks like this:
 | `overlay` | An overlay was switched, moved or faded, or all were hidden or shown |
 | `voice` | The voice started or stopped: `state` (`started` with its `text`, then `finished`, `stopped` or `hushed`), and `from` (`watcher` or `api`) |
 | `music` | The music started, stopped or changed track: `playing`, `track_id`, `title`, `artist` |
+| `stream` | Your companion answered stream chat: `kind` (`answer`), `who` (the viewer), `asked` (the command) and `text` (the answer) |
 | `exploration` | Worked out by Void Compass from the journal, with `commander` and `system`. `kind` is `first_discovery` (`body`, `class`, `value` in credits, `mapped_value` once mapped, `first_footfall_available`), `bio_analysed` (`species`, `genus`, `variant`, `body`, `value`, `estimated_value` that Vista Genomics pays, `first_logged_bonus`) or `first_footfall` (`body`) |
 
 ### Ask and wait
@@ -1815,6 +1819,8 @@ Every cockpit overlay can be listed, read, switched on or off, moved and faded, 
 | GET | `/api/v1/overlays/groups` | Your overlay groups (made in Overlay Studio): each one's `id`, `name`, `mode` (`only` or `add`), `activity`, `members`, whether it's `on` and whether the activity switched it on (`auto`), and what you're doing now (`activity`) |
 | POST | `/api/v1/overlays/groups/{group}/toggle` | Switch a group: `{"on": true}` or `{"on": false}`, or send nothing to flip it. An "only" group hides every other overlay while it's on |
 
+Overlay Studio's map, menu and game-closed settings still apply when an overlay is enabled or restored through the API. With Hide with the game closed on, every overlay is hidden while Elite is absent; gameplay overlays return on LoadGame, while the music player can stay at the main menu. The existing Elite process check runs every two seconds to notice exits and relaunches. Layout mode explicitly shows overlays for placement. Per-overlay `hide_on_maps` and `hide_in_menus` choices are saved even if the corresponding All overlays switch is off. Hide in menus uses the ship panels, station services and journal-reported menus; Elite does not report opening the pause/Esc menu.
+
 The overlay ids are:
 
 | id | Overlay |
@@ -1838,6 +1844,7 @@ The overlay ids are:
 | `colony-needs` | Construction Needs |
 | `trade-route` | Trade Route |
 | `crew-orders` | Crew Orders |
+| `stream-chat` | Stream Chat |
 | `expedition` | Expedition |
 | `galaxy-minimap` | Galaxy Minimap |
 | `rhino-map` | Rhino Map |

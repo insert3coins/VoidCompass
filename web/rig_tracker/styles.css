@@ -77,7 +77,7 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 .rig.ready .rig-ring .fill, .rig.ready .rig-ring .track { stroke: var(--green); }
 .rig.ready .rig-ring { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--green) 60%, transparent)); }
 .rig.ready .rig-clock b { color: var(--green); }
-/* collecting from it: the clock waits for you to drive off */
+/* collecting from it: the refill clock resumes from its last tonne */
 .rig.collecting { border-left-color: var(--yellow); }
 .rig.collecting .rig-clock b { color: var(--yellow); font-size: calc(13px * var(--scale)); letter-spacing: .06em; }
 .rig.learning .rig-clock b { color: var(--muted); }

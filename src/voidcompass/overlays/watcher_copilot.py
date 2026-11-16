@@ -1415,6 +1415,7 @@ OVERLAY_NAMES = {
     "expedition": ("expedition guide", "expedition overlay", "expedition"),
     "trade-route": ("trade route overlay", "trade route"),
     "crew-orders": ("crew orders overlay", "crew orders", "orders overlay"),
+    "stream-chat": ("stream chat overlay", "stream chat", "chat overlay"),
     "galaxy-minimap": ("galaxy minimap", "minimap", "mini map"),
     "rhino-map": ("rhino map",),
     "postcards": ("postcards", "postcard"),

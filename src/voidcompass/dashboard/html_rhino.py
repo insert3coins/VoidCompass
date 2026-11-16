@@ -10,7 +10,7 @@ import webbrowser
 
 from voidcompass.mining.planet_materials import PlanetMaterialsStore, rhino_commodity_choices
 from voidcompass.dashboard.dashboard_rigs_mixin import runs_summary
-from voidcompass.mining import regrowth
+from voidcompass.mining import regrowth, rhino_report
 from voidcompass.mining.rhino_intelligence import AMOUNTS, DENSITIES
 
 # The keys the page shows beside its buttons, by action.
@@ -122,7 +122,7 @@ class HtmlRhinoMixin:
             "in_rhino": self._rig_in_rhino(), "map": surface, "facts": facts or {}, "rigs": rigs or {},
             "holds": self._rig_holds(), "run": self._rhino_run(), "rig_words": {"text": words[0], "tone": words[1]} if words else None,
             "deposits": here, "sites": self._rhino_sites_everywhere(), "catalogue": rhino_commodity_choices(config, self._rhino_found()),
-            "saved_sites": self._rhino_saved_sites(), "site_here": self._rhino_site_here_brief(),
+            "saved_sites": self._rhino_saved_sites(), "site_here": self._rhino_site_here_brief(), "report": self._rhino_report_brief(),
             "amounts": list(AMOUNTS), "densities": list(DENSITIES),
             "prospects": self._mining_system_grounds() if callable(getattr(self, "_mining_system_grounds", None)) else [],
             "ground": self._mining_ground_here(where) if callable(getattr(self, "_mining_ground_here", None)) and where else None,
@@ -175,17 +175,83 @@ class HtmlRhinoMixin:
 
     def _rhino_saved_sites(self):
         """Every mining location you've saved, for SITES: no coverage grid (it's
-        big and the page doesn't draw it)."""
+        big and the page doesn't draw it), with what its runs took and are worth."""
         here = (str(getattr(self, "current_sys", "") or "").casefold(), str(getattr(self, "current_body_name", "") or "").casefold())
+        try:
+            prices = self._rhino_prices()
+        except Exception:
+            prices = {}
         out = []
         for site in self.survey_store().all_sites():
             survey = site.get("survey") or {}
+            earned, total = rhino_report.earnings(site, prices)
             out.append({key: site.get(key) for key in ("id", "name", "note", "signal", "system", "body", "deposits", "tonnes",
-                                                       "saved", "updated")}
-                       | {"runs": runs_summary(site.get("runs")),
-                          "swept": survey.get("percent"), "edge": bool(survey.get("edge")), "plans": len(site.get("plans") or ()),
+                                                       "saved", "updated", "centre")}
+                       | {"runs": runs_summary(site.get("runs")), "earned": earned, "earned_total": total,
+                          "swept": survey.get("percent"), "edge": bool(survey.get("edge")), "radius_m": survey.get("radius_m"),
+                          "plans": len(site.get("plans") or ()),
                           "here": (str(site.get("system") or "").casefold(), str(site.get("body") or "").casefold()) == here})
         return out
+
+    # -- a saved site written up (5.8.3) ------------------------------------------------------
+    def _rhino_find_site(self, site_id, system=None, body=None):
+        site_id = str(site_id or "")
+        for site in self.survey_store().all_sites():
+            if str(site.get("id")) == site_id and (system is None or str(site.get("system") or "").casefold() == str(system).casefold()) \
+                    and (body is None or str(site.get("body") or "").casefold() == str(body).casefold()):
+                return site
+        return None
+
+    def _rhino_site_report(self, site_id, system=None, body=None):
+        """The site as text for Discord or a file, or None."""
+        from voidcompass.dashboard.dashboard_rigs_mixin import rhino_surface_commodity
+        site = self._rhino_find_site(site_id, system, body)
+        if site is None:
+            return None
+        ids = {item for item in (site.get("deposits") or {}).get("ids") or () if item is not None}
+        try:
+            deposits = [row for row in self._planet_materials_store().rows() if row.get("id") in ids]
+        except Exception:
+            deposits = []
+        try:
+            prices = self._rhino_prices()
+        except Exception:
+            prices = {}
+        return rhino_report.site_report(site, deposits, prices, runs_summary(site.get("runs")), commodity_of=rhino_surface_commodity)
+
+    def _rhino_report_brief(self):
+        """The report the page has open, if any: {"id", "text"}."""
+        open_ = getattr(self, "_rhino_report_open", None)
+        if not open_:
+            return None
+        text = self._rhino_site_report(*open_)
+        if text is None:
+            self._rhino_report_open = None
+            return None
+        return {"id": open_[0], "text": text}
+
+    def _rhino_report_save(self, site_id, system, body, folder):
+        """REPORT › SAVE: the report as a text file in ``folder``; the file, or None."""
+        import re
+        from pathlib import Path
+        text = self._rhino_site_report(site_id, system, body)
+        target = Path(str(folder or "")).expanduser()
+        if text is None or not str(folder or "").strip() or not target.is_dir():
+            return None
+        site = self._rhino_find_site(site_id, system, body) or {}
+        stem = re.sub(r"[^A-Za-z0-9]+", "_", str(site.get("name") or "rhino_site")).strip("_")[:60] or "rhino_site"
+        path = target / f"{stem}_report.md"
+        path.write_text(text + "\n", encoding="utf-8")
+        return path
+
+    def api_rhino_site_report(self, site_id):
+        """The Local API: a saved site's report."""
+        from voidcompass.services.local_api import ApiError
+        site = self._rhino_find_site(site_id)
+        if site is None:
+            raise ApiError(404, "No saved Rhino site with that id: GET /api/v1/rhino lists the one you're at")
+        return {"id": site.get("id"), "name": site.get("name"), "system": site.get("system"), "body": site.get("body"),
+                "text": self._rhino_site_report(site_id)}
 
     def _rhino_site_here_brief(self):
         site = self._rhino_site_here() if self._rig_place() else None
@@ -205,6 +271,20 @@ class HtmlRhinoMixin:
             return bool(payload.get("confirmed")) and store.forget_site(system, body, site_id)
         if operation == "site_rename":
             return store.change_site(system, body, site_id, name=payload.get("name"), note=payload.get("note"))
+        if operation == "site_report":
+            # REPORT opens the write-up on the page (again: closes it).
+            wanted = (site_id, system, body)
+            self._rhino_report_open = None if getattr(self, "_rhino_report_open", None) == wanted else wanted
+            return True
+        if operation == "site_report_copy":
+            text = self._rhino_site_report(site_id, system, body)
+            return bool(text) and self._html_copy_text(text, "site report")
+        if operation == "site_report_save":
+            written = self._rhino_report_save(site_id, system, body, payload.get("path"))
+            feed = getattr(self, "add_event_feed_entry", None)
+            if written is not None and callable(feed):
+                feed("MINING", f"Site report saved: {written}", severity="INFO")
+            return written is not None
         site = next((row for row in store.sites(system, body) if row.get("id") == site_id), None)
         if site is None:
             return False
@@ -245,7 +325,8 @@ class HtmlRhinoMixin:
         elif operation == "rig":
             slot = _int(payload.get("slot"))
             done = self._rig_mark(slot) if 1 <= slot <= 6 else None
-        elif operation in ("site_save", "site_forget", "site_rename", "site_target", "site_resume"):
+        elif operation in ("site_save", "site_forget", "site_rename", "site_target", "site_resume", "site_report",
+                           "site_report_copy", "site_report_save"):
             done = self._rhino_site_operation(operation, payload)
         elif operation in ("deposit_save", "deposit_mined_out", "deposit_delete", "deposit_navigate", "deposit_regrown"):
             done = self._rhino_deposit_operation(operation, payload)
