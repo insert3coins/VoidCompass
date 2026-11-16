@@ -1,7 +1,7 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.8.3 // Paper Trail
-**Release Date:** TBA
+**Release Date:** 17 NOV 3312 *(Galactic Standard Time)*
 
 * **Your stream's chat talks to your companion.** Switch on Settings › Integrations › Stream chat, type your Twitch channel, and your viewers have a crew member to talk to. It only reads chat (no Twitch account, nothing ever posted), and it reconnects by itself.
   * **They ask, it answers:** !where, !ship, !route, !session (tonight's time on air, jumps, light years, scans, first discoveries, biology, tonnes and credits: it knows when you're live, asking Twitch once a minute, so the clock and the figures start when you go live, stop when you go off air, and Settings and the overlay say ON AIR or OFF AIR), !rigs, !crew, !rank, !top and !ask a question about the ship, the system's bodies and life, planets, ranks or Galnet. The companion on watch answers in its own voice, naming who asked, and shows it on the new Stream Chat overlay with the viewer's name in their own chat colour. It only speaks to answer a command: ordinary chat and commands it doesn't know get nothing, and everything else it has to say (welcomes, thanks, the naming votes, promotions) is shown, not said. Moderators have !quiet, !unquiet and !credits.
