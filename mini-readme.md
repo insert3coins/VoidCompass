@@ -1,7 +1,7 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.8.4.1 // Laden Means Laden
-**Release Date:** TBA 3312 *(Galactic Standard Time)*
+**Release Date:** 22 NOV 3312 *(Galactic Standard Time)*
 
 * **Jump ranges named the way EDSY names them.** The top bar's JUMP RANGE shows your max range and, beside it, your range **now** with the fuel and cargo aboard (it was labelled "laden"). Hover it for all four: max (least fuel, empty hold), unladen (full tank, empty hold), laden (full tank, full hold) and now. The CMDR tile shows max, now and laden.
 * **The ship builder's hulls and modules brought up to date with the game.** Frontier's later changes are in: the 2025 ship updates (the Asp Scout, Viper Mk IV, Eagle, Sidewinder, Federal Dropship, Imperial Clipper and Type-6 and Type-7 Transporters, with the new slot layouts the Asp Scout, Dropship, Clipper, Type-6 and Type-7 got), the Guardian weapons' damage, and corrected hull masses, shields, speeds, heat capacities and fuel reserves on many more hulls, every grade of armour's mass, hull boost and resistances (the Caspian Explorer's five Mk II grades among them), and module figures from integrity to power distributor capacities. Builds saved or shared on a hull whose layout changed keep their modules in the same kind of slot.
