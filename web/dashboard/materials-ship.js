@@ -213,12 +213,13 @@ function knownHull(key, saved) {
 
 function plain(row) {
   // What's saved: the ship, its armour and each slot's module and engineering.
-  return {id: row.id, name: row.name, ship: row.ship, bulkhead: row.bulkhead, armourGrades: (ships.ships[row.ship]?.bulkheads || []).length, layout: row.slots.length, roll: row.roll,
+  return {id: row.id, name: row.name, ship: row.ship, bulkhead: row.bulkhead, ...(row.armourEng ? {armourEng: row.armourEng} : {}), armourGrades: (ships.ships[row.ship]?.bulkheads || []).length, layout: row.slots.length, roll: row.roll,
     ...(row.armour ? {armour: row.armour} : {}),
     ...(ships.ships[row.ship]?.described ? {hull: ships.ships[row.ship]} : {}),
     slots: row.slots.map((slot) => ({module: slot.module, bp: slot.bp, grade: slot.grade, special: slot.special,
       ...(slot.roll != null ? {roll: slot.roll} : {}), ...(slot.jmods ? {jmods: slot.jmods} : {}),
-      ...(slot.unknown ? {unknown: slot.unknown} : {}), ...(slot.bpName ? {bpName: slot.bpName, bpGrade: n(slot.bpGrade)} : {})}))};
+      ...(slot.unknown ? {unknown: slot.unknown} : {}), ...(slot.bpName ? {bpName: slot.bpName, bpGrade: n(slot.bpGrade)} : {}),
+      ...(slot.off ? {off: true} : {})}))};
 }
 
 // Hulls whose slots the game laid out again after 5.8.4 (a build without its layout count is from before).
@@ -258,11 +259,12 @@ function fromSaved(saved) {
   // The Caspian's armour list had an extra grade in front before 5.8.4.1.
   if (saved.armourGrades == null && ships.ships[fresh.ship]?.symbol === "explorer_nx" && fresh.bulkhead > 0) fresh.bulkhead -= 1;
   fresh.armour = saved.armour || null;
+  fresh.armourEng = saved.armourEng || null;
   fresh.roll = saved.roll == null ? 100 : n(saved.roll);
   (saved.slots || []).forEach((slot, index) => {
     const into = target(index);
     if (into) Object.assign(into, {module: slot.module || null, bp: slot.bp || "", grade: n(slot.grade), special: slot.special || "",
-      roll: slot.roll == null ? null : n(slot.roll), jmods: slot.jmods || null, unknown: slot.unknown || "", bpName: slot.bpName || "",
+      roll: slot.roll == null ? null : n(slot.roll), jmods: slot.jmods || null, unknown: slot.unknown || "", bpName: slot.bpName || "", off: Boolean(slot.off),
       bpGrade: n(slot.bpGrade)});
   });
   fresh.slots.forEach(recheck);
@@ -342,6 +344,7 @@ function fromLoadout(loadout, hull) {
     slot.module = row ? ships.bySymbol[String(row.Item || "").toLowerCase()] || null : null;
     // A module the tables don't have yet (a new one) keeps its game name, so the slot doesn't look empty.
     slot.unknown = row && !slot.module ? String(row.Item || "") : "";
+    slot.off = row?.On === false;
     slot.bp = ""; slot.bpName = ""; slot.bpGrade = 0; slot.grade = 0; slot.special = ""; slot.roll = null; slot.jmods = null;
     if (slot.module) engineer(slot, row);
   };
@@ -351,13 +354,15 @@ function fromLoadout(loadout, hull) {
     const size = HARDPOINT_SIZES[slot.size];
     counters[size] = (counters[size] || 0) + 1;
     // A mining hull's mining mounts are numbered with the rest of their size (MediumMiningHardpoint1, MediumHardpoint3).
-    put(slot, bySlot[slot.jname] || bySlot[`${size}${slot.name === "Mining" ? "Mining" : ""}Hardpoint${counters[size]}`]
+    // Every hull's slots carry the game's names (5.8.4.2); counting is for one described from an import.
+    put(slot, slot.jname ? bySlot[slot.jname] : bySlot[`${size}${slot.name === "Mining" ? "Mining" : ""}Hardpoint${counters[size]}`]
       || bySlot[`${size}Hardpoint${counters[size]}`] || bySlot[`${size}MiningHardpoint${counters[size]}`]);
   });
   const named = (pattern) => Object.keys(bySlot).filter((name) => pattern.test(name)).sort();
   const internal = named(/^Slot\d+_Size\d+$/);
   // Slots kept for one kind of module have names of their own in the journal.
-  const kept = {military: named(/^Military\d+$/), limpets: named(/^LimpetController\d+$/), fighter: named(/^FighterBay\d+$/)};
+  const kept = {military: named(/^Military\d+$/), limpets: named(/^LimpetController\d+$/), fighter: named(/^FighterBay\d+$/),
+    cargo: named(/^Cargo\d+$/), passenger: named(/^Passenger\d+$/)};
   fresh.slots.filter((slot) => slot.group === "internal").forEach((slot) => {
     const kind = Object.keys(kept).find((key) => new RegExp(key, "i").test(slot.name || ""));
     if (slot.jname) put(slot, bySlot[slot.jname]);
@@ -370,7 +375,35 @@ function fromLoadout(loadout, hull) {
   const grade = BULKHEAD_GRADES.findIndex((g) => armour.includes(`_${g}`));
   fresh.bulkhead = grade >= 0 ? grade : 0;
   fresh.armour = armourFigures(bySlot.Armour);
+  fresh.armourEng = armourEngineering(bySlot.Armour?.Engineering);
   return fresh;
+}
+
+// Armour's blueprint, grade, roll and experimental (5.8.4.2): what an import without the game's
+// figures (Inara's SLEF) still says, and what the ARMOUR controls set.
+function armourEngineering(eng) {
+  const bp = eng ? blueprintKey(eng.BlueprintName) : "";
+  if (!bp) return null;
+  const effect = String(eng.ExperimentalEffect || "").toLowerCase();
+  const special = !effect ? "" : ships.specials[effect] ? effect : Object.keys(ships.specials).find((key) => ships.specials[key].journal === effect) || "";
+  return {bp, grade: n(eng.Level) || 1, roll: eng.Quality != null ? Math.round(n(eng.Quality) * 100) : null, special};
+}
+
+// The armour as engineered: hull boost works on 1 + boost (Lightweight G3: 1.8 x 0.97 - 1 = 74.6%), resistances
+// on the damage let through, mass straight. Checked against the game's own figures for each.
+function engineeredArmour(stock, eng, b) {
+  const out = {...stock};
+  if (!eng?.bp && !eng?.special) return out;
+  const roll = Math.max(0, Math.min(1, n(eng.roll ?? b.roll) / 100));
+  const change = (key, value) => {
+    if (key === "hullboost") out.hullboost = (1 + n(out.hullboost)) * (1 + value) - 1;
+    else if (key in out || RESISTANCES.has(key)) applyChange(out, key, value);
+  };
+  for (const [key, range] of Object.entries(ships.blueprints[eng.bp]?.grades?.[eng.grade]?.features || {})) {
+    if (Array.isArray(range)) change(key, n(range[0]) + (n(range[1]) - n(range[0])) * roll);
+  }
+  for (const [key, value] of Object.entries(ships.special_actions?.[eng.special] || {})) change(key, n(value));
+  return out;
 }
 
 // Engineered armour, as the game reported it: its hull boost and resistances as they are
@@ -390,10 +423,14 @@ function armourFigures(row) {
 }
 
 // -- maths ---------------------------------------------------------------------------
+const RESISTANCES = new Set(["kinres", "thermres", "explres", "causres"]);
+
 function applyChange(out, key, value) {
   const method = ships.modifications[key]?.method || "multiplicative";
   if (method === "overwrite") out[key] = value;
   else if (!(key in out)) return;
+  // A resistance takes its share of the damage that gets through: 1 - (1 - r)(1 - m), as the game does.
+  else if (method === "additive" && RESISTANCES.has(key)) out[key] = 1 - (1 - n(out[key])) * (1 - value);
   else if (method === "additive") out[key] = n(out[key]) + value;
   else out[key] = n(out[key]) * (1 + value);
 }
@@ -444,7 +481,11 @@ function wholeCurve(base, out) {
   for (const [opt, ends] of [["optmul", ["minmul", "maxmul"]], ["optmulspeed", ["minmulspeed", "maxmulspeed"]], ["optmass", ["minmass", "maxmass"]]]) {
     if (!n(base[opt]) || n(out[opt]) === n(base[opt])) continue;
     const ratio = n(out[opt]) / n(base[opt]);
-    for (const end of ends) if (end in base && out[end] === base[end]) out[end] = n(base[end]) * ratio;
+    for (const end of ends) {
+      // A shield generator's maximum mass only follows its optimal mass up (Optimised leaves it where it was).
+      if (end === "maxmass" && ratio < 1 && ["sg", "bsg", "psg"].includes(base.grp)) continue;
+      if (end in base && out[end] === base[end]) out[end] = n(base[end]) * ratio;
+    }
   }
   return out;
 }
@@ -467,14 +508,17 @@ const stack = (values) => 1 - values.reduce((left, value) => left * (1 - n(value
 function stats(b = build) {
   const ship = ships.ships[b.ship];
   const stock = ship.bulkheads[b.bulkhead] || ship.bulkheads[0] || {};
-  const game = b.armour || {};
-  const bulkhead = {...stock, ...Object.fromEntries(Object.values(ARMOUR_FIELDS).filter((key) => key in game).map((key) => [key, game[key]])),
-    mass: n(stock.mass) * (game.massRatio || 1)};
-  const fitted = b.slots.map((slot) => ({slot, m: engineered(slot, b)})).filter((row) => row.m);
-  const sum = (key, filter = () => true) => fitted.filter(filter).reduce((total, row) => total + n(row.m[key]), 0);
-  const moduleMass = sum("mass");
-  const fuel = sum("fuel");
-  const cargo = sum("cargo");
+  const game = b.armour;
+  const bulkhead = game ? {...stock, ...Object.fromEntries(Object.values(ARMOUR_FIELDS).filter((key) => key in game).map((key) => [key, game[key]])),
+    mass: n(stock.mass) * (game.massRatio || 1)} : engineeredArmour(stock, b.armourEng, b);
+  // A module switched off in the game (or here) still weighs and costs what it does, and holds
+  // its cargo and fuel; it adds no shields, draws no power and fires nothing.
+  const every = b.slots.map((slot) => ({slot, m: engineered(slot, b)})).filter((row) => row.m);
+  const fitted = every.filter((row) => !row.slot.off);
+  const sum = (key, filter = () => true, rows = fitted) => rows.filter(filter).reduce((total, row) => total + n(row.m[key]), 0);
+  const moduleMass = sum("mass", undefined, every);
+  const fuel = sum("fuel", undefined, every);
+  const cargo = sum("cargo", undefined, every);
   const unladen = n(ship.hullMass) + n(bulkhead.mass) + moduleMass;
   const laden = unladen + fuel + cargo;
   const fsd = fitted.find((row) => row.slot.group === "standard" && row.slot.index === 2)?.m;
@@ -484,7 +528,12 @@ function stats(b = build) {
   const speedMul = thrusters ? curve(unladen + fuel, thrusters) : 1;
   const shield = fitted.find((row) => ["sg", "bsg", "psg"].includes(row.m.grp))?.m;
   const boosters = sum("shieldboost", (row) => row.m.grp === "sb");
-  const shields = shield ? n(ship.baseShieldStrength) * curve(n(ship.hullMass), shield) * (1 + boosters) + sum("shieldaddition") : 0;
+  // A hull heavier than the generator's maximum mass gets no shields from it.
+  const shields = shield && !(n(shield.maxmass) && n(ship.hullMass) > n(shield.maxmass))
+    ? n(ship.baseShieldStrength) * curve(n(ship.hullMass), shield) * (1 + boosters) + sum("shieldaddition") : 0;
+  // Boosting takes the boost cost from the engine capacitor at once: one too small can't boost at all.
+  const distributor = fitted.find((row) => row.slot.group === "standard" && row.slot.index === 4)?.m;
+  const canBoost = !distributor || !n(ship.boostEnergy) || n(distributor.engcap) >= n(ship.boostEnergy);
   const armour = n(ship.baseArmour) * (1 + n(bulkhead.hullboost) + sum("hullboost", (row) => row.m.grp !== "bh")) + sum("hullreinforcement");
   const plant = fitted.find((row) => row.slot.group === "standard" && row.slot.index === 0)?.m;
   const draw = sum("power");
@@ -495,7 +544,7 @@ function stats(b = build) {
     const perSecond = m.fireint ? 1 / n(m.fireint) : n(m.rof) || 1;
     return total + n(m.damage) * perSecond * (n(m.roundspershot) || 1);
   }, 0);
-  const cost = n(ship.hullCost) + n(bulkhead.cost) + sum("cost");
+  const cost = n(ship.hullCost) + n(bulkhead.cost) + sum("cost", undefined, every);
   const hullParts = [bulkhead, ...fitted.filter((row) => ["hr", "mahr", "ghrp"].includes(row.m.grp)).map((row) => row.m)];
   const shieldParts = shield ? [shield, ...fitted.filter((row) => row.m.grp === "sb").map((row) => row.m)] : [];
   const res = (parts) => Object.fromEntries(["kinres", "thermres", "explres", "causres"].map((key) => [key, stack(parts.map((part) => part[key]))]));
@@ -505,7 +554,7 @@ function stats(b = build) {
     return total + (m.grp === "bl" ? n(m.thermload) : n(m.thermload) * (m.fireint ? 1 / n(m.fireint) : n(m.rof) || 1));
   }, 0);
   return {unladen, laden, fuel, cargo, jumpEmpty: jump(unladen + n(fsd?.maxfuel), n(fsd?.maxfuel)), jumpFull: jump(laden, n(fsd?.maxfuel)),
-    speed: n(ship.speed) * speedMul, boost: n(ship.boost) * speedMul, shields, armour, power: n(plant?.pgen), draw, dps, cost,
+    speed: n(ship.speed) * speedMul, boost: canBoost ? n(ship.boost) * speedMul : 0, canBoost, shields, armour, power: n(plant?.pgen), draw, dps, cost,
     wepcap: n(fitted.find((row) => row.slot.group === "standard" && row.slot.index === 4)?.m?.wepcap),
     hullRes: res(hullParts), shieldRes: res(shieldParts), heatCapacity: n(ship.heatCapacity),
     idleHeat: n(plant?.eff) * draw, jumpHeat: n(fsd?.thermload), weaponsHeat};
@@ -536,6 +585,16 @@ function wishItems() {
     const special = ref?.experimentals?.[slot.special] ? slot.special : ships.specials[slot.special]?.journal;
     if (special && ref?.experimentals?.[special]) items.push({type: "experimental", fdname: special, module: groupLabel(module)});
   }
+  const armour = build.armourEng;
+  if (armour?.bp && armour.grade && ref?.blueprints) {
+    const wanted = armour.bp.toLowerCase();
+    for (const [mod, blueprints] of Object.entries(ref.blueprints)) {
+      const name = Object.keys(blueprints).find((key) => (blueprints[key].fdnames || [blueprints[key].fdname]).some((fd) => String(fd).toLowerCase() === wanted));
+      if (name) { items.push({type: "blueprint", module: mod, name, from: 0, grade: armour.grade, slot: "Armour"}); break; }
+    }
+  }
+  const armourSpecial = ref?.experimentals?.[armour?.special] ? armour.special : ships.specials[armour?.special]?.journal;
+  if (armourSpecial && ref?.experimentals?.[armourSpecial]) items.push({type: "experimental", fdname: armourSpecial, module: "Armour"});
   return items;
 }
 
@@ -565,6 +624,17 @@ function options(slot) {
   return `<option value="">— empty —</option>${Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([group, rows]) =>
     `<optgroup label="${esc(group)}">${rows.sort(([, a], [, b]) => b.class - a.class || String(a.rating).localeCompare(String(b.rating))).map(([id, m]) =>
       `<option value="${esc(id)}"${id === slot.module ? " selected" : ""}>${esc(label(m))}</option>`).join("")}</optgroup>`).join("")}`;
+}
+
+function armourControls() {
+  const eligible = ships.eligible.bh || {};
+  const eng = build.armourEng || {};
+  const grades = eng.bp ? Object.keys(ships.blueprints[eng.bp]?.grades || {}).map(Number) : [];
+  return `<select data-ms-armour="bp" aria-label="Armour blueprint"><option value="">No blueprint</option>${Object.keys(eligible.blueprints || {}).map((key) =>
+      `<option value="${esc(key)}"${key === eng.bp ? " selected" : ""}>${esc(ships.blueprints[key]?.name || key)}</option>`).join("")}</select>
+    ${eng.bp ? `<select data-ms-armour="grade" aria-label="Armour grade">${grades.map((g) => `<option value="${g}"${g === n(eng.grade) ? " selected" : ""}>G${g}</option>`).join("")}</select>` : ""}
+    ${(eligible.specials || []).length ? `<select data-ms-armour="special" aria-label="Armour experimental"><option value="">No experimental</option>${eligible.specials.map((key) =>
+      `<option value="${esc(key)}"${key === eng.special ? " selected" : ""}>${esc(ships.specials[key]?.name || key)}</option>`).join("")}</select>` : ""}`;
 }
 
 function engineeringControls(slot) {
@@ -599,7 +669,7 @@ function slotRows(group, title) {
     const m = engineered(slot);
     const index = build.slots.indexOf(slot);
     return `<tr><td class="mt-slot-name">${esc(slotLabel(slot))}<small>${slot.size ? `size ${slot.size}` : ""}</small></td>
-      <td><select data-ms-slot="module" data-slot="${index}">${options(slot)}</select>${slot.unknown ? `<small class="mt-dim mt-unknown">Fitted: ${esc(slot.unknown)} (not in the builder's tables yet)</small>` : ""}</td>
+      <td><select data-ms-slot="module" data-slot="${index}">${options(slot)}</select>${slot.module ? `<button type="button" class="ghost mt-power${slot.off ? " off" : ""}" data-ms-op="power" data-slot="${index}" title="${slot.off ? "Switched off: adds no shields, draws no power, fires nothing. Switch it on" : "Switch this module off"}">${slot.off ? "OFF" : "ON"}</button>` : ""}${slot.unknown ? `<small class="mt-dim mt-unknown">Fitted: ${esc(slot.unknown)} (not in the builder's tables yet)</small>` : ""}</td>
       <td class="mt-slot-eng">${engineeringControls(slot)}</td>
       <td class="num mt-dim">${m ? `${fixed(m.mass || 0)} t · ${fixed(m.power || 0, 2)} MW` : ""}</td></tr>`;
   }).join("")}</tbody></table>`;
@@ -609,7 +679,7 @@ function statsPanel() {
   const s = stats();
   const ship = ships.ships[build.ship];
   const tiles = [["UNLADEN", `${fixed(s.unladen)} t`], ["LADEN", `${fixed(s.laden)} t`], ["JUMP (MAX)", `${fixed(s.jumpEmpty, 2)} ly`],
-    ["JUMP (LADEN)", `${fixed(s.jumpFull, 2)} ly`], ["SPEED", `${whole(s.speed)} m/s`], ["BOOST", `${whole(s.boost)} m/s`],
+    ["JUMP (LADEN)", `${fixed(s.jumpFull, 2)} ly`], ["SPEED", `${whole(s.speed)} m/s`], ["BOOST", s.canBoost ? `${whole(s.boost)} m/s` : "CAN'T BOOST"],
     ["SHIELDS", `${whole(s.shields)} MJ`], ["ARMOUR", whole(s.armour)], ["CARGO", `${whole(s.cargo)} t`], ["FUEL", `${whole(s.fuel)} t`],
     ["RAW DPS", fixed(s.dps)], ["COST", `${money(s.cost)} CR`]];
   const powerShare = s.power ? s.draw / s.power : 0;
@@ -728,6 +798,7 @@ function draw() {
     ${importBar()}
     <div class="mt-split mt-ship-split"><div><header class="mt-head"><h3>${esc(ship.name)}</h3>
       <label class="mt-select">ARMOUR <select data-ms-bulkhead>${ship.bulkheads.map((b, i) => `<option value="${i}"${i === build.bulkhead ? " selected" : ""}>${esc(b.name)}</option>`).join("")}</select></label>
+      ${armourControls()}
       ${build.armour ? `<span class="mt-tag" title="${esc(ships.blueprints[blueprintKey(build.armour.blueprint)]?.name || build.armour.blueprint)} G${n(build.armour.grade)}: the figures your ship reported, until you change the armour">GAME FIGURES</span>` : ""}
       <label class="mt-select">ROLLS <select data-ms-roll>${[0, 25, 50, 75, 100].map((r) => `<option value="${r}"${r === n(build.roll) ? " selected" : ""}>${r}%</option>`).join("")}</select></label></header>
       ${slotRows("standard", "CORE")}${slotRows("hardpoints", "HARDPOINTS")}${slotRows("utility", "UTILITY")}${slotRows("internal", "OPTIONAL INTERNAL")}</div>
@@ -773,6 +844,7 @@ export function handleShipClick(event, deckUi, snapshot, reference) {
   if (action === "pick") { picking = true; }
   else if (action === "pick_close") { picking = false; }
   else if (action === "new") { build = newBuild(control.dataset.ship); picking = false; }
+  else if (action === "power") { const slot = build.slots[Number(control.dataset.slot)]; if (slot) slot.off = !slot.off; }
   else if (action === "current") { const current = fromLoadout(data.ship_loadout); if (current) { build = current; build.fleet = String(data.ship_loadout.ShipID ?? ""); } }
   else if (action === "save" || action === "save_as") {
     if (action === "save_as" || !build.id) build.id = Math.random().toString(16).slice(2, 12);
@@ -807,14 +879,27 @@ export function handleShipChange(event, deckUi, snapshot, reference) {
     // stays there and its share code no longer has to describe the hull.
     if (loaded && String(saved.ship).startsWith("described:") && loaded.ship !== saved.ship) op("build_save", {build: plain(loaded)});
   } else if ("msBulkhead" in d) { build.bulkhead = Number(target.value); build.armour = null; }
-  else if ("msRoll" in d) { build.roll = Number(target.value); build.slots.forEach((slot) => { slot.jmods = null; }); }
+  else if (d.msArmour) {
+    // Engineering the armour here: the game's figures give way to the blueprint's.
+    const eng = build.armourEng || {bp: "", grade: 0, roll: null, special: ""};
+    if (d.msArmour === "bp") {
+      eng.bp = target.value;
+      eng.grade = eng.bp ? Math.max(0, ...Object.keys(ships.blueprints[eng.bp]?.grades || {}).map(Number)) : 0;
+    } else if (d.msArmour === "grade") eng.grade = Number(target.value);
+    else if (d.msArmour === "special") eng.special = target.value;
+    eng.roll = null;
+    build.armourEng = eng.bp || eng.special ? eng : null;
+    build.armour = null;
+  }
+  // ROLLS sets every slot, the ones a loaded ship brought its own rolls for too.
+  else if ("msRoll" in d) { build.roll = Number(target.value); build.slots.forEach((slot) => { slot.jmods = null; slot.roll = null; }); }
   else if (d.msSlot) {
     const slot = build.slots[Number(d.slot)];
     if (!slot) return true;
     slot.jmods = null;
     slot.bpName = "";
     if (d.msSlot === "module") slot.unknown = "";
-    if (d.msSlot === "module") { slot.module = target.value || null; slot.bp = ""; slot.grade = 0; slot.special = ""; slot.roll = null; }
+    if (d.msSlot === "module") { slot.module = target.value || null; slot.bp = ""; slot.grade = 0; slot.special = ""; slot.roll = null; slot.off = false; }
     else if (d.msSlot === "roll") slot.roll = target.value === "" ? null : Number(target.value);
     else if (d.msSlot === "bp") {
       slot.bp = target.value;

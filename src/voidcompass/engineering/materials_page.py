@@ -594,8 +594,15 @@ def build_code(build):
         roll = slot.get("roll")
         if roll is not None and _int(roll) == _int(build.get("roll"), 100):
             roll = None     # the build's own rolls: left out, read back the same
+        # Since 5.8.4.2 a module switched off says so (a 7th field older readers ignore).
         lines.append("\t".join([str(index), _MODULE_KIND.get(kind, kind) + ident, _clean(slot.get("bp")), str(_int(slot.get("grade")) or ""),
-                               _clean(slot.get("special")), "" if roll is None else str(_int(roll))]).rstrip("\t"))
+                               _clean(slot.get("special")), "" if roll is None else str(_int(roll)), "0" if slot.get("off") else ""]).rstrip("\t"))
+    # Since 5.8.4.2 the armour's engineering, on a line of its own (older readers skip it).
+    armour = build.get("armourEng") or {}
+    if armour.get("bp") or armour.get("special"):
+        roll = armour.get("roll")
+        lines.append("\t".join(["A", _clean(armour.get("bp")), str(_int(armour.get("grade")) or ""), _clean(armour.get("special")),
+                                "" if roll is None or _int(roll) == _int(build.get("roll"), 100) else str(_int(roll))]).rstrip("\t"))
     hull = build.get("hull") or {}
     if hull:
         slots = hull.get("slots") or {}
@@ -638,6 +645,10 @@ def read_build_code(text):
     kinds = {short: kind for kind, short in _MODULE_KIND.items()}
     for line in lines[1:]:
         parts = line.split("\t")
+        if parts[0] == "A":
+            parts += [""] * 5
+            build["armourEng"] = {"bp": parts[1], "grade": _int(parts[2]), "special": parts[3], "roll": _int(parts[4]) if parts[4] != "" else None}
+            continue
         if parts[0] == "H":
             parts += [""] * 8
             figures = {}
@@ -655,14 +666,15 @@ def read_build_code(text):
                                                     for row in parts[5].split(",") if row]},
                              "bulkheads": [], "defaults": {}}
             continue
-        parts += [""] * 6
+        parts += [""] * 7
         if not parts[0].isdigit() or not parts[1]:
             continue
         kind = kinds.get(parts[1][0])
         if kind is None:
             continue
         slots[int(parts[0])] = {"module": f"{kind}:{parts[1][1:]}", "bp": parts[2], "grade": _int(parts[3]),
-                                "special": parts[4], **({"roll": _int(parts[5])} if parts[5] != "" else {})}
+                                "special": parts[4], **({"roll": _int(parts[5])} if parts[5] != "" else {}),
+                                **({"off": True} if parts[6] == "0" else {})}
     build["slots"] = [slots.get(index, {"module": None, "bp": "", "grade": 0, "special": ""}) for index in range(max(slots, default=-1) + 1)]
     return build
 

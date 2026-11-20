@@ -305,6 +305,8 @@
 .mt-route li[data-mt-op]:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .mt-wishmats tr[data-mt-op] { cursor: pointer; }
 .mt-unknown { display: block; margin-top: 2px; font-size: 10.5px; overflow-wrap: anywhere; }
+.mt-power { margin-left: 6px; min-width: 0; padding: 2px 6px; font: 700 9px Consolas, monospace; letter-spacing: .08em; opacity: .55; }
+.mt-power.off { opacity: 1; color: var(--orange, #e8902f); border-color: currentColor; }
 /* Slot tags (GAME FIGURES, a blueprint by name) sit centred beside the selects, not stretched to them. */
 .mt-slot-eng { align-items: center; }
 .mt-slot-eng .mt-tag { display: inline-flex; align-items: center; align-self: center; height: auto; padding: 4px 7px; font-size: 9px; line-height: 1; letter-spacing: .1em; white-space: nowrap; }
