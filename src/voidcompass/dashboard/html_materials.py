@@ -188,22 +188,11 @@ class HtmlMaterialsMixin:
         elif ev in SUIT_EVENTS:
             changed = mp.note_suit_loadout(state, ev, raw)
         elif ev == "Loadout":
-            keep = ("Ship", "ShipName", "ShipIdent", "ShipID", "HullValue", "ModulesValue", "UnladenMass", "CargoCapacity",
-                    "MaxJumpRange", "FuelCapacity", "timestamp")
-            modules = []
-            for row in raw.get("Modules") or ():
-                module = {key: row.get(key) for key in ("Slot", "Item", "Priority", "On", "Value") if key in row}
-                if isinstance(row.get("Engineering"), dict):
-                    eng = row["Engineering"]
-                    module["Engineering"] = {key: eng.get(key) for key in ("BlueprintName", "Level", "Quality", "ExperimentalEffect",
-                                                                           "Engineer", "Modifiers") if key in eng}
-                modules.append(module)
-            state["ship_loadout"] = {**{key: raw.get(key) for key in keep if key in raw}, "Modules": modules}
-            mp.note_loadout_figures(state, modules)
+            state["ship_loadout"] = mp.compact_loadout(raw)
+            mp.note_loadout_figures(state, state["ship_loadout"]["Modules"])
             mp.note_hull(state, raw)
+            mp.note_fleet(state, ev, raw)
             changed = True
-        elif ev in mp._SHIPYARD_NAMES:
-            changed = mp.note_hull_name(state, raw)
         elif ev == "CommunityGoal":
             mp.note_goals(state, raw)
             changed = True
@@ -217,6 +206,10 @@ class HtmlMaterialsMixin:
             if said and callable(feed) and not startup_replay:
                 for line in said:
                     feed("ENGINEERING", line, severity="INFO")
+        if ev in mp._SHIPYARD_NAMES:
+            changed = mp.note_hull_name(state, raw) or changed
+        if ev in mp.FLEET_EVENTS and ev != "Loadout":
+            changed = mp.note_fleet(state, ev, raw) or changed
         if changed:
             # Read back at startup, readiness is noted without a toast for it.
             self._materials_changed(quiet=startup_replay)
@@ -226,7 +219,7 @@ class HtmlMaterialsMixin:
         position = self._galaxy_minimap_position() if hasattr(self, "_galaxy_minimap_position") else None
         return {"system": str(getattr(self, "current_sys", "") or ""), "coords": list(position) if position else None}
 
-    _HISTORY_SCAN = 2   # 1: blueprint figures; 2: and the ship types you've flown
+    _HISTORY_SCAN = 3   # 1: blueprint figures; 2: and the ship types you've flown; 3: and every ship you own
 
     def _materials_learn_from_history(self, state):
         """Once per commander: read the journal history for blueprint figures and ship types from before 5.8.4."""
@@ -247,7 +240,7 @@ class HtmlMaterialsMixin:
 
         def work():
             try:
-                learned = mp.scan_journal_history(list_journals(folder))
+                learned = mp.scan_journal_history(list_journals(folder), getattr(self, "cmdr_fid", "") or "")
             except Exception:
                 logging.debug("Materials history scan failed", exc_info=True)
                 learned = {}
@@ -299,6 +292,8 @@ class HtmlMaterialsMixin:
             "learned_figures": mp.learned_figures(state),
             # The latest Loadout of each ship type you've flown, for hulls the builder's tables don't have yet.
             "seen_hulls": state.get("seen_hulls") or {}, "ship_names": state.get("ship_names") or {},
+            # Every ship you own as its latest Loadout, the one you're in first.
+            "fleet": mp.fleet_list(state),
             # What to do next, worked out from all of the above (the PLAN tabs).
             "plan": {game: mp.next_steps(state, game, here["coords"], getattr(self, "_materials_nearest_cache", None),
                                          mp.hge_summary(state) if game == "horizons" else None) for game in ("odyssey", "horizons")},
@@ -313,6 +308,14 @@ class HtmlMaterialsMixin:
         if name == "materials-summary":
             game = "horizons" if query.get("game") == "horizons" else "odyssey"
             return mp.summary(self._materials_state(), game, str(query.get("list") or "")[:16])
+        if name == "materials-ship":
+            # One of your ships, its whole latest Loadout (the one you're in: as engineered since).
+            state = self._materials_state()
+            ship_id = str(query.get("id") or "")
+            now = state.get("ship_loadout") or {}
+            if ship_id and str(now.get("ShipID")) == ship_id:
+                return now
+            return (state.get("fleet") or {}).get(ship_id) or {}
         return None
 
     def _materials_nearest(self, kind):

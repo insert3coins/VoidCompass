@@ -2173,12 +2173,14 @@ class MainDashboard(
         )
         payload = {
             key: value for key, value in (materials or {}).items()
-            if not str(key).startswith("_") and key != "ship_builds"
+            if not str(key).startswith("_") and key not in ("ship_builds", "fleet")
         }
         try:
-            # Saved ship builds are a file each, named after the build (ship_builds/ beside this file).
-            from voidcompass.core.field_state import save_ship_builds
+            # Saved ship builds are a file each, named after the build (ship_builds/ beside this file),
+            # and your ships' Loadouts are ship_fleet.json, written only when a ship changes.
+            from voidcompass.core.field_state import save_ship_builds, save_ship_fleet
             save_ship_builds(path, (materials or {}).get("ship_builds") or [])
+            save_ship_fleet(path, (materials or {}).get("fleet") or {}, (materials or {}).get("_fleet_rev", 0))
             persistence_queue().submit_json(path, payload, indent=2, delay_s=0.35)
             if isinstance(materials, dict):
                 materials.pop("_save_error", None)
@@ -2256,6 +2258,8 @@ class MainDashboard(
                     "Engineering state was still pending during profile switch: %s",
                     outgoing_engineer_path,
                 )
+            from voidcompass.core.field_state import ship_fleet_path
+            persistence_queue().flush(ship_fleet_path(outgoing_engineer_path), timeout=0.25)
         try:
             self.edsm.prepare_profile_switch()
         except Exception:
@@ -2277,6 +2281,7 @@ class MainDashboard(
                 "carrier_state.json",
                 "colonisation_data.json",
                 "engineer_materials.json",
+                "ship_fleet.json",
                 "mining_data.db",
                 "mining_sessions.json",
                 "specialists.json",
@@ -2293,6 +2298,13 @@ class MainDashboard(
                         shutil.copy2(src, dst)
                     except Exception:
                         pass
+            src = get_profile_file(old_key, "ship_builds")
+            dst = get_profile_file(new_key, "ship_builds")
+            if os.path.isdir(src) and not os.path.exists(dst):
+                try:
+                    shutil.copytree(src, dst)
+                except Exception:
+                    pass
         self.config["active_commander_profile"] = new_key
         self.config["active_commander_name"] = commander_name
         self.config["active_commander_fid"] = fid or profile.get("fid", "")

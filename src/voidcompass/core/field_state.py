@@ -92,6 +92,45 @@ def save_ship_builds(materials_path: str, builds) -> None:
             _written_builds.pop(path, None)
 
 
+# Every ship you own as its latest Loadout (5.8.4), in a file of its own beside
+# engineer_materials.json: it's written when a ship changes, not with every material.
+SHIP_FLEET_FILE = "ship_fleet.json"
+_written_fleet = {}
+
+
+def ship_fleet_path(materials_path: str) -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(materials_path)), SHIP_FLEET_FILE) if materials_path else ""
+
+
+def load_ship_fleet(materials_path: str) -> dict:
+    path = ship_fleet_path(materials_path)
+    if not path or not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            ships = json.load(handle).get("ships")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    ships = {str(key): row for key, row in (ships or {}).items() if isinstance(row, dict)} if isinstance(ships, dict) else {}
+    _written_fleet[path] = json.dumps(ships, sort_keys=True)
+    return ships
+
+
+def save_ship_fleet(materials_path: str, fleet, revision=None) -> None:
+    """Written only when it changed: by its revision (note_fleet counts them), or by its text."""
+    path = ship_fleet_path(materials_path)
+    if not path or (not fleet and not os.path.exists(path)):
+        return
+    if revision is not None and _written_fleet.get(path) == ("rev", revision):
+        return
+    ships = dict(fleet or {})
+    text = json.dumps(ships, sort_keys=True)
+    if _written_fleet.get(path) != text:
+        from voidcompass.core.persistence_queue import persistence_queue
+        persistence_queue().submit_json(path, {"ships": ships}, indent=1, delay_s=0.35)
+    _written_fleet[path] = ("rev", revision) if revision is not None else text
+
+
 def load_engineer_materials(path: str) -> dict:
     """Load a commander's engineering inventory and preserve corrupt input."""
     empty = {
@@ -103,7 +142,7 @@ def load_engineer_materials(path: str) -> dict:
         "last_updated": None,
     }
     if not path or not os.path.exists(path):
-        return empty
+        return {**empty, "fleet": load_ship_fleet(path)}
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
@@ -122,6 +161,7 @@ def load_engineer_materials(path: str) -> dict:
         builds = load_ship_builds(path)
         if builds is not None:
             data["ship_builds"] = builds
+        data["fleet"] = load_ship_fleet(path)
         return data
     except Exception as exc:
         backup = None
@@ -139,6 +179,7 @@ def load_engineer_materials(path: str) -> dict:
         return {
             **empty,
             **({"ship_builds": builds} if builds is not None else {}),
+            "fleet": load_ship_fleet(path),
             "_load_warning": f"Could not read engineering data: {exc}",
             "_corrupt_backup": backup,
         }

@@ -11,7 +11,8 @@ commander's engineer_materials file:
     wishlists  {"odyssey": {"lists": [...], "selected": id}, "horizons": {...}}
     loadouts   the Odyssey loadout designs; suit_loadouts the game's own
     ship_builds the ship builder's saved builds; ship_loadout the last Loadout
-    goals      community goals seen, with their history
+    fleet      {ShipID: its latest Loadout} for every ship you own (saved as ship_fleet.json)
+    goals     community goals seen, with their history
 """
 from __future__ import annotations
 
@@ -1247,12 +1248,112 @@ def note_hull_name(state, raw):
     return True
 
 
-def scan_journal_history(paths):
-    """Every Loadout, roll and shipyard name in these journals, oldest first: a state of its own to merge."""
+# -- your fleet (5.8.4) ------------------------------------------------------------
+# Every ship you own, by the game's ShipID, as its latest Loadout: so the builder can
+# open any of them, not only the one you're in. A ship sold, or missing from the
+# shipyard's StoredShips list, leaves it.
+FLEET_EVENTS = ("Loadout", "SetUserShipName", "StoredShips", "ShipyardSell", "SellShipOnRebuy", "ShipyardBuy", "ShipyardSwap")
+_LOADOUT_KEEP = ("Ship", "ShipName", "ShipIdent", "ShipID", "HullValue", "ModulesValue", "UnladenMass", "CargoCapacity",
+                 "MaxJumpRange", "FuelCapacity", "timestamp")
+
+
+def compact_loadout(raw):
+    """A Loadout as the page keeps it: the ship, each module and its engineering."""
+    modules = []
+    for row in raw.get("Modules") or ():
+        if not isinstance(row, dict):
+            continue
+        module = {key: row.get(key) for key in ("Slot", "Item", "Priority", "On", "Value") if key in row}
+        if isinstance(row.get("Engineering"), dict):
+            eng = row["Engineering"]
+            module["Engineering"] = {key: eng.get(key) for key in ("BlueprintName", "Level", "Quality", "ExperimentalEffect",
+                                                                   "Engineer", "Modifiers") if key in eng}
+        modules.append(module)
+    return {**{key: raw.get(key) for key in _LOADOUT_KEEP if key in raw}, "Modules": modules}
+
+
+def _fleet_gone(state, key, at):
+    fleet = state.get("fleet") or {}
+    gone = state.setdefault("_fleet_gone", {})
+    gone[key] = max(str(gone.get(key) or ""), at)
+    if key in fleet and str(fleet[key].get("timestamp") or "") <= at:
+        del fleet[key]
+        return True
+    return False
+
+
+def note_fleet(state, ev, raw):
+    """One of FLEET_EVENTS into the fleet; True when it changed (and its revision moves on, for the save)."""
+    changed = _note_fleet(state, ev, raw)
+    if changed:
+        state["_fleet_rev"] = int(state.get("_fleet_rev") or 0) + 1
+    return changed
+
+
+def _note_fleet(state, ev, raw):
+    fleet = state.setdefault("fleet", {})
+    at = str(raw.get("timestamp") or "")
+    if ev == "Loadout":
+        if raw.get("ShipID") is None or not raw.get("Ship"):
+            return False
+        key, loadout = str(raw["ShipID"]), compact_loadout(raw)
+        old = fleet.get(key)
+        if old == loadout or (old and str(old.get("timestamp") or "") > at):
+            return False
+        fleet[key] = loadout
+        return True
+    if ev == "SetUserShipName":
+        row = fleet.get(str(raw.get("ShipID")))
+        if not row:
+            return False
+        name, ident = raw.get("UserShipName"), raw.get("UserShipId")
+        if (row.get("ShipName"), row.get("ShipIdent")) == (name, ident):
+            return False
+        row["ShipName"], row["ShipIdent"] = name, ident
+        return True
+    if ev == "StoredShips":
+        owned = {str(row.get("ShipID")) for part in ("ShipsHere", "ShipsRemote") for row in raw.get(part) or () if isinstance(row, dict)}
+        flying = str((state.get("ship_loadout") or {}).get("ShipID"))
+        changed = False
+        for key in [key for key in fleet if key not in owned and key != flying]:
+            changed = _fleet_gone(state, key, at) or changed
+        return changed
+    sold = raw.get("SellShipID", raw.get("SellShipId"))
+    return _fleet_gone(state, str(sold), at) if sold is not None else False
+
+
+def merge_fleet(state, fleet, gone):
+    """A history scan's fleet into the commander's own: the newer Loadout of each ship wins."""
+    mine = state.setdefault("fleet", {})
+    for key, at in (gone or {}).items():
+        if key in mine and str(mine[key].get("timestamp") or "") <= at:
+            del mine[key]
+    for key, loadout in (fleet or {}).items():
+        if key not in mine or str(mine[key].get("timestamp") or "") < str(loadout.get("timestamp") or ""):
+            mine[key] = loadout
+    state["_fleet_rev"] = int(state.get("_fleet_rev") or 0) + 1
+
+
+def fleet_list(state):
+    """The ships for the page, the one you're in first, then the latest flown. Just their
+    names here: a ship's whole Loadout comes from /api/data/materials-ship when it's opened."""
+    flying = str((state.get("ship_loadout") or {}).get("ShipID"))
+    rows = sorted((state.get("fleet") or {}).items(), key=lambda kv: str(kv[1].get("timestamp") or ""), reverse=True)
+    rows = [kv for kv in rows if kv[0] == flying] + [kv for kv in rows if kv[0] != flying]
+    return [{"id": key, "ship": str(row.get("Ship") or "").lower(), "name": row.get("ShipName") or "", "ident": row.get("ShipIdent") or "",
+             "at": row.get("timestamp") or "", "now": key == flying} for key, row in rows]
+
+
+def scan_journal_history(paths, fid=""):
+    """Every Loadout, roll and shipyard name in these journals, oldest first: a state of its own to merge.
+    The fleet is only the commander with this FID's (the folder can hold others' journals)."""
     import json
     scanned = {}
-    markers = ('"Loadout"', '"EngineerCraft"') + tuple(f'"{event}"' for event in _SHIPYARD_NAMES)
+    wanted = str(fid or "").strip().upper()
+    markers = ('"Loadout"', '"EngineerCraft"', '"Commander"', '"LoadGame"') + tuple(
+        f'"{event}"' for event in set(_SHIPYARD_NAMES) | set(FLEET_EVENTS))
     for path in paths:
+        mine = not wanted
         try:
             with open(path, encoding="utf-8", errors="replace") as handle:
                 for line in handle:
@@ -1263,17 +1364,22 @@ def scan_journal_history(paths):
                     except ValueError:
                         continue
                     event = raw.get("event")
+                    if event in ("Commander", "LoadGame") and raw.get("FID") and wanted:
+                        mine = str(raw["FID"]).strip().upper() == wanted
                     if event == "Loadout":
-                        scanned["ship_loadout"] = {"Modules": [dict(row) for row in raw.get("Modules") or () if isinstance(row, dict)]}
+                        scanned["ship_loadout"] = {"ShipID": raw.get("ShipID"),
+                                                   "Modules": [dict(row) for row in raw.get("Modules") or () if isinstance(row, dict)]}
                         note_loadout_figures(scanned, raw.get("Modules"))
                         note_hull(scanned, raw)
                     elif event == "EngineerCraft":
                         note_craft_figures(scanned, raw)
-                    elif event in _SHIPYARD_NAMES:
+                    if event in _SHIPYARD_NAMES:
                         note_hull_name(scanned, raw)
+                    if event in FLEET_EVENTS and mine:
+                        note_fleet(scanned, event, raw)
         except OSError:
             continue
-    return {key: scanned.get(key) or {} for key in ("learned_figures", "seen_hulls", "ship_names")}
+    return {key: scanned.get(key) or {} for key in ("learned_figures", "seen_hulls", "ship_names", "fleet", "_fleet_gone")}
 
 
 def scan_journal_figures(paths):
@@ -1290,6 +1396,7 @@ def merge_journal_history(state, scanned):
     names = state.setdefault("ship_names", {})
     for symbol, name in (scanned.get("ship_names") or {}).items():
         names.setdefault(symbol, name)
+    merge_fleet(state, scanned.get("fleet"), scanned.get("_fleet_gone"))
 
 
 def merge_learned_figures(state, learned):

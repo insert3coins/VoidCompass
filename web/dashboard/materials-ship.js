@@ -590,12 +590,37 @@ function savedList() {
     `<option value="${esc(row.id)}"${row.id === build?.id ? " selected" : ""}>${esc(row.name)} · ${esc(ships.ships[row.ship]?.name || row.ship)}</option>`).join("")}</select>`;
 }
 
+// Every ship you own (its latest Loadout), the one you're in first. Only names come with
+// each refresh; a ship's whole Loadout is fetched when you open it.
+function fleetList() {
+  const fleet = data.fleet || [];
+  if (!fleet.length) return data.ship_loadout ? `<button type="button" class="ghost" data-ms-op="current">YOUR SHIP NOW</button>` : "";
+  const type = (row) => Object.values(ships.ships).find((ship) => ship.symbol === row.ship)?.name || (data.ship_names || {})[row.ship] || row.ship;
+  return `<select data-ms-fleet title="Open one of your ships as you last flew it"><option value="">Your ships…</option>${fleet.map((row) =>
+    `<option value="${esc(row.id)}"${row.id === build?.fleet ? " selected" : ""}>${esc(row.name || type(row))}${row.ident ? ` [${esc(row.ident)}]` : ""} · ${esc(type(row))}${row.now ? " (flying)" : ""}</option>`).join("")}</select>`;
+}
+
+async function openShip(id) {
+  try {
+    const response = await fetch(ui.apiUrl(`/api/data/materials-ship?id=${encodeURIComponent(id)}`), {cache: "no-store"});
+    const loadout = response.ok ? await response.json() : null;
+    const loaded = loadout?.Ship ? fromLoadout(loadout) : null;
+    if (!loaded) { ui.showToast?.("That ship's loadout isn't one the builder can read yet"); return; }
+    loaded.fleet = id;
+    build = loaded;
+    picking = false;
+  } catch {
+    ui.showToast?.("Couldn't open that ship");
+  }
+  draw();
+}
+
 function draw() {
   if (!host || !host.isConnected) return;
   if (!ships) { load(); host.innerHTML = `<p class="mt-loading">Loading the hulls and modules…</p>`; return; }
   if (!build && !picking) {
     const current = data.ship_loadout ? fromLoadout(data.ship_loadout) : null;
-    if (current) build = current;
+    if (current) { build = current; build.fleet = data.ship_loadout.ShipID != null ? String(data.ship_loadout.ShipID) : ""; }
     else picking = true;
   }
   if (picking) { host.innerHTML = picker(); return; }
@@ -606,7 +631,7 @@ function draw() {
       <button type="button" data-ms-op="wish">+ WISHLIST</button>
       ${build.id ? `<button type="button" class="ghost" data-ms-op="share">SHARE CODE</button><button type="button" class="ghost danger" data-ms-op="delete">DELETE</button>` : ""}
       <button type="button" class="ghost" data-ms-op="pick">NEW HULL</button>
-      ${data.ship_loadout ? `<button type="button" class="ghost" data-ms-op="current">YOUR SHIP NOW</button>` : ""}</div>
+      ${fleetList()}</div>
     ${importBar()}
     <div class="mt-split mt-ship-split"><div><header class="mt-head"><h3>${esc(ship.name)}</h3>
       <label class="mt-select">ARMOUR <select data-ms-bulkhead>${ship.bulkheads.map((b, i) => `<option value="${i}"${i === build.bulkhead ? " selected" : ""}>${esc(b.name)}</option>`).join("")}</select></label>
@@ -637,7 +662,7 @@ export function renderShipBuilder(element, snapshot, reference, deckUi, fresh) {
     if (loaded) { build = loaded; picking = false; fresh = true; }
   }
   const sig = JSON.stringify([(data.ship_builds || []).map((row) => [row.id, row.name, row.updated]), data.ship_loadout?.timestamp || "", data.options?.roll,
-    Object.keys(data.seen_hulls || {})]);
+    Object.keys(data.seen_hulls || {}), (data.fleet || []).map((row) => [row.id, row.name, row.ident, row.at, row.now])]);
   if (!fresh && sig === signature) return;
   const focused = document.activeElement;
   if (!fresh && host?.contains(focused) && focused.matches("input, select")) return;
@@ -654,7 +679,7 @@ export function handleShipClick(event, deckUi, snapshot, reference) {
   if (action === "pick") { picking = true; }
   else if (action === "pick_close") { picking = false; }
   else if (action === "new") { build = newBuild(control.dataset.ship); picking = false; }
-  else if (action === "current") { const current = fromLoadout(data.ship_loadout); if (current) build = current; }
+  else if (action === "current") { const current = fromLoadout(data.ship_loadout); if (current) { build = current; build.fleet = String(data.ship_loadout.ShipID ?? ""); } }
   else if (action === "save" || action === "save_as") {
     if (action === "save_as" || !build.id) build.id = Math.random().toString(16).slice(2, 12);
     op("build_save", {build: plain(build)}).then((ok) => ui.showToast?.(ok ? "Build saved" : "Couldn't save it (60 builds at most)"));
@@ -679,6 +704,7 @@ export function handleShipChange(event, deckUi, snapshot, reference) {
   if ("msFilter" in d) { shipFilter = target.value; draw(); const input = host.querySelector("[data-ms-filter]"); input?.focus(); return true; }
   if ("msName" in d) { build.name = target.value.slice(0, 40); return true; }
   if ("msCompare" in d) { compareId = target.value; draw(); return true; }
+  if ("msFleet" in d) { if (target.value) openShip(target.value); return true; }
   if ("msSaved" in d) {
     const saved = (data.ship_builds || []).find((row) => row.id === target.value);
     const loaded = saved ? fromSaved(saved) : null;
