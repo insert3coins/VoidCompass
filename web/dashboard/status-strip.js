@@ -51,12 +51,20 @@ function rank(r, label) {
   return r?.name ? `${label}: ${esc(r.name)}${r.percent !== null && r.percent !== undefined ? ` ${num(r.percent)}%` : ""}${r.next ? ` <em>next ${esc(r.next)}</em>` : ""}` : "";
 }
 
+// Jump ranges as EDSY names them; "now" is what's aboard this moment.
+function rangeTitle(c) {
+  return [c.max_range ? `Max ${num(c.max_range, 1)} ly: least fuel, empty hold` : "",
+    c.unladen ? `Unladen ${num(c.unladen, 1)} ly: full tank, empty hold` : "",
+    c.laden ? `Laden ${num(c.laden, 1)} ly: full tank, full hold` : "",
+    c.now_range ? `Now ${num(c.now_range, 1)} ly: the fuel and cargo aboard` : ""].filter(Boolean).join(String.fromCharCode(10));
+}
+
 function cmdrTile(c) {
   if (!c) return "";
   return tile("cmdr", `CMDR ${esc(String(c.name || "").toUpperCase())}`, [
     c.credits !== null && c.credits !== undefined ? `${cr(c.credits)} cr` : "—",
     esc(c.ship || c.ship_type),
-    c.max_range ? `max jump ${num(c.max_range, 1)} ly${c.laden ? ` · ${num(c.laden, 1)} laden` : ""}` : "",
+    c.max_range ? `<span title="${esc(rangeTitle(c))}">max jump ${num(c.max_range, 1)} ly${c.now_range ? ` · ${num(c.now_range, 1)} now` : ""}${c.laden ? ` · ${num(c.laden, 1)} laden` : ""}</span>` : "",
     rank(c.explorer, "Explorer"), rank(c.exobiologist, "Exobiologist"),
   ]);
 }
@@ -141,7 +149,7 @@ function compactTiles(t) {
     tile("where", "WHERE", [w.region || w.system
       ? `${esc(w.region || w.system)}${known(w.sol) ? ` <em>Sol ${num(w.sol)} ly</em>` : ""}${fresh ? ' <em class="st-new">NEW</em>' : ""}`
       : "Waiting for the journal"]),
-    tile("cmdr", "JUMP RANGE", [t.cmdr?.max_range ? `${num(t.cmdr.max_range, 1)} ly${t.cmdr.laden ? ` <em>${num(t.cmdr.laden, 1)} laden</em>` : ""}` : "Awaiting loadout"]),
+    tile("cmdr", "JUMP RANGE", [t.cmdr?.max_range ? `<span title="${esc(rangeTitle(t.cmdr))}">${num(t.cmdr.max_range, 1)} ly${t.cmdr.now_range ? ` <em>${num(t.cmdr.now_range, 1)} now</em>` : ""}</span>` : "Awaiting loadout"]),
     tile("fuel", "FUEL", [fuel + meter]),
     tile("unsold", "DATA ABOARD", [`${cr(u.total)} cr${u.sell_here?.length ? ' <em class="st-sell">SELL HERE</em>' : u.samples ? ` <em>${num(u.samples)} samples</em>` : ""}`]),
     tile("carrier", "CARRIER", [c.name || c.callsign ? `${esc(c.name || c.callsign)}${c.here ? ' <em class="st-live">HERE</em>' : c.system ? ` <em>${esc(c.system)}</em>` : ""}` : "None linked"]),

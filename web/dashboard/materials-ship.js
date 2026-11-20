@@ -57,7 +57,12 @@ function load() {
     .then((json) => {
       ships = json;
       ships.bySymbol = {};
-      for (const [id, module] of Object.entries(ships.modules)) if (module.symbol) ships.bySymbol[module.symbol] = id;
+      // A pre-engineered variant (the Sirius heat sink, an Expanded Capacity cargo rack...) shares its plain
+      // module's symbol; the journal names the plain one and says what was engineered.
+      for (const [id, module] of Object.entries(ships.modules)) {
+        const had = ships.modules[ships.bySymbol[module.symbol]];
+        if (module.symbol && (!had || !module.preEngineered || had.preEngineered)) ships.bySymbol[module.symbol] = id;
+      }
       for (const [symbol, id] of Object.entries(ships.aliases || {})) ships.bySymbol[symbol] ??= id;
       learnHulls();
       shipsState = "ready";
@@ -121,9 +126,9 @@ function describedHull(loadout, hull) {
   const rows = loadout.Modules || [];
   const sizeOf = (item) => Number((String(item || "").match(/size(\d)/i) || [])[1] || 0);
   const standard = STANDARD_SLOTS.map((name) => sizeOf(rows.find((row) => row.Slot === name)?.Item) || 1);
-  const hardpoints = rows.map((row) => String(row.Slot || "").match(/^(Tiny|Small|Medium|Large|Huge)Hardpoint(\d+)$/)).filter(Boolean)
+  const hardpoints = rows.map((row) => String(row.Slot || "").match(/^(Tiny|Small|Medium|Large|Huge)(?:Mining)?Hardpoint(\d+)$/)).filter(Boolean)
     .map((m) => ({class: SIZE_OF[m[1]], jname: m[0], n: Number(m[2])})).sort((a, b) => b.class - a.class || a.n - b.n);
-  const internal = rows.filter((row) => /^(Slot\d+_Size\d+|Military\d+|Cargo\d+|PlanetaryApproachSuite)$/.test(String(row.Slot || "")))
+  const internal = rows.filter((row) => /^(Slot\d+_Size\d+|Military\d+|Cargo\d+|PlanetaryApproachSuite|LimpetController\d+|FighterBay\d+)$/.test(String(row.Slot || "")))
     .map((row) => ({class: Number((String(row.Slot).match(/_Size(\d+)$/) || [])[1]) || sizeOf(row.Item) || 1, jname: row.Slot,
       name: /^Military/.test(row.Slot) ? "Military" : /^Cargo/.test(row.Slot) ? "Cargo" : /Approach/.test(row.Slot) ? "PlanetaryApproachSuite" : ""}))
     .sort((a, b) => a.jname.localeCompare(b.jname));
@@ -141,6 +146,7 @@ function describedHull(loadout, hull) {
 // (with its armour) as the ship's unladen mass less what its modules weigh.
 function learnHulls() {
   if (!ships) return;
+  correctHullMasses();
   const known = new Set(Object.values(ships.ships).filter((ship) => !ship.described).map((ship) => ship.symbol));
   for (const [symbol, seen] of Object.entries(data.seen_hulls || {})) {
     const key = `described:${symbol}`;
@@ -163,8 +169,36 @@ function learnHulls() {
   }
 }
 
+// A hull the tables have, but at a mass the game doesn't agree with (the Caspian's is
+// 950 t in the tables, about 832 t as flown): the game's unladen mass less what its
+// modules and armour weigh, from the latest Loadout of that type. Only when every
+// module is known, and only when it's out by more than a tonne.
+function correctHullMasses() {
+  for (const ship of Object.values(ships.ships)) {
+    const seen = !ship.described && (data.seen_hulls || {})[ship.symbol];
+    if (!seen || !n(seen.unladen)) continue;
+    ship.tableHullMass ??= ship.hullMass;
+    let modules = 0;
+    let unknown = false;
+    for (const row of seen.modules || []) {
+      if (row.Slot === "Armour") {
+        const grade = BULKHEAD_GRADES.findIndex((g) => String(row.Item || "").includes(`_${g}`));
+        modules += n(ship.bulkheads?.[Math.max(0, grade)]?.mass) * (row.mass_ratio || 1);
+        continue;
+      }
+      const id = ships.bySymbol[row.Item];
+      if (id) modules += n(ships.modules[id].mass) * (row.mass_ratio || 1);
+      else if (FITTED_SLOT.test(row.Slot)) unknown = true;
+    }
+    const hull = Math.round((n(seen.unladen) - modules) * 100) / 100;
+    const right = !unknown && hull > 0 && Math.abs(hull - n(ship.tableHullMass)) > 1;
+    ship.hullMass = right ? hull : ship.tableHullMass;
+    ship.massFromJournal = right;
+  }
+}
+
 // Slots that hold a module with mass (not paint, decals, the cockpit or the cargo hatch).
-const FITTED_SLOT = /^(PowerPlant|MainEngines|FrameShiftDrive|LifeSupport|PowerDistributor|Radar|FuelTank|(Tiny|Small|Medium|Large|Huge)Hardpoint\d+|Slot\d+_Size\d+|Military\d+|Cargo\d+|Passenger\d+)$/;
+const FITTED_SLOT = /^(PowerPlant|MainEngines|FrameShiftDrive|LifeSupport|PowerDistributor|Radar|FuelTank|(Tiny|Small|Medium|Large|Huge)(Mining)?Hardpoint\d+|Slot\d+_Size\d+|Military\d+|Cargo\d+|Passenger\d+|LimpetController\d+|FighterBay\d+)$/;
 
 // The armour grades' resistances are the same on every hull; a described hull's mass and boost aren't known.
 function standardBulkheads() {
@@ -179,12 +213,16 @@ function knownHull(key, saved) {
 
 function plain(row) {
   // What's saved: the ship, its armour and each slot's module and engineering.
-  return {id: row.id, name: row.name, ship: row.ship, bulkhead: row.bulkhead, roll: row.roll,
+  return {id: row.id, name: row.name, ship: row.ship, bulkhead: row.bulkhead, armourGrades: (ships.ships[row.ship]?.bulkheads || []).length, layout: row.slots.length, roll: row.roll,
+    ...(row.armour ? {armour: row.armour} : {}),
     ...(ships.ships[row.ship]?.described ? {hull: ships.ships[row.ship]} : {}),
     slots: row.slots.map((slot) => ({module: slot.module, bp: slot.bp, grade: slot.grade, special: slot.special,
       ...(slot.roll != null ? {roll: slot.roll} : {}), ...(slot.jmods ? {jmods: slot.jmods} : {}),
       ...(slot.unknown ? {unknown: slot.unknown} : {}), ...(slot.bpName ? {bpName: slot.bpName, bpGrade: n(slot.bpGrade)} : {})}))};
 }
+
+// Hulls whose slots the game laid out again after 5.8.4 (a build without its layout count is from before).
+const RELAID = new Set(["asp_scout", "federation_dropship", "empire_trader", "type6", "type7"]);
 
 function fromSaved(saved) {
   if (!knownHull(saved.ship, saved.hull)) return null;
@@ -193,7 +231,21 @@ function fromSaved(saved) {
   const known = symbol && Object.keys(ships.ships).find((key) => !ships.ships[key].described && ships.ships[key].symbol === symbol);
   const was = newBuild(saved.ship);
   const fresh = newBuild(known || saved.ship);
+  // A hull whose layout the game has changed since the build was saved (5.8.4.1: the Asp Scout,
+  // Federal Dropship, Imperial Clipper, Type-6 and Type-7): its modules go to the same kind of slot
+  // in the same order, where they fit.
+  const relaid = !known && (saved.layout != null ? n(saved.layout) !== fresh.slots.length : RELAID.has(ships.ships[fresh.ship]?.symbol));
+  const taken = new Set();
+  const kindOf = (id) => (String(id || "").startsWith("internal:") ? "internal" : moduleOf(id)?.class === 0 ? "utility" : "hardpoints");
   const target = (index) => {
+    if (relaid) {
+      const slot = (saved.slots || [])[index];
+      if (index < 7) return fresh.slots[index];
+      if (!slot?.module) return null;
+      const into = fresh.slots.find((row, at) => !taken.has(at) && row.group === kindOf(slot.module) && n(moduleOf(slot.module)?.class) <= n(row.size));
+      if (into) taken.add(fresh.slots.indexOf(into));
+      return into || null;
+    }
     if (!known) return fresh.slots[index];
     const old = was.slots[index];
     if (!old) return null;
@@ -203,6 +255,9 @@ function fromSaved(saved) {
   fresh.id = saved.id;
   fresh.name = saved.name;
   fresh.bulkhead = n(saved.bulkhead);
+  // The Caspian's armour list had an extra grade in front before 5.8.4.1.
+  if (saved.armourGrades == null && ships.ships[fresh.ship]?.symbol === "explorer_nx" && fresh.bulkhead > 0) fresh.bulkhead -= 1;
+  fresh.armour = saved.armour || null;
   fresh.roll = saved.roll == null ? 100 : n(saved.roll);
   (saved.slots || []).forEach((slot, index) => {
     const into = target(index);
@@ -295,20 +350,43 @@ function fromLoadout(loadout, hull) {
   fresh.slots.filter((slot) => slot.group === "hardpoints" || slot.group === "utility").forEach((slot) => {
     const size = HARDPOINT_SIZES[slot.size];
     counters[size] = (counters[size] || 0) + 1;
-    put(slot, bySlot[slot.jname || `${size}Hardpoint${counters[size]}`]);
+    // A mining hull's mining mounts are numbered with the rest of their size (MediumMiningHardpoint1, MediumHardpoint3).
+    put(slot, bySlot[slot.jname] || bySlot[`${size}${slot.name === "Mining" ? "Mining" : ""}Hardpoint${counters[size]}`]
+      || bySlot[`${size}Hardpoint${counters[size]}`] || bySlot[`${size}MiningHardpoint${counters[size]}`]);
   });
-  const internal = Object.keys(bySlot).filter((name) => /^Slot\d+_Size\d+$/.test(name)).sort();
-  const military = Object.keys(bySlot).filter((name) => /^Military\d+$/.test(name)).sort();
+  const named = (pattern) => Object.keys(bySlot).filter((name) => pattern.test(name)).sort();
+  const internal = named(/^Slot\d+_Size\d+$/);
+  // Slots kept for one kind of module have names of their own in the journal.
+  const kept = {military: named(/^Military\d+$/), limpets: named(/^LimpetController\d+$/), fighter: named(/^FighterBay\d+$/)};
   fresh.slots.filter((slot) => slot.group === "internal").forEach((slot) => {
+    const kind = Object.keys(kept).find((key) => new RegExp(key, "i").test(slot.name || ""));
     if (slot.jname) put(slot, bySlot[slot.jname]);
     else if (/approach/i.test(slot.name || "")) put(slot, bySlot.PlanetaryApproachSuite);
-    else if (/military/i.test(slot.name || "")) put(slot, bySlot[military.shift()]);
+    else if (kind && kept[kind].length) put(slot, bySlot[kept[kind].shift()]);
+    else if (kind === "military") put(slot, null);
     else put(slot, bySlot[internal.shift()]);
   });
   const armour = String(bySlot.Armour?.Item || "").toLowerCase();
   const grade = BULKHEAD_GRADES.findIndex((g) => armour.includes(`_${g}`));
   fresh.bulkhead = grade >= 0 ? grade : 0;
+  fresh.armour = armourFigures(bySlot.Armour);
   return fresh;
+}
+
+// Engineered armour, as the game reported it: its hull boost and resistances as they are
+// (not against the stock figure, which can be 0), its mass against the stock mass.
+const ARMOUR_FIELDS = {DefenceModifierHealthMultiplier: "hullboost", KineticResistance: "kinres", ThermicResistance: "thermres",
+  ExplosiveResistance: "explres", CausticResistance: "causres"};
+
+function armourFigures(row) {
+  const eng = row?.Engineering;
+  if (!eng?.Modifiers?.length) return null;
+  const figures = {blueprint: String(eng.BlueprintName || ""), grade: n(eng.Level)};
+  for (const mod of eng.Modifiers) {
+    if (ARMOUR_FIELDS[mod.Label]) figures[ARMOUR_FIELDS[mod.Label]] = n(mod.Value) / 100;
+    else if (mod.Label === "Mass" && n(mod.OriginalValue)) figures.massRatio = n(mod.Value) / n(mod.OriginalValue);
+  }
+  return figures;
 }
 
 // -- maths ---------------------------------------------------------------------------
@@ -342,7 +420,7 @@ function engineered(slot, b = build) {
   if (slot.jmods) {
     // Imported from your ship: the game's figures, experimental and all.
     for (const [key, ratio] of Object.entries(slot.jmods)) if (key in out) out[key] = n(out[key]) * ratio;
-    return out;
+    return wholeCurve(base, out);
   }
   const features = slot.bp && slot.grade ? ships.blueprints[slot.bp]?.grades?.[slot.grade]?.features || {} : {};
   const roll = slotRoll(slot, b);
@@ -357,6 +435,17 @@ function engineered(slot, b = build) {
     applyChange(out, key, n(low) + (n(high) - n(low)) * roll);
   }
   for (const [key, value] of Object.entries(ships.special_actions?.[slot.special] || {})) applyChange(out, key, n(value));
+  return wholeCurve(base, out);
+}
+
+// Engineering a thruster's or shield generator's optimal multiplier or optimal mass moves its whole
+// curve, as the game does: the minimum and maximum go with it.
+function wholeCurve(base, out) {
+  for (const [opt, ends] of [["optmul", ["minmul", "maxmul"]], ["optmulspeed", ["minmulspeed", "maxmulspeed"]], ["optmass", ["minmass", "maxmass"]]]) {
+    if (!n(base[opt]) || n(out[opt]) === n(base[opt])) continue;
+    const ratio = n(out[opt]) / n(base[opt]);
+    for (const end of ends) if (end in base && out[end] === base[end]) out[end] = n(base[end]) * ratio;
+  }
   return out;
 }
 
@@ -377,7 +466,10 @@ const stack = (values) => 1 - values.reduce((left, value) => left * (1 - n(value
 
 function stats(b = build) {
   const ship = ships.ships[b.ship];
-  const bulkhead = ship.bulkheads[b.bulkhead] || ship.bulkheads[0] || {};
+  const stock = ship.bulkheads[b.bulkhead] || ship.bulkheads[0] || {};
+  const game = b.armour || {};
+  const bulkhead = {...stock, ...Object.fromEntries(Object.values(ARMOUR_FIELDS).filter((key) => key in game).map((key) => [key, game[key]])),
+    mass: n(stock.mass) * (game.massRatio || 1)};
   const fitted = b.slots.map((slot) => ({slot, m: engineered(slot, b)})).filter((row) => row.m);
   const sum = (key, filter = () => true) => fitted.filter(filter).reduce((total, row) => total + n(row.m[key]), 0);
   const moduleMass = sum("mass");
@@ -516,8 +608,8 @@ function slotRows(group, title) {
 function statsPanel() {
   const s = stats();
   const ship = ships.ships[build.ship];
-  const tiles = [["UNLADEN", `${fixed(s.unladen)} t`], ["LADEN", `${fixed(s.laden)} t`], ["JUMP (EMPTY)", `${fixed(s.jumpEmpty, 2)} ly`],
-    ["JUMP (FULL)", `${fixed(s.jumpFull, 2)} ly`], ["SPEED", `${whole(s.speed)} m/s`], ["BOOST", `${whole(s.boost)} m/s`],
+  const tiles = [["UNLADEN", `${fixed(s.unladen)} t`], ["LADEN", `${fixed(s.laden)} t`], ["JUMP (MAX)", `${fixed(s.jumpEmpty, 2)} ly`],
+    ["JUMP (LADEN)", `${fixed(s.jumpFull, 2)} ly`], ["SPEED", `${whole(s.speed)} m/s`], ["BOOST", `${whole(s.boost)} m/s`],
     ["SHIELDS", `${whole(s.shields)} MJ`], ["ARMOUR", whole(s.armour)], ["CARGO", `${whole(s.cargo)} t`], ["FUEL", `${whole(s.fuel)} t`],
     ["RAW DPS", fixed(s.dps)], ["COST", `${money(s.cost)} CR`]];
   const powerShare = s.power ? s.draw / s.power : 0;
@@ -526,7 +618,7 @@ function statsPanel() {
   const other = compareId ? (data.ship_builds || []).find((row) => row.id === compareId) : null;
   const versus = other ? fromSaved(other) : null;
   const cmp = versus ? stats(versus) : null;
-  const diffRows = cmp ? [["Jump (empty)", "jumpEmpty", 2, " ly"], ["Jump (full)", "jumpFull", 2, " ly"], ["Speed", "speed", 0, " m/s"], ["Boost", "boost", 0, " m/s"],
+  const diffRows = cmp ? [["Jump (max)", "jumpEmpty", 2, " ly"], ["Jump (laden)", "jumpFull", 2, " ly"], ["Speed", "speed", 0, " m/s"], ["Boost", "boost", 0, " m/s"],
     ["Shields", "shields", 0, " MJ"], ["Armour", "armour", 0, ""], ["Cargo", "cargo", 0, " t"], ["Raw DPS", "dps", 1, ""], ["Power spare", null, 2, " MW"], ["Cost", "cost", 0, " CR"]]
     .map(([label, key, digits, unit]) => {
       const mine = key ? s[key] : s.power - s.draw, theirs = key ? cmp[key] : cmp.power - cmp.draw;
@@ -547,6 +639,7 @@ function statsPanel() {
     <div class="mt-power ${powerShare > 1 ? "short" : "ok"}"><span>POWER ${fixed(s.draw, 2)} / ${fixed(s.power, 2)} MW</span><span class="mt-bar"><i style="width:${Math.min(100, powerShare * 100).toFixed(1)}%"></i></span>
       ${powerShare > 1 ? "<b>Over the plant's output: some modules will shut down</b>" : ""}</div>
     ${ship.described && !ship.hullMass ? `<p class="mt-note">The ${esc(ship.name)} isn't in the builder's tables yet: its slots and modules come from your build, but its own figures (mass, speed, shields, armour) aren't known, so jump range, speed and defences here leave the hull out.</p>` : ""}
+    ${ship.massFromJournal ? `<p class="mt-note">The ${esc(ship.name)}'s hull mass is ${fixed(ship.hullMass)} t, from your journal: the game's own figures for the one you fly put it there, not at the ${fixed(ship.tableHullMass)} t the builder's tables give.</p>` : ""}
     ${ship.described && ship.hullMass && ship.learned ? `<p class="mt-note">The ${esc(ship.name)} isn't in the builder's tables yet, so it was learned from your journal: its slots from your Loadout, and its mass (${fixed(ship.hullMass)} t, with the armour you fly) from the ship's unladen mass less its modules. Jump range and mass are right; speed, shields and armour aren't known yet, so those leave the hull out.</p>` : ""}
     <p class="mt-dim">${esc(ship.manufacturer || "")} · class ${esc(ship.class || "")} landing pad · mass lock ${esc(ship.masslock || "")} · rolls at ${whole(build.roll)}%. Figures are worked out here and can differ a little from the game's; slots marked GAME FIGURES use what your ship reported.</p>
     ${resistances}${heat}${compare}`;
@@ -635,6 +728,7 @@ function draw() {
     ${importBar()}
     <div class="mt-split mt-ship-split"><div><header class="mt-head"><h3>${esc(ship.name)}</h3>
       <label class="mt-select">ARMOUR <select data-ms-bulkhead>${ship.bulkheads.map((b, i) => `<option value="${i}"${i === build.bulkhead ? " selected" : ""}>${esc(b.name)}</option>`).join("")}</select></label>
+      ${build.armour ? `<span class="mt-tag" title="${esc(ships.blueprints[blueprintKey(build.armour.blueprint)]?.name || build.armour.blueprint)} G${n(build.armour.grade)}: the figures your ship reported, until you change the armour">GAME FIGURES</span>` : ""}
       <label class="mt-select">ROLLS <select data-ms-roll>${[0, 25, 50, 75, 100].map((r) => `<option value="${r}"${r === n(build.roll) ? " selected" : ""}>${r}%</option>`).join("")}</select></label></header>
       ${slotRows("standard", "CORE")}${slotRows("hardpoints", "HARDPOINTS")}${slotRows("utility", "UTILITY")}${slotRows("internal", "OPTIONAL INTERNAL")}</div>
       <aside class="mt-side">${statsPanel()}${materialsPanel()}</aside></div>`;
@@ -712,7 +806,7 @@ export function handleShipChange(event, deckUi, snapshot, reference) {
     // Saved on a hull that was new then and is in the tables now: keep it on the real hull, so it
     // stays there and its share code no longer has to describe the hull.
     if (loaded && String(saved.ship).startsWith("described:") && loaded.ship !== saved.ship) op("build_save", {build: plain(loaded)});
-  } else if ("msBulkhead" in d) build.bulkhead = Number(target.value);
+  } else if ("msBulkhead" in d) { build.bulkhead = Number(target.value); build.armour = null; }
   else if ("msRoll" in d) { build.roll = Number(target.value); build.slots.forEach((slot) => { slot.jmods = null; }); }
   else if (d.msSlot) {
     const slot = build.slots[Number(d.slot)];

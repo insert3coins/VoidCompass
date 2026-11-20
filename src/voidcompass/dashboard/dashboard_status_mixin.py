@@ -98,22 +98,28 @@ class DashboardStatusMixin:
             max_range = self._expedition_jump_range()
         except Exception:
             pass
-        laden = None
+        # As EDSY names them: max (least fuel, empty hold, the game's own figure), unladen (full
+        # tank, empty hold), laden (full tank, full hold) and now (what's aboard this moment).
+        now = unladen = laden = None
         try:
             figures = fsd.fleet_figures(loadout) if loadout.get("Modules") else None
             cargo = sum(int(row.get("count") or row.get("Count") or 0) for row in getattr(self, "current_cargo_inventory", None) or ()
                         if isinstance(row, dict))
             if figures and figures.get("unladen"):
-                laden = fsd.fleet_range(figures, cargo=cargo, fuel=_num(getattr(self, "current_fuel_main", None)))
+                now = fsd.fleet_range(figures, cargo=cargo, fuel=_num(getattr(self, "current_fuel_main", None)))
+                unladen = fsd.fleet_range(figures)
+                hold = _num(figures.get("cargo_capacity")) or 0
+                laden = fsd.fleet_range(figures, cargo=hold) if hold > 0 else unladen
         except Exception:
-            laden = None
+            now = unladen = laden = None
+        r1 = lambda value: round(value, 1) if value else None
         cmdr_ranks = getattr(self, "cmdr_ranks", None) or {}
         progress = getattr(self, "cmdr_rank_progress", None) or {}
         return {"name": str(getattr(self, "cmdr_name", "") or self.config.get("active_commander_name") or ""),
                 "credits": getattr(self, "cmdr_balance", None),
                 "ship": str(ship.get("ship_name") or ship.get("user_ship_name") or ""),
                 "ship_type": str(ship.get("ship_localised") or ship.get("ship") or ""),
-                "max_range": round(max_range, 1) if max_range else None, "laden": round(laden, 1) if laden else None,
+                "max_range": r1(max_range), "now_range": r1(now), "unladen": r1(unladen), "laden": r1(laden),
                 "explorer": _rank(cmdr_ranks, progress, "Explore"),
                 "exobiologist": _rank(cmdr_ranks, progress, "Exobiologist")}
 

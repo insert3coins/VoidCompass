@@ -581,7 +581,11 @@ def _clean(value, limit=60):
 def build_code(build):
     import base64
     import zlib
-    lines = ["\t".join([_clean(build.get("ship")), str(_int(build.get("bulkhead"))), str(_int(build.get("roll"), 100)), _clean(build.get("name"), 40)])]
+    # Since 5.8.4.1 the head also says how many slots and armour grades the hull had (older readers ignore them).
+    head = [_clean(build.get("ship")), str(_int(build.get("bulkhead"))), str(_int(build.get("roll"), 100)), _clean(build.get("name"), 40)]
+    if build.get("layout") is not None:
+        head += [str(_int(build.get("layout"))), str(_int(build.get("armourGrades")))]
+    lines = ["\t".join(head)]
     for index, slot in enumerate(build.get("slots") or ()):
         module = str(slot.get("module") or "")
         if not module:
@@ -626,8 +630,10 @@ def read_build_code(text):
         lines = text.decode("utf-8").split("\n")
     except Exception:
         return None
-    head = lines[0].split("\t") + ["", "", "", ""]
+    head = lines[0].split("\t") + ["", "", "", "", "", ""]
     build = {"id": _new_id(), "ship": head[0], "bulkhead": _int(head[1]), "roll": _int(head[2], 100), "name": head[3] or "Shared build"}
+    if head[4].isdigit():
+        build.update(layout=int(head[4]), armourGrades=_int(head[5]))
     slots = {}
     kinds = {short: kind for kind, short in _MODULE_KIND.items()}
     for line in lines[1:]:
