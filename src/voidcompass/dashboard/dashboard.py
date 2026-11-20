@@ -2173,9 +2173,12 @@ class MainDashboard(
         )
         payload = {
             key: value for key, value in (materials or {}).items()
-            if not str(key).startswith("_")
+            if not str(key).startswith("_") and key != "ship_builds"
         }
         try:
+            # Saved ship builds are a file each, named after the build (ship_builds/ beside this file).
+            from voidcompass.core.field_state import save_ship_builds
+            save_ship_builds(path, (materials or {}).get("ship_builds") or [])
             persistence_queue().submit_json(path, payload, indent=2, delay_s=0.35)
             if isinstance(materials, dict):
                 materials.pop("_save_error", None)
@@ -8494,6 +8497,8 @@ class MainDashboard(
         self._smalls_event(ev, raw if isinstance(raw, dict) else d, startup_replay)
         # 5.8.3: stream chat's games, its figures and where you are.
         self._stream_chat_event(ev, raw if isinstance(raw, dict) else d, startup_replay)
+        # 5.8.4: the Materials page's locker, loadouts, ship and community goals.
+        self._materials_event(ev, raw if isinstance(raw, dict) else d, startup_replay)
         if ev in ("StartJump", "FSDJump", "SupercruiseEntry", "SupercruiseExit"):
             # The game sets "in danger" on every jump and supercruise entry for
             # 16-26 s with no threat (ED-Outrider's JOURNAL_REFERENCE): not a fight.
@@ -10967,6 +10972,7 @@ class MainDashboard(
             ]
         self.engineer_materials["ship_locker"] = locker
         self._save_engineer_materials(self.engineer_materials)
+        self._materials_ship_locker_file(data)
         self._refresh_html_workspace()
 
     def _sync_materials_full(self, raw_list: list, mfg_list: list, enc_list: list):
@@ -10982,6 +10988,7 @@ class MainDashboard(
                     mats[cat_key][key] = {"name": name, "count": count}
         mats["last_updated"] = time.time()
         self._save_engineer_materials(mats)
+        self._materials_ready_check()
         self._refresh_html_workspace()
 
     def _adjust_material(self, cat: str, key: str, name: str, delta: int):
@@ -11063,6 +11070,7 @@ class MainDashboard(
                     -int(mat.get("Quantity") or mat.get("Count") or 0),
                 )
 
+        self._materials_ready_check()
         if ev == "MaterialCollected":
             for blueprint in sorted(ready_blueprints(self.engineer_materials) - ready_before):
                 pin = next((row for row in self.engineer_materials.get("pinned_blueprints", [])

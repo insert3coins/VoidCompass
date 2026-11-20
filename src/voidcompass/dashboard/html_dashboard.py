@@ -87,6 +87,7 @@ from voidcompass.dashboard.html_bgs import HtmlBgsMixin
 from voidcompass.dashboard.html_trading import HtmlTradingMixin
 from voidcompass.dashboard.html_mining import HtmlMiningMixin
 from voidcompass.dashboard.html_rhino import HtmlRhinoMixin
+from voidcompass.dashboard.html_materials import HtmlMaterialsMixin
 from voidcompass.dashboard.html_planetary import HtmlPlanetaryMixin
 
 
@@ -136,7 +137,7 @@ _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "chronicle", "mission", "ground", "mining", "rhino",
     "powerplay", "carrier", "achievements", "settings",
     "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation",
-    "wrapped", "games", "system-map",
+    "wrapped", "games", "system-map", "materials",
 }
 
 
@@ -242,7 +243,7 @@ def _hotkey_group(action, attr):
         return "music"
     return HOTKEY_GROUP_OF.get(action, "controls")
 
-class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin, HtmlMiningMixin, HtmlRhinoMixin, HtmlPlanetaryMixin):
+class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOverlayStudioMixin, HtmlMusicMixin, HtmlColonisationMixin, HtmlBgsMixin, HtmlTradingMixin, HtmlMiningMixin, HtmlRhinoMixin, HtmlPlanetaryMixin, HtmlMaterialsMixin):
     """Publish exploration state and accept private dashboard commands."""
 
     def start_html_dashboard_bridge(self):
@@ -2480,6 +2481,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "canonn_reports", "leave_behind_cr", "rhino_commodities_hidden",
             "api_enabled", "api_port", "api_allow_lan", "api_allow_control",
             "stream_chat_enabled", "stream_chat_channel", "stream_chat_voice", "stream_chat_welcomes", "stream_chat_naming", "stream_chat_where", "stream_chat_cooldown_s", "stream_chat_game_gap_min", "stream_chat_blocked",
+            "materials_wanted_toast", "materials_ready_toast", "materials_hide_unused", "materials_locker_sort", "materials_roll",
         ):
             value = self.config.get(key)
             values[key] = value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
@@ -2499,6 +2501,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             ("stream_chat_enabled", False), ("stream_chat_channel", ""), ("stream_chat_voice", True), ("stream_chat_welcomes", True),
             ("stream_chat_naming", True), ("stream_chat_where", "region"),
             ("stream_chat_cooldown_s", 20), ("stream_chat_game_gap_min", 3), ("stream_chat_blocked", ""),
+            ("materials_wanted_toast", True), ("materials_ready_toast", True), ("materials_hide_unused", False),
+            ("materials_locker_sort", "name"), ("materials_roll", 100),
         ):
             if values.get(key) is None:
                 values[key] = default
@@ -2835,6 +2839,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "mining": self._html_mining_workspace,
             # The Rhino page: surface mining round one big map.
             "rhino": self._html_rhino_workspace,
+            # The Materials page (5.8.4): on-foot and ship engineering.
+            "materials": self._html_materials_workspace,
             "powerplay": self._html_powerplay_workspace,
             "carrier": self._html_carrier_workspace,
             "achievements": self._html_achievements_workspace,
@@ -3489,6 +3495,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             if changed:
                 self.update_ground_target_ui()
 
+        elif page == "materials":
+            done = self._html_materials_operation(operation, payload)
+            self._schedule_html_dashboard_publish(immediate=True)
+            return done
         elif page == "rhino":
             done = self._html_rhino_operation(operation, payload)
             self._schedule_html_dashboard_publish(immediate=True)
@@ -4291,6 +4301,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     "stream_chat_welcomes": bool, "stream_chat_naming": bool,
                     "stream_chat_where": str, "stream_chat_cooldown_s": int, "stream_chat_game_gap_min": int,
                     "stream_chat_blocked": str,
+                    "materials_wanted_toast": bool, "materials_ready_toast": bool, "materials_hide_unused": bool,
+                    "materials_locker_sort": str, "materials_roll": int,
                 }
                 updates = {}
                 if "rhino_commodities_hidden" in values:
@@ -4365,6 +4377,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     elif key == "stream_chat_channel":
                         from voidcompass.core.stream_chat import channel_name
                         updates[key] = channel_name(value) or _text(value, 80)
+                    elif key == "materials_locker_sort":
+                        updates[key] = value if value in ("name", "count", "worth", "need") else "name"
+                    elif key == "materials_roll":
+                        updates[key] = max(0, min(100, _integer(value, 100)))
                     elif key == "stream_chat_where":
                         updates[key] = value if value in ("exact", "region", "delay10", "delay30") else "region"
                     elif key == "stream_chat_cooldown_s":

@@ -520,6 +520,10 @@ class DashboardJourneyMixin:
         if name in ("listen", "listen-test"):
             # Talking to the Watcher (5.7.1): the level meter, and the mic test to hear back.
             return self._watcher_listen_data(name)
+        if name.startswith("materials-"):
+            # The Materials page's tables (5.8.4).
+            answer = self._materials_data(name, query)
+            return self._json_answer(answer) if answer is not None else None
         # Explore & Survey, CMDR and History's tables (5.7.8).
         survey = getattr(self, "_survey_data", None)
         answer = survey(name, query) if callable(survey) else None

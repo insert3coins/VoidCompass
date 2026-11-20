@@ -47,6 +47,7 @@ import {handleBgsChange, handleBgsClick, handleBgsSubmit, renderBgs} from "./bgs
 import {handleTradingClick, handleTradingInput, handleTradingSubmit, renderTrading, resetTrading} from "./trading.js";
 import {handleMiningClick, handleMiningInput, handleMiningSubmit, renderMining, resetMining} from "./mining.js";
 import {handleRhinoClick, handleRhinoInput, handleRhinoSubmit, renderRhino, resetRhino} from "./rhino.js";
+import {renderMaterials, resetMaterials} from "./materials.js";
 import {handleThemeWorkshopClick, handleThemeWorkshopInput, themeSettings, themeWorkshopOpen, workshopTheme} from "./theme-workshop.js";
 import {groupChips, groupChipsFingerprint, handleOverlayGroupsClick, handleOverlayGroupsInput, handleOverlayGroupsSubmit,
   renderGroupMembership, renderOverlayGroups} from "./overlay-groups.js";
@@ -1979,25 +1980,18 @@ function selectStudioOverlay(id, follow = false) {
   fill(byId("studio-selected-enabled"), Boolean(selected.enabled));
   // 5.8.3: the groups it's in, a switch each.
   renderGroupMembership(studioData(), id);
-  // Per overlay; the All overlays switch turns map hiding on or off for all.
-  // Each overlay's own choice can always be set: with the All overlays switch
-  // off it's kept for when it's on (a switch that couldn't move looked stuck).
+  // Each overlay's own choice (5.8.4): there's no switch for all to wait on.
   const layoutOn = Boolean((studioData().options || {}).layout_mode);
-  const mapsOn = Boolean((studioData().options || {}).overlay_hide_on_maps ?? true);
   const mapHide = byId("studio-selected-maphide");
   fill(mapHide, selected.hide_on_maps !== false);
   if (mapHide) mapHide.disabled = false;
   text("studio-selected-maphide-note", selected.hide_on_maps === false ? "Stays on screen on the maps"
-    : !mapsOn ? "Hides on the maps once Hide on maps is on (All overlays)"
-    : layoutOn ? "Saved: hides on maps when Layout mode is off" : "Hides on the Galaxy Map, System Map and Orrery");
-  // The same for the menus (5.7.1), which are off for all until switched on.
-  const menusOn = Boolean((studioData().options || {}).overlay_hide_in_menus);
+    : layoutOn ? "Hides on maps when Layout mode is off" : "Hides on the Galaxy Map, System Map and Orrery");
   const menuHide = byId("studio-selected-menuhide");
-  fill(menuHide, selected.hide_in_menus !== false);
+  fill(menuHide, selected.hide_in_menus === true);
   if (menuHide) menuHide.disabled = false;
-  text("studio-selected-menuhide-note", selected.hide_in_menus === false ? "Stays on screen in the menus"
-    : !menusOn ? "Hides in the menus once Hide in menus is on (All overlays)"
-    : layoutOn ? "Saved: hides in menus when Layout mode is off" : "Hides on ship panels, station services and menus");
+  text("studio-selected-menuhide-note", selected.hide_in_menus !== true ? "Stays on screen in the menus"
+    : layoutOn ? "Hides in menus when Layout mode is off" : "Hides on ship panels, station services and menus");
   // Its own opacity (5.5.3.3), or the one set for all overlays.
   const ownOpacity = byId("studio-selected-opacity");
   if (ownOpacity && document.activeElement !== ownOpacity) ownOpacity.value = String(Number(selected.own_opacity) || 0);
@@ -2183,10 +2177,10 @@ function renderStudioVisibility(studio) {
   } else if (options.overlay_hide_when_game_closed !== false && (live.session_closed || live.main_menu)) {
     label = "WAITING FOR GAME LOAD";
     detail = "Gameplay overlays are hidden until you load into the game. The music player can stay at the main menu.";
-  } else if (options.overlay_hide_on_maps && live.in_map) {
+  } else if (live.in_map && everyCount("hide_on_maps")) {
     label = "MAP HIDING ACTIVE";
     detail = "A map is open. Each overlay follows its own Hide on maps choice.";
-  } else if (options.overlay_hide_in_menus && live.in_menu) {
+  } else if (live.in_menu && everyCount("hide_in_menus")) {
     label = "MENU HIDING ACTIVE";
     detail = "A reported menu is open. Each overlay follows its own Hide in menus choice.";
   } else if (live.game_running === true) {
@@ -2195,6 +2189,14 @@ function renderStudioVisibility(studio) {
   }
   text("studio-visibility-status", label);
   text("studio-visibility-detail", detail);
+  const total = (studioData().overlays || []).length;
+  text("studio-every-maps", `${everyCount("hide_on_maps")} of ${total} hide on the Galaxy Map, System Map and Orrery`);
+  text("studio-every-menus", `${everyCount("hide_in_menus")} of ${total} hide on ship panels, station services and menus`);
+}
+
+// How many overlays hide on the maps (or in the menus), each by its own choice.
+function everyCount(field) {
+  return (studioData().overlays || []).filter((row) => field === "hide_on_maps" ? row.hide_on_maps !== false : row.hide_in_menus === true).length;
 }
 
 function renderOverlayStudio(state) {
@@ -3187,6 +3189,7 @@ function settingsSectionBody(id, data) {
         + settingSwitch({key: "canonn_reports", label: "Phenomena reports", detail: "On arriving in a system, ask Canonn what other commanders found in space there (notable stellar phenomena), and hear the ones not yet in your Codex for the region. Only the system's name is sent.", checked: value.canonn_reports !== false}))
       + settingGroup("SURFACE PADS", surfacePadsSettings(data.surface_pads || {}))
       + settingGroup("RHINO COMMODITIES", rhinoCommoditySwitches(value, data))
+      + settingGroup("MATERIALS", materialsSettings(value))
       + settingGroup("HOME", `${settingText({key: "home_system", id: "setting-home", label: "Home system", detail: "Distances \"from home\" start here: your companion's remarks and the Galaxy Minimap. Leave it empty for Sol.", value: value.home_system, placeholder: "Sol", status: homeStatus(data.home)})}`)
       + settingGroup("COMMAND DECK", `${settingSwitch({key: "adaptive_command_enabled", label: "Adaptive command deck", detail: "The dashboard follows what you are doing: exploring, mining, on foot, docked.", checked: value.adaptive_command_enabled})}`)
       + settingGroup("ACHIEVEMENTS", `${settingSwitch({key: "achievements_enabled", label: "Track achievements", detail: "Unlock achievements from your journal as you play.", checked: value.achievements_enabled})}${settingNote("Unlocks pop up in the cockpit's Achievements overlay: switch it on or off, and place it, in Overlay Studio.")}`);
@@ -3357,6 +3360,15 @@ function streamChatStatus(stream = {}, value = {}) {
   }
   if (stream.status === "error") return {tone: "bad", text: String(stream.error || "ERROR").toUpperCase()};
   return {tone: "", text: stream.status === "reconnecting" ? "RECONNECTING" : "CONNECTING"};
+}
+
+function materialsSettings(value) {
+  return settingSwitch({key: "materials_wanted_toast", label: "Wanted pickups", detail: "A note each time you pick up something your wishlist is short of (on foot or in your ship), with how many you have of what it needs.", checked: value.materials_wanted_toast !== false})
+    + settingSwitch({key: "materials_ready_toast", label: "Ready to make", detail: "A note when you've collected everything a wishlist item takes.", checked: value.materials_ready_toast !== false})
+    + settingSwitch({key: "materials_hide_unused", label: "Hide unused items in the locker", detail: "The Materials page's LOCKER opens without the items nothing uses (or you've marked not used). Its filters still show them.", checked: value.materials_hide_unused === true})
+    + settingSelect({key: "materials_locker_sort", label: "Locker order", detail: "How the LOCKER is sorted when the page opens.", value: value.materials_locker_sort || "name", options: [["name", "By name"], ["count", "Most held"], ["worth", "Most valuable"], ["need", "Most short for the wishlist"]]})
+    + settingSelect({key: "materials_roll", label: "Ship builder rolls", detail: "How good the engineering rolls are when the ship builder works out a build's figures (each slot can differ).", value: String(number(value.materials_roll, 100)), options: [["0", "Worst (0%)"], ["25", "25%"], ["50", "Average (50%)"], ["75", "75%"], ["100", "Best (100%)"]], type: "number"})
+    + settingActions(`<button type="button" data-page="materials">MATERIALS</button>`, "materials engineering wishlist locker blueprints");
 }
 
 function streamChatSettings(value, stream) {
@@ -3964,6 +3976,7 @@ function renderWorkspace(state) {
     mission: (data) => renderExpeditions(data, WORKSHOP_UI),
     mining: renderMiningWorkspace,
     rhino: (data) => renderRhino(data, WORKSHOP_UI),
+    materials: (data) => renderMaterials(data, WORKSHOP_UI),
     powerplay: renderPowerplayWorkspace,
     carrier: renderCarrierWorkspace,
     achievements: renderAchievementsWorkspace,
@@ -4010,6 +4023,7 @@ function renderDashboard(state) {
     resetTrading();
     resetMining();
     resetRhino();
+    resetMaterials();
     resetExpeditions();
     resetPlanetary();
     analyticsView = "trends";
@@ -5192,6 +5206,14 @@ byId("studio-selected-text").addEventListener("change", async (event) => {
   const wanted = event.target.value;
   if (!studioSelectedId || !(await command("overlay_studio", {operation: "own_text", overlay_id: studioSelectedId, value: Number(wanted)}))) {
     event.target.value = "0";
+  }
+});
+document.addEventListener("click", async (event) => {
+  const every = event.target.closest?.("[data-studio-every]");
+  if (!every) return;
+  const where = every.dataset.studioEvery, hide = every.dataset.hide === "1";
+  if (hide === false || window.confirm(`Hide every overlay ${where === "maps" ? "on the maps" : "in the menus"}? Each overlay can still be changed in its inspector.`)) {
+    if (await command("overlay_studio", {operation: "every_hiding", where, hide})) showToast(`Every overlay ${hide ? "hides" : "stays on screen"} ${where === "maps" ? "on the maps" : "in the menus"}`);
   }
 });
 byId("studio-selected-maphide").addEventListener("change", async (event) => {

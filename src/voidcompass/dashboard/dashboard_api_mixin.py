@@ -235,8 +235,9 @@ class DashboardApiMixin(ApiRecordsMixin):
             "overlays": {"hidden_all": bool(getattr(self, "_overlay_hotkey_global_hidden", False)),
                          "in_map": getattr(self, "current_gui_focus", -1) in getattr(self, "_MAP_GUI_FOCUS", ()),
                          "in_menu": bool(in_menu()) if callable(in_menu) else False,
-                         "hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
-                         "hide_in_menus": bool(self.config.get("overlay_hide_in_menus", False))},
+                         # Each overlay's own choice (5.8.4): how many hide there.
+                         "hide_on_maps": len(set(OVERLAY_SPEC_BY_ATTR) - set(self.config.get("overlay_map_keep_visible") or ())),
+                         "hide_in_menus": len(set(self.config.get("overlay_menu_hide") or ()))},
             "watcher": {"orb": hud is not None, "mind": mind.debug_state() if mind is not None else None},
             "voice": {"on": self._watcher_voice_on() if hasattr(self, "_watcher_voice_on") else False,
                       "speaking": bool(getattr(self, "_voice_speaking", False)),

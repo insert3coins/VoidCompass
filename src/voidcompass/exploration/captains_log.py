@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import math
 import os
@@ -16,6 +17,12 @@ from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 
 MAX_SESSIONS = 250
 MAX_HIGHLIGHTS = 180
+# Sessions older than the latest few keep their moments (codex, biology, sales,
+# photos, losses, milestones, orders) but not each jump and survey: their counts
+# stay in the session, and every jump is in the flight record anyway.
+FULL_SESSIONS = 30
+ROUTINE_KINDS = {"JUMP", "FSS"}
+MAX_SEEN = 6000
 TRACKED_EVENTS = {
     "LoadGame", "Shutdown", "FSDJump", "CarrierJump", "CodexEntry", "ScanOrganic",
     "Screenshot", "MarketBuy", "MarketSell", "SellExplorationData",
@@ -24,6 +31,14 @@ TRACKED_EVENTS = {
 }
 
 NOTABLE_WORLDS = {"Earthlike body", "Water world", "Ammonia world"}
+
+
+def _short_key(text):
+    """An event's fingerprint for the "seen" list: 12 characters instead of the whole key."""
+    text = str(text or "")
+    if len(text) == 12 and "|" not in text:
+        return text
+    return hashlib.blake2b(text.encode("utf-8"), digest_size=6).hexdigest()
 
 
 def _stamp(raw):
@@ -61,7 +76,17 @@ class CaptainsLog:
                     self.data["schema"] = 2
                     self.data["imported_files"] = {}
         except Exception:
-            pass
+            return
+        # Logs written before 5.8.4 kept whole event keys and every jump of every session.
+        self.data["seen"] = list(dict.fromkeys(_short_key(key) for key in self.data.get("seen") or []))[-MAX_SEEN:]
+        self._compact()
+
+    def _compact(self):
+        """Older sessions keep their moments, not each jump and survey."""
+        for session in (self.data.get("sessions") or [])[:-FULL_SESSIONS]:
+            rows = session.get("highlights") or []
+            if any(row.get("kind") in ROUTINE_KINDS for row in rows if isinstance(row, dict)):
+                session["highlights"] = [row for row in rows if not isinstance(row, dict) or row.get("kind") not in ROUTINE_KINDS]
 
     def _persist_snapshot(self):
         """Produce the log payload on the persistence worker."""
@@ -100,13 +125,14 @@ class CaptainsLog:
         }
         sessions.append(session)
         self.data["sessions"] = sessions[-MAX_SESSIONS:]
+        self._compact()
         return session
 
     @staticmethod
     def _event_key(raw):
-        return "|".join(str(raw.get(k) or "") for k in (
+        return _short_key("|".join(str(raw.get(k) or "") for k in (
             "timestamp", "event", "StarSystem", "BodyName", "Species", "Filename", "MarketID", "Type"
-        ))
+        )))
 
     def _highlight(self, session, raw, kind, title, detail=""):
         rows = session.setdefault("highlights", [])
@@ -158,8 +184,8 @@ class CaptainsLog:
                 return False
             seen.append(key)
             self._seen_set.add(key)
-            if len(seen) > 6000:
-                self.data["seen"] = seen[-6000:]
+            if len(seen) > MAX_SEEN:
+                self.data["seen"] = seen[-MAX_SEEN:]
                 self._seen_set = set(self.data["seen"])
 
             if ev == "LoadGame":
@@ -361,7 +387,8 @@ class CaptainsLog:
             )[-MAX_SESSIONS:]
             self.data["seen"] = list(dict.fromkeys(
                 (rebuilt.data.get("seen") or []) + (self.data.get("seen") or [])
-            ))[-6000:]
+            ))[-MAX_SEEN:]
+            self._compact()
             self._seen_set = set(self.data["seen"])
             # Keep every journal read (see deep_survey's LIMITS): at 400 the
             # oldest files were read again at every start.

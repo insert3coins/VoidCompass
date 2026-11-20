@@ -64,7 +64,8 @@ class PersistenceQueue:
                 # time while replacing its payload with the newest snapshot.
                 due = min(float(previous["due"]), due)
             self._jobs[key] = {
-                "kind": "json", "path": key, "value": snapshot,
+                # "path" matches repeat writes (case-folded); "target" keeps the name's own case for a new file.
+                "kind": "json", "path": key, "target": os.path.abspath(os.fspath(path)), "value": snapshot,
                 "source": source, "indent": indent, "due": due,
             }
             self._condition.notify_all()
@@ -84,7 +85,7 @@ class PersistenceQueue:
                 self._coalesced += 1
             else:
                 self._jobs[key] = {
-                    "kind": "append", "path": key, "text": str(text), "due": due,
+                    "kind": "append", "path": key, "target": os.path.abspath(os.fspath(path)), "text": str(text), "due": due,
                 }
             self._condition.notify_all()
 
@@ -154,7 +155,7 @@ class PersistenceQueue:
 
     @staticmethod
     def _write(job):
-        path = Path(job["path"])
+        path = Path(job.get("target") or job["path"])
         if not path.parent.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
         if job["kind"] == "append":

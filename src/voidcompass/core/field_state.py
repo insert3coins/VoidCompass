@@ -15,6 +15,83 @@ def get_material_category(key: str) -> str:
     return material_info(key).get("category", "manufactured")
 
 
+# Saved ship builds (5.8.4): one file each, named after the build, in a folder beside
+# engineer_materials.json. A build file dropped in there loads at the next start.
+SHIP_BUILDS_DIR = "ship_builds"
+_UNSAFE = set('<>:"/\\|?*')
+_written_builds = {}
+
+
+def ship_builds_folder(materials_path: str) -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(materials_path)), SHIP_BUILDS_DIR) if materials_path else ""
+
+
+def _build_file_name(name: str) -> str:
+    text = "".join("_" if ch in _UNSAFE or ord(ch) < 32 else ch for ch in str(name or "Build")).strip(" .")
+    return (text or "Build")[:60]
+
+
+def load_ship_builds(materials_path: str):
+    """The builds in the profile's ship_builds folder, or None when there's no folder yet."""
+    folder = ship_builds_folder(materials_path)
+    if not folder or not os.path.isdir(folder):
+        return None
+    builds = []
+    for name in sorted(os.listdir(folder)):
+        if not name.lower().endswith(".json"):
+            continue
+        path = os.path.join(folder, name)
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                build = json.load(handle)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(build, dict) or not build.get("ship"):
+            continue
+        build.setdefault("name", name[:-5])
+        build.setdefault("id", os.urandom(5).hex())
+        builds.append(build)
+        _written_builds[path] = json.dumps(build, sort_keys=True)
+    seen, unique = set(), []
+    for build in builds:
+        if build["id"] not in seen:
+            seen.add(build["id"])
+            unique.append(build)
+    return sorted(unique, key=lambda row: float(row.get("updated") or 0))
+
+
+def save_ship_builds(materials_path: str, builds) -> None:
+    """Keep the folder to the builds: one file each, renamed and removed with them."""
+    folder = ship_builds_folder(materials_path)
+    builds = [row for row in builds or () if isinstance(row, dict)]
+    if not folder or (not builds and not os.path.isdir(folder)):
+        return
+    from voidcompass.core.persistence_queue import persistence_queue
+    os.makedirs(folder, exist_ok=True)
+    wanted, used = {}, set()
+    for build in sorted(builds, key=lambda row: (float(row.get("updated") or 0), str(row.get("id")))):
+        stem = _build_file_name(build.get("name"))
+        name, count = stem, 2
+        while name.lower() in used:
+            name, count = f"{stem} ({count})", count + 1
+        used.add(name.lower())
+        wanted[os.path.join(folder, f"{name}.json")] = build
+    for path, build in wanted.items():
+        text = json.dumps(build, sort_keys=True)
+        if _written_builds.get(path) != text or not os.path.exists(path):
+            persistence_queue().submit_json(path, build, indent=2, delay_s=0.35)
+            _written_builds[path] = text
+    # Only files this app wrote or read as builds go; anything else in there is left alone.
+    for name in os.listdir(folder):
+        path = os.path.join(folder, name)
+        if name.lower().endswith(".json") and path not in wanted and path in _written_builds:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            _written_builds.pop(path, None)
+
+
 def load_engineer_materials(path: str) -> dict:
     """Load a commander's engineering inventory and preserve corrupt input."""
     empty = {
@@ -41,6 +118,10 @@ def load_engineer_materials(path: str) -> dict:
         data.setdefault("build_planner_builds", [])
         data.setdefault("build_planner_selected", "live")
         data.setdefault("build_planner_compare", "")
+        # Builds live in their own files; one from before 5.8.4 keeps its list until the next save moves it.
+        builds = load_ship_builds(path)
+        if builds is not None:
+            data["ship_builds"] = builds
         return data
     except Exception as exc:
         backup = None
@@ -50,8 +131,14 @@ def load_engineer_materials(path: str) -> dict:
             shutil.copy2(path, backup)
         except Exception:
             backup = None
+        # Builds are files of their own: they load even when this file doesn't, so a save can't drop them.
+        try:
+            builds = load_ship_builds(path)
+        except Exception:
+            builds = None
         return {
             **empty,
+            **({"ship_builds": builds} if builds is not None else {}),
             "_load_warning": f"Could not read engineering data: {exc}",
             "_corrupt_backup": backup,
         }

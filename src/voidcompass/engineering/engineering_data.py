@@ -148,6 +148,16 @@ _MATERIAL_ROWS += [
     ("tg_structuraldata", "Thargoid Structural Data", "encoded", "thargoid", 2),
     ("tg_shipflightdata", "Ship Flight Data", "encoded", "thargoid", 3),
     ("tg_shipsystemsdata", "Ship Systems Data", "encoded", "thargoid", 4),
+    ("tg_abrasion03", "Hardened Surface Fragments", "manufactured", "thargoid", 1),
+    ("unknowncorechip", "Tactical Core Chip", "manufactured", "thargoid", 2),
+    ("tg_abrasion02", "Phasing Membrane Residue", "manufactured", "thargoid", 3),
+    ("tg_causticgeneratorparts", "Corrosive Mechanisms", "manufactured", "thargoid", 3),
+    ("tg_causticshard", "Caustic Shard", "manufactured", "thargoid", 3),
+    ("tg_causticcrystal", "Caustic Crystal", "manufactured", "thargoid", 4),
+    ("tg_abrasion01", "Heat Exposure Specimen", "manufactured", "thargoid", 5),
+    ("tg_interdictiondata", "Thargoid Interdiction Telemetry", "encoded", "thargoid", 3),
+    ("tg_shutdowndata", "Massive Energy Surge Analytics", "encoded", "thargoid", 3),
+    ("tg_structuraldata02", "Thargoid Capital Ship Data", "encoded", "thargoid", 3),
 ]
 
 MATERIALS = {

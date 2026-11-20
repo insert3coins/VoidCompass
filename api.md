@@ -1557,6 +1557,7 @@ for carrier in requests.get("http://127.0.0.1:7380/api/v1/carrier").json()["carr
 | GET | `/api/v1/mining/record` | All your mining from the journals: tonnes refined in the ship and hauled in the Rhino, by material, month and place; rocks prospected, your best of each, motherlodes, limpets; and what your mined cargo has sold for. `status` is `reading` the first time, while the journals are read |
 | GET | `/api/v1/combat` | The combat session in progress, its target, and past sessions |
 | GET | `/api/v1/engineering` | Your materials (raw, manufactured, encoded), engineers, pinned blueprints, on-foot goals and ship locker |
+| GET | `/api/v1/materials` | The Materials page: what you hold on foot (`odyssey.have`, by symbol) and for ships (`horizons.have`), engineer progress, and each game's selected wishlist worked out (items with `ready`, materials with `need`/`have`/`missing`, credits, `progress` %, material trader swaps for ships) with the engineers to visit nearest first (`route`), and the high grade emissions you have worked (`horizons.high_grade_emissions`: by system, by faction state, and what the ship wishlist still wants from them) |
 
 **Example: one key to start and end a mining run** (PowerShell)
 
@@ -1819,7 +1820,7 @@ Every cockpit overlay can be listed, read, switched on or off, moved and faded, 
 | GET | `/api/v1/overlays/groups` | Your overlay groups (made in Overlay Studio): each one's `id`, `name`, `mode` (`only` or `add`), `activity`, `members`, whether it's `on` and whether the activity switched it on (`auto`), and what you're doing now (`activity`) |
 | POST | `/api/v1/overlays/groups/{group}/toggle` | Switch a group: `{"on": true}` or `{"on": false}`, or send nothing to flip it. An "only" group hides every other overlay while it's on |
 
-Overlay Studio's map, menu and game-closed settings still apply when an overlay is enabled or restored through the API. With Hide with the game closed on, every overlay is hidden while Elite is absent; gameplay overlays return on LoadGame, while the music player can stay at the main menu. The existing Elite process check runs every two seconds to notice exits and relaunches. Layout mode explicitly shows overlays for placement. Per-overlay `hide_on_maps` and `hide_in_menus` choices are saved even if the corresponding All overlays switch is off. Hide in menus uses the ship panels, station services and journal-reported menus; Elite does not report opening the pause/Esc menu.
+Overlay Studio's map, menu and game-closed settings still apply when an overlay is enabled or restored through the API. With Hide with the game closed on, every overlay is hidden while Elite is absent; gameplay overlays return on LoadGame, while the music player can stay at the main menu. The existing Elite process check runs every two seconds to notice exits and relaunches. Layout mode explicitly shows overlays for placement. Hiding on the maps and in the menus is each overlay's own choice (its `hide_on_maps` and `hide_in_menus`); there is no switch for all of them, though Overlay Studio can set every overlay at once. Hide in menus uses the ship panels, station services and journal-reported menus; Elite does not report opening the pause/Esc menu.
 
 The overlay ids are:
 
@@ -2051,7 +2052,7 @@ The news from the galaxy, as the Galnet ticker shows it.
 
 ## Debugging
 
-What's going on inside Void Compass, live: for the debugger in `tools/debug` (run `python tools/debug/void_debugger.py`), or your own tools. These answer this PC only, even with other devices allowed, and never show a setting's value: keys, tokens and webhooks in the log read `<hidden>`.
+What's going on inside Void Compass, live, for your own tools. These answer this PC only, even with other devices allowed, and never show a setting's value: keys, tokens and webhooks in the log read `<hidden>`.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -2091,23 +2092,6 @@ The usual suspects, and what to do about each.
 **The browser source shows nothing.** Open its file in a normal browser and press F12: the console shows what went wrong. Most often the API is off, or the source isn't a local file.
 
 **504.** Void Compass was busy (rebuilding its cache, or loading a long journal). Try again in a moment.
-
-## MCP server
-
-An AI client you already run (Claude Code, the Claude desktop app, or any client that speaks the Model Context Protocol) can ask about your game through this API. `tools/mcp/voidcompass_mcp.py` in Void Compass's source is a small MCP server over stdio. It only ever sends `GET` requests to this PC, so it can read your game but can't press a key or change anything.
-
-1. Switch the Local API on (**Settings › Integrations › Local API**).
-2. Give your client this command, from a copy of Void Compass's source with Python 3.11 or later:
-
-```bat
-python tools/mcp/voidcompass_mcp.py
-```
-
-For Claude Code: `claude mcp add voidcompass -- python D:/path/to/VoidCompass/tools/mcp/voidcompass_mcp.py`
-
-Its tools: `commander`, `location`, `ship`, `fleet`, `missions`, `system_bodies`, `survey`, `nearby`, `route`, `unsold`, `codex`, `earnings`, `history`, `journal_log` and `status`. Each one is a `GET` on this API. Set `VOIDCOMPASS_API` if your API listens on another port (the default is `http://127.0.0.1:7380/api/v1`).
-
-After ED Outrider's MCP server, on Void Compass's own API.
 
 ## For developers
 

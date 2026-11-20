@@ -174,6 +174,9 @@ class DashboardHost:
         self.dashboard_url = dashboard_url
         self.window = None
         self.closing_from_backend = False
+        # pywebview runs the closed handler on a thread of its own; the process
+        # waits for it so its last posts (geometry, window_closed) aren't cut off.
+        self.closed_done = threading.Event()
         self._geometry = {}
         self._geometry_lock = threading.Lock()
         self._geometry_timer = None
@@ -268,16 +271,20 @@ class DashboardHost:
             self.post("window_geometry", **geometry)
 
     def closed(self):
-        with self._geometry_lock:
-            timer = self._geometry_timer
-            self._geometry_timer = None
-            geometry = dict(self._geometry)
-        if timer is not None:
-            timer.cancel()
-        if {"x", "y", "width", "height"}.issubset(geometry):
-            self.post("window_geometry", **geometry)
-        if not self.closing_from_backend and not self.relaunch_requested:
-            self.post("window_closed")
+        try:
+            with self._geometry_lock:
+                timer = self._geometry_timer
+                self._geometry_timer = None
+                geometry = dict(self._geometry)
+            if timer is not None:
+                timer.cancel()
+            # Where the window was goes first: the close saves settings.
+            if {"x", "y", "width", "height"}.issubset(geometry):
+                self.post("window_geometry", **geometry)
+            if not self.closing_from_backend and not self.relaunch_requested:
+                self.post("window_closed")
+        finally:
+            self.closed_done.set()
 
     def _service_boot_release(self, boot_active, onboarding_active, now):
         """Nudge a stalled client after its own handoff window; never paint it."""
@@ -754,6 +761,7 @@ def main(argv=None):
         print("Dashboard WebView2 message loop failed", file=sys.stderr)
         traceback.print_exc()
         return 4
+    host.closed_done.wait(3.0)
     return HOST_RELAUNCH_EXIT_CODE if host.relaunch_requested else 0
 
 

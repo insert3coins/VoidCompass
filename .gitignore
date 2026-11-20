@@ -27,12 +27,8 @@ waypoints.json
 __pycache__/
 *.egg-info/
 *.log
-# tools/journal_watch.py's own files (a developer tool, never released).
-tools/journal_watch/
-# tools/pause_probe.py's recordings (a developer tool, never released).
-tools/pause_probe/
-# a developer tool, never released
-tools/debug
+# Developer tools (builds, data generators, screenshots, debuggers): local only, never released.
+/tools/
 
 # Local-only scratch tests and generated visual-test artefacts. The real
 # regression suite under tests/ is source and must remain tracked.

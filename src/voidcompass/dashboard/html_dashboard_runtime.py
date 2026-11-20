@@ -496,6 +496,13 @@ class HtmlDashboardRuntime:
             if now - self._host_exit_seen_at < 0.45:
                 self._schedule_host_watchdog()
                 return
+            if exit_code == 0:
+                # The host only exits 0 once its window has closed: a normal close
+                # whose message didn't arrive. Close quietly, as the message would have.
+                self._write_host_log("HTML command-deck window closed (exit 0, no close message)")
+                logging.info("HTML command-deck host exited 0 without its close message; closing normally")
+                self._close_from_window()
+                return
             self._write_host_log(
                 f"HTML command-deck host exited unexpectedly (code {exit_code})"
             )

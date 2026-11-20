@@ -1,0 +1,367 @@
+/* The Materials page (materials.js, materials-ship.js). Colours are theme tokens. */
+
+#materials-workspace { container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0; }
+#materials-workspace button { cursor: pointer; }
+#materials-workspace input, #materials-workspace select {
+  min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--input); color: var(--text);
+  font: 12px "Segoe UI", sans-serif; outline: none;
+}
+#materials-workspace input:focus, #materials-workspace select:focus { border-color: var(--accent); }
+#materials-workspace input[type="checkbox"] { height: auto; }
+#materials-workspace h3 { margin: 0; color: var(--text); font: 600 15px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
+#materials-workspace h4 { margin: 6px 0 0; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+#materials-workspace button:not(.mt-chip):not(.mt-tab):not(.mt-group):not(.mt-rail-item):not(.mt-mod):not(.mt-hull):not(.mt-eye):not(.mt-goalcard):not(.mt-global-row):not(.mt-pick) {
+  min-height: 28px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent); font: 700 9.5px Consolas, monospace; letter-spacing: .1em;
+}
+#materials-workspace button.ghost { border-color: var(--border); background: transparent; color: var(--muted); }
+#materials-workspace button.ghost:hover { color: var(--text); border-color: var(--accent); }
+#materials-workspace button.danger:hover { color: var(--red); border-color: var(--red); }
+.mt-loading, .mt-empty { margin: 0; padding: 14px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.mt-note { margin: 0; padding: 8px 12px; border-left: 2px solid var(--accent); background: var(--panel); color: var(--muted); font: 11.5px/1.5 "Segoe UI", sans-serif; }
+.mt-dim { margin: 0; color: var(--dim); font: 11px/1.5 "Segoe UI", sans-serif; }
+.mt-tag { padding: 0 4px; border: 1px solid var(--border); color: var(--muted); font: 700 8px Consolas, monospace; letter-spacing: .08em; }
+
+/* Games, then the pages of the one picked. */
+.mt-groups { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; border-bottom: 1px solid var(--border); }
+.mt-group { padding: 10px 18px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: 700 12px Consolas, monospace; letter-spacing: .16em; }
+.mt-group.on { color: var(--accent); border-bottom-color: var(--accent); background: linear-gradient(0deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent); }
+.mt-group:hover { color: var(--text); }
+.mt-code { margin-left: auto; display: flex; align-items: center; padding: 0 4px; }
+.mt-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.mt-tab { padding: 6px 12px; border: 1px solid var(--border-soft); background: var(--panel); color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .12em; }
+.mt-tab.on { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); color: var(--accent); }
+.mt-tab b { margin-left: 6px; padding: 0 5px; border: 1px solid var(--border-soft); font-weight: 400; font-size: 9px; }
+.mt-codebar { display: flex; flex-wrap: wrap; gap: 8px; }
+.mt-codebar input { flex: 1 1 320px; }
+.mt-body { display: grid; gap: 12px; min-width: 0; }
+
+.mt-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.mt-search input { width: 220px; }
+.mt-select { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.mt-check { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.mt-chips { display: inline-flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--border-soft); }
+.mt-chip { padding: 5px 10px; border: 0; border-right: 1px solid var(--border-soft); background: transparent; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.mt-chip:last-child { border-right: 0; }
+.mt-chip.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+
+.mt-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.mt-tile { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.mt-tile span { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.mt-tile b { color: var(--text); font: 600 17px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.mt-tile.ok b { color: var(--green); }
+.mt-tile.short b { color: var(--yellow); }
+
+.mt-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 12px; align-items: start; }
+.mt-split-rail { grid-template-columns: minmax(200px, 250px) minmax(0, 1fr); }
+.mt-split-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@container (max-width: 980px) { .mt-split, .mt-split-rail, .mt-split-even { grid-template-columns: minmax(0, 1fr); } }
+.mt-side { display: grid; gap: 12px; min-width: 0; align-content: start; }
+.mt-card { display: grid; gap: 8px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border-soft); background: var(--panel); }
+.mt-card > h3 { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .14em; }
+.mt-detail > h3 { color: var(--text); font: 600 16px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: 0; }
+.mt-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.mt-head p { margin: 2px 0 0; color: var(--muted); font: 11.5px "Segoe UI", sans-serif; }
+.mt-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mt-name { flex: 1 1 220px; font-size: 14px !important; }
+
+/* Tables. */
+.mt-table-wrap { min-width: 0; overflow-x: auto; border: 1px solid var(--border-soft); background: var(--panel); }
+.mt-table { width: 100%; border-collapse: collapse; font: 12px "Segoe UI", sans-serif; color: var(--text); }
+.mt-table th { position: sticky; top: 0; padding: 7px 10px; background: var(--panel-alt); color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; text-align: left; }
+.mt-table td { padding: 6px 10px; border-top: 1px solid var(--border-soft); vertical-align: middle; }
+.mt-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mt-table tbody tr[data-mt-op] { cursor: pointer; }
+.mt-table tbody tr[data-mt-op]:hover, .mt-table tr.picked { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.mt-table tr.short td:first-child { box-shadow: inset 2px 0 var(--yellow); }
+.mt-table tr.ok td:first-child { box-shadow: inset 2px 0 var(--green); }
+.mt-table tr.mt-muted { color: var(--dim); }
+.mt-uses { max-width: 260px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; font: 12px/1.45 "Segoe UI", sans-serif; }
+.mt-facts dt { color: var(--dim); font: 700 8.5px/1.9 Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.mt-facts dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
+.mt-list { display: grid; gap: 3px; margin: 0; padding-left: 16px; color: var(--muted); font: 12px/1.45 "Segoe UI", sans-serif; }
+
+.mt-bar { display: inline-block; width: 100%; min-width: 48px; height: 4px; background: var(--inset); vertical-align: middle; }
+.mt-bar i { display: block; height: 100%; background: var(--accent); }
+.mt-bar.ok i { background: var(--green); }
+.mt-bar.short i { background: var(--yellow); }
+
+/* Recipes: a recipe's ingredients with what you hold. */
+.mt-recipes { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.mt-recipe { display: grid; gap: 6px; align-content: start; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.mt-recipe > header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.mt-recipe > header b { color: var(--text); font: 600 13px "Segoe UI", sans-serif; }
+.mt-recipe > header button { margin-left: auto; }
+.mt-ingredients { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; font: 12px "Segoe UI", sans-serif; }
+.mt-ingredients li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 6px; border-left: 2px solid var(--yellow); color: var(--muted); }
+.mt-ingredients li.ok { border-left-color: var(--green); }
+.mt-ingredients b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.mt-blueprint { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border-soft); }
+.mt-blueprint > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* A list down the side to pick from. */
+.mt-rail { display: grid; gap: 4px; align-content: start; min-width: 0; max-height: 78vh; overflow-y: auto; }
+.mt-rail-item { display: grid; gap: 2px; justify-items: start; padding: 7px 10px; border: 1px solid var(--border-soft); border-left: 2px solid transparent; background: var(--panel); color: var(--text); text-align: left; }
+.mt-rail-item b { font: 600 12.5px "Segoe UI", sans-serif; }
+.mt-rail-item small { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; }
+.mt-rail-item.on { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--panel)); }
+
+/* Engineers. */
+.mt-eng-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.mt-eng { display: grid; gap: 8px; align-content: start; padding: 12px 14px; border: 1px solid var(--border-soft); border-top: 2px solid var(--border); background: var(--panel); }
+.mt-eng.unlocked { border-top-color: var(--green); }
+.mt-eng.invited, .mt-eng.acquainted, .mt-eng.known { border-top-color: var(--yellow); }
+.mt-eng.barred { border-top-color: var(--red); }
+.mt-eng > header, .mt-goal > header { display: flex; justify-content: space-between; gap: 10px; }
+.mt-eng > header p, .mt-goal > header p { margin: 2px 0 0; color: var(--muted); font: 11.5px "Segoe UI", sans-serif; }
+.mt-eng-state { display: grid; justify-items: end; gap: 2px; text-align: right; }
+.mt-eng-state b { color: var(--text); font: 700 10px Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.mt-eng-state span { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.mt-eng footer, .mt-goal footer { display: flex; gap: 6px; }
+.mt-eng-bps { display: grid; gap: 5px; font: 11.5px "Segoe UI", sans-serif; color: var(--muted); }
+.mt-eng-bps b { display: block; color: var(--text); font-weight: 600; }
+.mt-eng-bps span { display: inline-block; margin-right: 10px; }
+.mt-eng-bps i { color: var(--accent); font-style: normal; font-weight: 700; }
+
+/* Loadouts. */
+.mt-editor { display: grid; gap: 10px; min-width: 0; }
+.mt-part { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.mt-part > header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.mt-part > header label { display: inline-flex; align-items: center; gap: 6px; }
+.mt-mods { display: flex; flex-wrap: wrap; gap: 6px; }
+.mt-mod { display: grid; gap: 1px; justify-items: start; padding: 5px 9px; border: 1px solid var(--border-soft); background: var(--inset); color: var(--muted); font: 11.5px "Segoe UI", sans-serif; text-align: left; }
+.mt-mod small { color: var(--dim); font: 700 8px Consolas, monospace; letter-spacing: .1em; }
+.mt-mod.has { border-color: var(--green); color: var(--text); }
+.mt-mod.has small { color: var(--green); }
+.mt-mod.wants { border-color: var(--yellow); color: var(--text); }
+.mt-mod.wants small { color: var(--yellow); }
+.mt-stats { max-width: 420px; border-collapse: collapse; font: 12px "Segoe UI", sans-serif; color: var(--muted); }
+.mt-stats th { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; text-align: right; padding: 2px 8px; }
+.mt-stats td { padding: 2px 8px; }
+.mt-stats .num { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.mt-stats .num.up { color: var(--green); }
+
+/* Wishlists. */
+.mt-wish-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.mt-progress { display: flex; flex: 1 1 360px; align-items: center; gap: 10px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.mt-progress .mt-bar { flex: 1 1 auto; height: 6px; }
+.mt-progress b { color: var(--text); font: 700 13px Consolas, monospace; }
+.mt-wish { display: grid; gap: 4px; margin: 0 0 6px; padding: 0; list-style: none; }
+.mt-wish li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 10px; border: 1px solid var(--border-soft); background: var(--panel); color: var(--text); font: 12.5px "Segoe UI", sans-serif; }
+.mt-wish li > span:first-of-type { flex: 1 1 240px; }
+.mt-wish li small { color: var(--dim); }
+.mt-wish li.hidden { opacity: .55; }
+.mt-wish li.ready { border-color: color-mix(in srgb, var(--green) 55%, var(--border-soft)); }
+.mt-eye { width: 22px; border: 0; background: transparent; color: var(--accent); font-size: 12px; }
+.mt-ready { color: var(--green); font: 700 9px Consolas, monospace; letter-spacing: .12em; }
+.mt-grades { display: inline-flex; gap: 4px; }
+.mt-grades select { height: 24px !important; font-size: 11px !important; }
+.mt-route { display: grid; gap: 6px; margin: 0; padding-left: 18px; font: 12px "Segoe UI", sans-serif; color: var(--muted); }
+.mt-route b { color: var(--text); }
+.mt-route span { margin-left: 6px; }
+.mt-route small { display: block; color: var(--dim); }
+
+/* Horizons materials laid out like the trader. */
+.mt-traders { display: grid; gap: 12px; }
+.mt-trader { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--border-soft); background: var(--panel); }
+.mt-trader > header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.mt-trader > header span { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.mt-trader .mt-nearest-buttons { margin-left: auto; }
+.mt-family { display: grid; grid-template-columns: 110px repeat(5, minmax(0, 1fr)); gap: 6px; align-items: stretch; }
+@container (max-width: 900px) { .mt-family { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mt-family-name { grid-column: 1 / -1; } }
+.mt-family-name { align-self: center; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.mt-mat { display: grid; gap: 3px; padding: 6px 8px; border: 1px solid var(--border-soft); background: var(--inset); min-width: 0; }
+.mt-mat b { color: var(--text); font: 600 11.5px "Segoe UI", sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-mat span { color: var(--dim); font: 10.5px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.mt-mat.short { border-color: color-mix(in srgb, var(--yellow) 60%, var(--border-soft)); }
+.mt-mat.ok { border-color: color-mix(in srgb, var(--green) 60%, var(--border-soft)); }
+.mt-nearest { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); font: 12px "Segoe UI", sans-serif; color: var(--muted); }
+.mt-nearest > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.mt-nearest b { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+
+/* Community goals and permits. */
+.mt-goals { display: grid; gap: 12px; }
+.mt-goal { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--border-soft); border-top: 2px solid var(--accent); background: var(--panel); }
+.mt-goal.done { border-top-color: var(--green); }
+.mt-chart { width: 100%; max-width: 720px; height: 120px; }
+.mt-chart .axis { stroke: var(--border); stroke-width: 1; }
+.mt-chart .line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.mt-chart .dot { fill: var(--accent); }
+.mt-permits { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.mt-permit { display: grid; gap: 6px; align-content: start; justify-items: start; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.mt-permit p { margin: 0; color: var(--muted); font: 12px/1.45 "Segoe UI", sans-serif; }
+
+/* The ship builder. */
+.mt-ship { display: grid; gap: 12px; min-width: 0; }
+.mt-ship-bar select[data-ms-saved] { max-width: 260px; }
+.mt-ship-split { grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); }
+@container (max-width: 1100px) { .mt-ship-split { grid-template-columns: minmax(0, 1fr); } }
+.mt-slots td { padding: 4px 8px; }
+.mt-slots select { width: 100%; max-width: 330px; height: 26px !important; font-size: 11.5px !important; }
+.mt-slot-name { width: 150px; color: var(--muted); }
+.mt-slot-name small { display: block; color: var(--dim); font-size: 10px; }
+.mt-slot-eng { display: flex; flex-wrap: wrap; gap: 4px; }
+.mt-slot-eng select { width: auto; max-width: 200px; }
+.mt-ship-tiles { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.mt-ship-tiles .mt-tile b { font-size: 15px; }
+.mt-power { display: grid; gap: 4px; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
+.mt-power .mt-bar { height: 6px; }
+.mt-power.short .mt-bar i { background: var(--red); }
+.mt-power.short b { color: var(--red); font: 11px "Segoe UI", sans-serif; letter-spacing: 0; }
+.mt-hulls { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.mt-hull { display: grid; gap: 3px; justify-items: start; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); color: var(--text); text-align: left; }
+.mt-hull:hover { border-color: var(--accent); }
+.mt-hull b { font: 600 13px "Segoe UI", sans-serif; }
+.mt-hull small { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
+.mt-wishmats { table-layout: fixed; }
+.mt-wishmats td:nth-child(1) { width: 38%; }
+.mt-wishmats td:nth-child(2) { width: 16%; }
+.mt-wishmats td:nth-child(4) { width: 12%; }
+.mt-compare td.ok { color: var(--green); }
+.mt-compare td.short, .mt-table td.short { color: var(--yellow); }
+.mt-ship .mt-codebar { margin-top: -4px; }
+
+/* Pinned blueprints on an engineer's card and under a blueprint. */
+.mt-pins { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mt-pins li { display: grid; grid-template-columns: minmax(0, 1fr) 70px auto auto; align-items: center; gap: 4px 8px; padding: 5px 8px; border-left: 2px solid var(--yellow); background: var(--inset); font: 12px "Segoe UI", sans-serif; }
+.mt-pins li.ok { border-left-color: var(--green); }
+.mt-pins b { color: var(--text); font-weight: 600; }
+.mt-pins i { color: var(--accent); font-style: normal; font-weight: 700; }
+.mt-pins small { display: block; color: var(--dim); }
+.mt-pinned { margin: 0; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.mt-pinned .mt-tag { color: var(--accent); }
+
+/* The redesign: a main column with the inspector beside it. */
+.mt-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 14px; align-items: start; }
+@container (max-width: 1000px) { .mt-layout { grid-template-columns: minmax(0, 1fr); } .mt-layout .mt-inspector { order: -1; } .mt-layout:not(.inspecting) .mt-inspector { display: none; } }
+.mt-main { display: grid; gap: 12px; min-width: 0; align-content: start; }
+.mt-inspector { position: sticky; top: 8px; display: grid; gap: 10px; align-content: start; min-width: 0; max-height: calc(100vh - 140px); overflow-y: auto;
+  padding: 12px 14px; border: 1px solid var(--border-soft); border-top: 2px solid var(--accent); background: var(--panel); }
+.mt-insp-empty b { color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .16em; }
+.mt-insp-empty p { margin: 6px 0 0; color: var(--dim); font: 12px/1.5 "Segoe UI", sans-serif; }
+.mt-insp-head { display: flex; justify-content: space-between; gap: 10px; }
+.mt-insp-head small { color: var(--accent); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.mt-insp-head h3 { margin-top: 3px !important; font-size: 18px !important; }
+.mt-insp-body { display: grid; gap: 8px; min-width: 0; }
+.mt-insp-body p { margin: 0; color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif; }
+.mt-insp-figure { display: flex; align-items: center; gap: 12px; }
+.mt-insp-figure > div { display: grid; gap: 2px; font: 12px "Segoe UI", sans-serif; color: var(--muted); }
+.mt-insp-figure b { color: var(--text); font-size: 13px; }
+.mt-insp-figure .short { color: var(--yellow); }
+.mt-insp-figure .ok { color: var(--green); }
+.mt-insp-actions { padding: 4px 0; }
+.mt-recipes-one { grid-template-columns: minmax(0, 1fr); }
+.mt-link { color: var(--accent); cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.mt-accent { color: var(--accent); }
+.picked, .mt-table tr.picked { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent); }
+.mt-eng[data-mt-op], .mt-mat[data-mt-op] { cursor: pointer; }
+.mt-eng[data-mt-op]:hover, .mt-mat[data-mt-op]:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border-soft)); }
+
+/* PLAN: a ring for the list, goals as cards, the next steps as a numbered list. */
+.mt-plan-head { display: flex; align-items: center; gap: 14px; }
+.mt-plan-head .mt-ring { width: 64px; height: 64px; }
+.mt-plan-head p { margin: 2px 0 0; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.mt-ring { width: 44px; height: 44px; flex: 0 0 auto; }
+.mt-ring .track { fill: none; stroke: var(--inset); stroke-width: 5; }
+.mt-ring .fill { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; }
+.mt-ring.ok .fill { stroke: var(--green); }
+.mt-ring text { fill: var(--text); font: 700 10px Consolas, monospace; text-anchor: middle; }
+.mt-goalgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+#materials-workspace .mt-goalcard { text-transform: none; letter-spacing: 0; display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 8px 10px; border: 1px solid var(--border-soft); background: var(--panel); color: var(--text); text-align: left; }
+.mt-goalcard span { display: grid; gap: 3px; min-width: 0; }
+.mt-goalcard b { font: 600 12.5px "Segoe UI", sans-serif; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; }
+.mt-goalcard small { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .1em; }
+.mt-goalcard.ready { border-color: color-mix(in srgb, var(--green) 55%, var(--border-soft)); }
+.mt-goalcard.ready small { color: var(--green); }
+.mt-goalcard.pin { border-style: dashed; }
+.mt-goalcard.hidden { opacity: .5; }
+.mt-steps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.mt-step { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--border-soft); border-left: 2px solid var(--accent); background: var(--panel); cursor: pointer; }
+.mt-step:hover { background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.mt-step i { color: var(--accent); font: 700 16px "Segoe UI Symbol", sans-serif; font-style: normal; text-align: center; }
+.mt-step.trade { border-left-color: var(--yellow); } .mt-step.trade i { color: var(--yellow); }
+.mt-step.collect { border-left-color: var(--muted); } .mt-step.collect i { color: var(--muted); }
+.mt-step.bartender { border-left-color: var(--orange); } .mt-step.bartender i { color: var(--orange); }
+.mt-step span { display: grid; gap: 2px; min-width: 0; }
+.mt-step b { color: var(--text); font: 600 13px "Segoe UI", sans-serif; }
+.mt-step small { color: var(--dim); font: 11.5px "Segoe UI", sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-step em { color: var(--muted); font: 700 10px Consolas, monospace; font-style: normal; white-space: nowrap; }
+.mt-listbar { padding-bottom: 4px; border-bottom: 1px solid var(--border-soft); }
+
+/* One search across everything. */
+.mt-groups { position: relative; }
+.mt-code { gap: 8px; }
+.mt-global input { width: min(360px, 34vw); }
+.mt-global-results { position: absolute; right: 120px; top: 100%; z-index: 20; width: min(440px, 90vw); }
+.mt-global-box { display: grid; gap: 2px; max-height: 60vh; overflow-y: auto; padding: 8px; border: 1px solid var(--border); background: var(--panel-raised); box-shadow: 0 14px 36px rgba(0, 0, 0, .45); }
+#materials-workspace .mt-global-row { text-transform: none; letter-spacing: 0; display: flex; justify-content: space-between; gap: 10px; padding: 6px 8px; border: 0; background: transparent; color: var(--text); text-align: left; font: 12.5px "Segoe UI", sans-serif; }
+.mt-global-row:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.mt-global-row small { color: var(--dim); }
+
+/* PLAN's lower half: the whole shopping list and every engineer to see. */
+.mt-plan-lower { margin-top: 6px; }
+.mt-route li[data-mt-op] { cursor: pointer; padding: 4px 6px; }
+.mt-route li[data-mt-op]:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.mt-wishmats tr[data-mt-op] { cursor: pointer; }
+.mt-unknown { display: block; margin-top: 2px; font-size: 10.5px; overflow-wrap: anywhere; }
+/* Slot tags (GAME FIGURES, a blueprint by name) sit centred beside the selects, not stretched to them. */
+.mt-slot-eng { align-items: center; }
+.mt-slot-eng .mt-tag { display: inline-flex; align-items: center; align-self: center; height: auto; padding: 4px 7px; font-size: 9px; line-height: 1; letter-spacing: .1em; white-space: nowrap; }
+
+/* PLAN: a summary line, then one view at a time. */
+.mt-plan-sum { display: flex; align-items: center; gap: 12px; }
+.mt-plan-sum .mt-ring { width: 52px; height: 52px; }
+.mt-plan-sum b { display: block; color: var(--text); font: 600 15px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
+.mt-plan-sum span { color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.mt-plan-sum em { font-style: normal; font-weight: 600; }
+.mt-plan-sum em.ok { color: var(--green); }
+.mt-plan-sum em.short { color: var(--yellow); }
+.mt-plan-tabs { margin-top: 2px; }
+.mt-goal-table td, .mt-shop td, .mt-recipe-table td { padding: 7px 10px; }
+.mt-goal-table tr[data-mt-op], .mt-shop tr[data-mt-op], .mt-recipe-table tr[data-mt-op] { cursor: pointer; }
+.mt-goal-table tr[data-mt-op]:hover, .mt-shop tr[data-mt-op]:hover, .mt-recipe-table tr[data-mt-op]:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.mt-goal-bar { width: 26%; min-width: 120px; white-space: nowrap; }
+.mt-goal-bar .mt-bar { width: calc(100% - 46px); }
+.mt-goal-bar small { display: inline-block; width: 40px; margin-left: 6px; color: var(--dim); font: 10.5px Consolas, monospace; text-align: right; }
+.mt-shop .mt-goal-bar small { width: auto; min-width: 54px; }
+.mt-table b.short { color: var(--yellow); }
+.mt-sub { display: block; margin-top: 1px; font-size: 10.5px; }
+
+/* RECIPES: a grouped module picker and grade grids. */
+.mt-picker { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.mt-picker-group { display: grid; grid-template-columns: 82px minmax(0, 1fr); align-items: start; gap: 8px; }
+.mt-picker-group > span { padding-top: 6px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.mt-picker-group > div { display: flex; flex-wrap: wrap; gap: 4px; }
+#materials-workspace .mt-pick { position: relative; padding: 4px 9px; border: 1px solid var(--border-soft); background: var(--inset); color: var(--muted);
+  font: 12px "Segoe UI", sans-serif; text-transform: none; letter-spacing: 0; }
+#materials-workspace .mt-pick:hover { color: var(--text); border-color: var(--border); }
+#materials-workspace .mt-pick.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--inset)); color: var(--text); }
+.mt-pick i { position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--yellow); }
+.mt-grid th, .mt-grid td { text-align: center; }
+.mt-grid .mt-grid-name { text-align: left; cursor: pointer; padding: 7px 10px; border-top: 1px solid var(--border-soft); font-weight: 400; }
+.mt-grid .mt-grid-name b { color: var(--text); font: 600 12.5px "Segoe UI", sans-serif; }
+.mt-grid .mt-grid-name .mt-tag { margin-left: 6px; }
+.mt-grid .mt-grid-name:hover b { color: var(--accent); }
+.mt-grid thead th:first-child { text-align: left; }
+.mt-cell { width: 54px; cursor: pointer; font: 700 12px Consolas, monospace; }
+.mt-cell.ok { color: var(--green); background: color-mix(in srgb, var(--green) 9%, transparent); }
+.mt-cell.part { color: var(--yellow); }
+.mt-cell.no { color: var(--dim); }
+.mt-cell.none { cursor: default; }
+.mt-cell:not(.none):hover { box-shadow: inset 0 0 0 1px var(--accent); }
+.mt-cell.picked { box-shadow: inset 0 0 0 2px var(--accent); }
+.mt-grid-eng { text-align: left !important; font-size: 11.5px; white-space: nowrap; }
+.mt-grid-act { width: 1%; white-space: nowrap; text-align: right !important; }
+.mt-grid-group td { padding: 8px 10px 4px; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; text-align: left !important; }
+
+.mt-pick { cursor: pointer; user-select: none; }
+.mt-pick:focus-visible { outline: 1px solid var(--accent); }
+.mt-insp-actions .mt-link { font: 12px "Segoe UI", sans-serif; }
+.mt-cover-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.mt-cover-list li { display: grid; grid-template-columns: minmax(0, 1fr) 90px 36px; align-items: center; gap: 8px; padding: 5px 8px; border-left: 2px solid var(--border); background: var(--inset); cursor: pointer; }
+.mt-cover-list li.ok { border-left-color: var(--green); }
+.mt-cover-list li:hover { background: color-mix(in srgb, var(--accent) 8%, var(--inset)); }
+.mt-cover-list b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.mt-cover-list small { color: var(--dim); font: 10.5px Consolas, monospace; text-align: right; }
+.mt-cell.pending { color: var(--dim); }

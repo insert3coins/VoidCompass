@@ -296,6 +296,8 @@ PROFILE_TEXT_SETTINGS = (
     "stream_chat_channel",
     "stream_chat_where",
     "stream_chat_blocked",
+    # 5.8.4: the Materials page (Settings › Flight & exploration › Materials).
+    "materials_locker_sort",
     "stream_chat_style",
     "stream_chat_card",
     "stream_chat_accent",
@@ -396,8 +398,6 @@ PROFILE_BOOL_SETTINGS = (
     "orders_kind_trade",
     "orders_kind_colonisation",
     "orders_kind_powerplay",
-    "overlay_hide_on_maps",
-    "overlay_hide_in_menus",
     "overlay_hide_when_game_closed",
     "overlay_transparency_fix",
     # The old (windowed) overlay windows, for a PC where visual hosting
@@ -464,6 +464,9 @@ PROFILE_BOOL_SETTINGS = (
     "stream_chat_voice",
     "stream_chat_welcomes",
     "stream_chat_naming",
+    "materials_wanted_toast",
+    "materials_ready_toast",
+    "materials_hide_unused",
     "stream_chat_hint",
     "stream_chat_show_chat",
     "expedition_overlay_enabled",
@@ -588,6 +591,7 @@ PROFILE_VALUE_SETTINGS = (
     "station_info_timeout_semantics_version",
     "survey_codex_flags_version",
     "overlay_hide_when_game_closed_version",
+    "overlay_visibility_version",
     "survey_status_hud_x",
     "survey_status_hud_y",
     "survey_spotlight_threshold",
@@ -609,6 +613,7 @@ PROFILE_VALUE_SETTINGS = (
     "stream_chat_hud_y",
     "stream_chat_cooldown_s",
     "stream_chat_game_gap_min",
+    "materials_roll",
     "stream_chat_height",
     "stream_chat_text_scale_percent",
     "orders_hud_y",
@@ -714,7 +719,7 @@ PROFILE_VALUE_SETTINGS = (
     "overlay_text_scale_percent",
     "overlay_frame_rate",
     "overlay_map_keep_visible",
-    "overlay_menu_keep_visible",
+    "overlay_menu_hide",
     # 5.8.1: overlay groups and which are on.
     "overlay_groups",
     "overlay_group_state",
@@ -970,6 +975,30 @@ def apply_profile_config(config, profile_key=None):
         profile["overlay_hide_when_game_closed"] = True
         profile["overlay_hide_when_game_closed_version"] = 1
     profile.setdefault("overlay_hide_when_game_closed", True)
+    # v5.8.4: Hide on maps and Hide in menus are each overlay's own choice, with
+    # no switch for all. Once, a profile's old all-overlays switches become the
+    # overlays' own choices, so nothing hides or shows differently.
+    try:
+        visibility_version = int(profile.get("overlay_visibility_version") or 0)
+    except (TypeError, ValueError):
+        visibility_version = 0
+    if visibility_version < 1:
+        from voidcompass.core.overlay_registry import OVERLAY_SPECS
+        every = sorted(spec.attr for spec in OVERLAY_SPECS)
+
+        def old(key, default):
+            value = profile.get(key, config.get(key, default))
+            return default if value is None else bool(value)
+
+        if not old("overlay_hide_on_maps", True):
+            profile["overlay_map_keep_visible"] = every
+        keep = profile.get("overlay_menu_keep_visible", config.get("overlay_menu_keep_visible", ["colony_needs_hud"]))
+        keep = set(keep) if isinstance(keep, (list, tuple, set)) else set()
+        profile["overlay_menu_hide"] = [attr for attr in every if attr not in keep] if old("overlay_hide_in_menus", False) else []
+        profile["overlay_visibility_version"] = 1
+    for retired in ("overlay_hide_on_maps", "overlay_hide_in_menus", "overlay_menu_keep_visible"):
+        profile.pop(retired, None)
+        config.pop(retired, None)
     # Replace the implicit "0 means persistent" control with an explicit switch.
     # Existing positive timeouts remain enabled; persistent profiles remain
     # persistent and receive a useful delay ready for the switch to be turned on.
@@ -1137,6 +1166,7 @@ def apply_profile_config(config, profile_key=None):
         "stream_chat_channel": "",
         "stream_chat_where": "region",
         "stream_chat_blocked": "",
+        "materials_locker_sort": "name",
         "stream_chat_style": "neon",
         "stream_chat_card": "synthwave",
         "stream_chat_accent": "#FF2BD6",
@@ -1211,6 +1241,7 @@ def apply_profile_config(config, profile_key=None):
         "orders_enabled": True, "orders_campaigns": True, "orders_watcher": True,
         "stream_chat_enabled": False, "stream_chat_voice": True, "stream_chat_welcomes": True,
         "stream_chat_naming": True, "stream_chat_hint": True, "stream_chat_show_chat": True,
+        "materials_wanted_toast": True, "materials_ready_toast": True, "materials_hide_unused": False,
         "orders_copy_target": True, "orders_open_map": False,
         "crew_banter_flight": True, "crew_banter_exploring": True, "crew_banter_port": True, "crew_banter_crew": True,
         "crew_banter_quiet": True,
@@ -1220,8 +1251,6 @@ def apply_profile_config(config, profile_key=None):
         "watcher_listen_enabled": False,
         "watcher_ship_enabled": True,
         "controller_hotkeys_enabled": True,
-        "overlay_hide_on_maps": True,
-        "overlay_hide_in_menus": False,
         "overlay_hide_when_game_closed": True,
         "edsm_upload_enabled": False,
         "inara_upload_enabled": False,
@@ -1338,8 +1367,8 @@ def apply_profile_config(config, profile_key=None):
                 "overlay_map_keep_visible": [],
                 "overlay_groups": [],
                 "overlay_group_state": {},
-                # Construction Needs is made for station services (5.7.1).
-                "overlay_menu_keep_visible": ["colony_needs_hud"],
+                # Overlays that hide while a menu is open: each overlay's own choice (5.8.4).
+                "overlay_menu_hide": [],
                 # Overlays with their own opacity (Studio id: percent).
                 "overlay_opacity_by_overlay": {},
                 "overlay_controller_bindings": {},
@@ -1415,6 +1444,7 @@ def apply_profile_config(config, profile_key=None):
                 "stream_chat_hud_y": 300,
                 "stream_chat_cooldown_s": 20,
                 "stream_chat_game_gap_min": 3,
+                "materials_roll": 100,
                 "stream_chat_height": 480,
                 "expedition_text_scale_percent": 0,
                 "rig_tracker_text_scale_percent": 0,
@@ -1560,6 +1590,7 @@ def load_config():
         'stream_chat_channel': '',
         'stream_chat_where': 'region',
         'stream_chat_blocked': '',
+        'materials_locker_sort': 'name',
         'stream_chat_style': 'neon',
         'stream_chat_card': 'synthwave',
         'stream_chat_accent': '#FF2BD6',
@@ -1645,6 +1676,7 @@ def load_config():
         'survey_species_lists': True,
         'survey_codex_flags_version': 1,
         'overlay_hide_when_game_closed_version': 1,
+        'overlay_visibility_version': 1,
         'raven_sync_enabled': True,
         'bgs_online_enabled': True,
         'trading_online_enabled': True,
@@ -1685,6 +1717,7 @@ def load_config():
         'stream_chat_hud_y': 300,
         'stream_chat_cooldown_s': 20,
         'stream_chat_game_gap_min': 3,
+        'materials_roll': 100,
         'stream_chat_height': 480,
         'orders_hud_y': 640,
         'expedition_hud_x': 40,
@@ -1816,6 +1849,9 @@ def load_config():
         'stream_chat_voice': True,
         'stream_chat_welcomes': True,
         'stream_chat_naming': True,
+        'materials_wanted_toast': True,
+        'materials_ready_toast': True,
+        'materials_hide_unused': False,
         'stream_chat_hint': True,
         'stream_chat_show_chat': True,
         'mining_recap': True,
@@ -2029,8 +2065,6 @@ def load_config():
         'ui_text_scale_percent': 100,
         'ui_text_min_px': 0,
         'overlay_text_scale_percent': 100,
-        'overlay_hide_on_maps': True,
-        'overlay_hide_in_menus': False,
         'overlay_hide_when_game_closed': True,
         'overlay_frame_rate': 30,
         'overlay_transparency_fix': False,
@@ -2038,7 +2072,7 @@ def load_config():
         'overlay_map_keep_visible': [],
         'overlay_groups': [],
         'overlay_group_state': {},
-        'overlay_menu_keep_visible': ['colony_needs_hud'],
+        'overlay_menu_hide': [],
         'overlay_opacity_by_overlay': {},
         # Controller buttons as shortcuts (5.7.3): on, none bound yet.
         'overlay_controller_bindings': {},

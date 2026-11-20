@@ -264,7 +264,7 @@ class HtmlOverlayStudioMixin:
                 **({"thought": thought} if thought else {}),
                 "enabled": enabled,
                 "hide_on_maps": attr not in self._map_keep_visible(),
-                "hide_in_menus": attr not in self._menu_keep_visible(),
+                "hide_in_menus": attr in self._menu_hidden(),
                 "own_opacity": self._own_opacities().get(attr, 0),
                 "own_text": text_size_choice(self.config.get(TEXT_SIZE_KEYS.get(attr, ""))),
                 "shown": shown,
@@ -358,8 +358,6 @@ class HtmlOverlayStudioMixin:
                 **{f"hud_page_{page}": page in hud_pages.pages_options(self.config)["enabled"] for page in hud_pages.PAGES[1:]},
                 "overlay_text_scale_percent": _integer(self.config.get("overlay_text_scale_percent"), 100),
                 "overlay_frame_rate": overlay_frame_rate(self.config),
-                "overlay_hide_on_maps": bool(self.config.get("overlay_hide_on_maps", True)),
-                "overlay_hide_in_menus": bool(self.config.get("overlay_hide_in_menus", False)),
                 "overlay_hide_when_game_closed": bool(self.config.get("overlay_hide_when_game_closed", True)),
                 # The page redraws every switch from these (5.5.3.4: the Dark
                 # box fix's switch went back to off without it).
@@ -603,18 +601,16 @@ class HtmlOverlayStudioMixin:
     MENU_MUSIC = frozenset({"MainMenu", "CQCMenu", "FleetCarrier_Managment", "FleetCarrier_Management",
                             "GalacticPowers", "Squadrons", "Codex"})
     MAP_MUSIC = frozenset({"GalaxyMap", "SystemMap"})
-    # Construction Needs is made for station services and the right panel.
-    MENU_KEEP_DEFAULT = ("colony_needs_hud",)
 
     def _map_keep_visible(self):
         """Overlays (Studio ids) that stay on screen with a map open."""
         keep = self.config.get("overlay_map_keep_visible")
         return {str(item) for item in keep} if isinstance(keep, (list, tuple, set)) else set()
 
-    def _menu_keep_visible(self):
-        """Overlays (Studio ids) that stay on screen in the menus."""
-        keep = self.config.get("overlay_menu_keep_visible", list(self.MENU_KEEP_DEFAULT))
-        return {str(item) for item in keep} if isinstance(keep, (list, tuple, set)) else set()
+    def _menu_hidden(self):
+        """Overlays (Studio ids) that hide while a menu is open: each overlay's own choice (5.8.4)."""
+        hide = self.config.get("overlay_menu_hide")
+        return {str(item) for item in hide} if isinstance(hide, (list, tuple, set)) else set()
 
     def _in_game_menu(self):
         return (getattr(self, "current_gui_focus", -1) in self._MENU_GUI_FOCUS
@@ -628,27 +624,24 @@ class HtmlOverlayStudioMixin:
         map_music = track in self.MAP_MUSIC
         if map_music != bool(getattr(self, "_map_music", False)) and track is not None:
             self._map_music = map_music
-            if bool(self.config.get("overlay_hide_on_maps", True)):
-                self._apply_map_overlay_hiding()
+            self._apply_map_overlay_hiding()
         menu = track if track in self.MENU_MUSIC else ""
         if menu == getattr(self, "_menu_music", ""):
             return
         self._menu_music = menu
-        if bool(self.config.get("overlay_hide_in_menus", False)) or bool(self.config.get("overlay_hide_when_game_closed", True)):
-            self._apply_map_overlay_hiding()
+        self._apply_map_overlay_hiding()
 
     def _apply_map_overlay_hiding(self):
-        """While a map (or, when chosen, a menu) is open, hide the overlays
-        the commander wants hidden: all of them, less any that opted out in
-        Overlay Studio."""
+        """While a map or a menu is open, hide the overlays that chose to hide
+        there (each overlay's own Hide on maps / Hide in menus in Overlay Studio)."""
         focus = getattr(self, "current_gui_focus", -1)
         hidden = set()
-        if bool(self.config.get("overlay_hide_on_maps", True)) and (focus in self._MAP_GUI_FOCUS or getattr(self, "_map_music", False)):
+        if focus in self._MAP_GUI_FOCUS or getattr(self, "_map_music", False):
             keep = self._map_keep_visible()
             hidden = {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in keep}
-        if bool(self.config.get("overlay_hide_in_menus", False)) and self._in_game_menu():
-            keep = self._menu_keep_visible()
-            hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in keep}
+        if self._in_game_menu():
+            menu = self._menu_hidden()
+            hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr in menu}
         if bool(self.config.get("overlay_hide_when_game_closed", True)):
             if getattr(self, "_game_process_running", None) is False:
                 hidden |= {spec.overlay_id for spec in OVERLAY_SPEC_BY_ATTR.values()}
@@ -762,12 +755,26 @@ class HtmlOverlayStudioMixin:
         """Overlay Studio inspector: whether one overlay hides in the menus."""
         if overlay_id not in OVERLAY_SPEC_BY_ATTR:
             return False
-        keep = self._menu_keep_visible()
+        menu = self._menu_hidden()
         if hide:
-            keep.discard(overlay_id)
+            menu.add(overlay_id)
         else:
-            keep.add(overlay_id)
-        self.config["overlay_menu_keep_visible"] = sorted(keep)
+            menu.discard(overlay_id)
+        self.config["overlay_menu_hide"] = sorted(menu)
+        self._persist_config()
+        self._apply_map_overlay_hiding()
+        self._schedule_html_dashboard_publish(immediate=True)
+        return True
+
+    def _set_every_overlay_hiding(self, where, hide):
+        """VISIBILITY's HIDE ALL / SHOW ALL: set every overlay's own map or menu choice at once."""
+        ids = sorted(OVERLAY_SPEC_BY_ATTR)
+        if where == "maps":
+            self.config["overlay_map_keep_visible"] = [] if hide else ids
+        elif where == "menus":
+            self.config["overlay_menu_hide"] = ids if hide else []
+        else:
+            return False
         self._persist_config()
         self._apply_map_overlay_hiding()
         self._schedule_html_dashboard_publish(immediate=True)
@@ -797,7 +804,7 @@ class HtmlOverlayStudioMixin:
             "rig_tracker_show_holds", "rig_tracker_guide", "rig_tracker_deposit", "stream_chat_hint", "stream_chat_show_chat",
             "hud_pages_takeover", "hud_hold_lists", "hud_page_expedition", "hud_page_jump", "hud_page_survey", "hud_page_planet", "hud_page_rhino", "hud_page_mining", "hud_page_combat", "hud_page_station", "hud_page_colony", "hud_page_carrier", "hud_page_trade", "hud_page_powerplay",
             "music_player_show_art", "music_player_show_details", "music_player_show_next",
-            "overlay_hide_on_maps", "overlay_hide_in_menus", "overlay_hide_when_game_closed", "overlay_transparency_fix", "overlay_classic_windows",
+            "overlay_hide_when_game_closed", "overlay_transparency_fix", "overlay_classic_windows",
             "colony_show_carriers", "colony_carrier_delta", "colony_collapse_covered",
             "colony_highlight_almost", "colony_show_on_right_panel",
             "colony_inline_carriers", "colony_hide_other_overlays",
@@ -814,7 +821,7 @@ class HtmlOverlayStudioMixin:
         self._persist_config()
         if key == "overlay_mouse_passthrough":
             self._apply_overlay_mouse_passthrough()
-        elif key in {"overlay_hide_on_maps", "overlay_hide_in_menus", "overlay_hide_when_game_closed"}:
+        elif key == "overlay_hide_when_game_closed":
             self._apply_map_overlay_hiding()
         elif key == "overlay_transparency_fix":
             HtmlOverlayServer.set_shape_windows(bool(self.config[key]))
@@ -1179,6 +1186,8 @@ class HtmlOverlayStudioMixin:
             return self._set_overlay_map_hiding(overlay_id, bool(payload.get("hide")))
         if operation == "menu_hiding":
             return self._set_overlay_menu_hiding(overlay_id, bool(payload.get("hide")))
+        if operation == "every_hiding":
+            return self._set_every_overlay_hiding(str(payload.get("where") or ""), bool(payload.get("hide")))
         if operation == "own_opacity":
             return self._set_overlay_own_opacity(overlay_id, payload.get("value"))
         if operation == "own_text":

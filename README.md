@@ -1,6 +1,6 @@
 # Void Compass
 
-**Current version: 5.8.3**
+**Current version: 5.8.4**
 
 Void Compass is a companion app for *Elite Dangerous*. It reads the journal and status files the game already writes, and turns them into a command deck on your desktop and a set of overlays in your cockpit. Everything runs and stays on your own PC: there's no account and no cloud service.
 
@@ -50,8 +50,6 @@ The command deck has a tab for each part of the game:
 - **The Watcher**: an eye that watches your journal and thinks out loud beside it, about what you're doing, where you've been and its own long story. It remembers you between sessions and, once you know each other, asks whether it may use your name. Its thoughts and story come from written lines, spoken by its optional Piper voice. The TALK tab takes typed or spoken commands and answers questions from your ship's systems. Whisper hears push-to-talk speech on this PC; the uplink can look up commodity prices through Spansh.
 
 Any page except the Dashboard can pop out into a window of its own for a second monitor (**⧉ POP OUT** beside its title), without the main deck's header or status bars.
-
-An AI client you already use (Claude Code, the Claude desktop app or any MCP client) can read your game through the Local API with the read-only MCP server in `tools/mcp`. See the [Local API docs](api.md#mcp-server).
 
 Everything else is quiet on purpose: it shows up on the deck, in notifications and on the overlays.
 
@@ -118,9 +116,7 @@ python -m pip install -e .
 python VoidCompass.py
 ```
 
-The code lives in `src/voidcompass`, grouped by area: `core`, `dashboard`, `overlays`, `exploration`, `engineering`, `mining`, `powerplay`, `colonisation`, `bgs` and `services`. The deck and overlay pages are in `web`, reference data in `data`, tests in `tests` and build scripts in `tools`.
-
-To build a release, run `python tools/build.py`. It creates the app in `dist` and the zip in `release`.
+The code lives in `src/voidcompass`, grouped by area: `core`, `dashboard`, `overlays`, `exploration`, `engineering`, `mining`, `powerplay`, `colonisation`, `bgs` and `services`. The deck and overlay pages are in `web` and reference data in `data`.
 
 To diagnose the Watcher renderer, close the app and set `"watcher_renderer_logging": true` in the root `config.json` beside the executable (or in the source run's folder). On the next launch, `logs/watcher_renderer.log` records whether the boot eye uses Three.js or the canvas fallback. It also records the dashboard Watcher and Heartbeat overlay once each when they have drawn. A fallback report says whether the Three.js module failed to load or the renderer could not start. Set it back to `false` to turn this diagnostic off; the setting is off by default.
 

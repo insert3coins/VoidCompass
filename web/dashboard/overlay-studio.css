@@ -13,6 +13,11 @@
 .studio-visibility-controls .studio-switch b { font-size: 12px; }
 .studio-visibility-controls .studio-switch small { display: block; white-space: normal; line-height: 1.4; margin-top: 4px; }
 .studio-visibility-controls .studio-switch small[hidden] { display: none; }
+.studio-every { display: grid; gap: 8px; align-content: space-between; padding: 10px; border: 1px solid var(--border-soft); background: var(--panel-alt); min-width: 0; }
+.studio-every b { color: var(--text); font-size: 12px; }
+.studio-every small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.studio-every-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-every-buttons button { padding: 4px 10px; font: 700 9.5px Consolas, monospace; letter-spacing: .08em; }
 #studio-visibility-detail { margin: 0; padding: 0 16px 12px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 @media (max-width: 1250px) { .studio-visibility-controls { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 740px) { .studio-visibility-controls { grid-template-columns: 1fr; } }
