@@ -131,7 +131,7 @@ RELAY = {
             "relay_done": ("{officer} says {title} is done. Lovely.", "Word from {officer}: {title}, finished.",
                            "{title}: complete. {officer} is very pleased.", "{officer}'s order is done. {title}.",
                            "Done. {title}, says {officer}."),
-            "relay_news": ("{officer} has news on {title}.", "Update from {officer}: {title}.", "Passing it on: {officer} on {title}.",
+            "relay_news": ("{officer} has news on {title}.", "A word from {officer} about {title}.", "Passing it on: {officer} on {title}.",
                            "{title}: progress, says {officer}.", "{officer} has an update. {title}."),
         },
     },

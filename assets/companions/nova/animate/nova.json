@@ -1,0 +1,146 @@
+{
+ "name": "Nova",
+ "size": 256,
+ "clips": {
+  "idle": {
+   "frames": 96,
+   "cols": 8,
+   "playback": "loop",
+   "fps": 15
+  },
+  "listening": {
+   "frames": 24,
+   "cols": 8,
+   "playback": "loop",
+   "fps": 15
+  },
+  "working": {
+   "frames": 24,
+   "cols": 8,
+   "playback": "loop",
+   "fps": 15
+  },
+  "charging": {
+   "frames": 24,
+   "cols": 8,
+   "playback": "loop",
+   "fps": 24
+  },
+  "alert": {
+   "frames": 24,
+   "cols": 8,
+   "playback": "loop",
+   "fps": 24
+  },
+  "warm-smile": {
+   "frames": 16,
+   "cols": 8,
+   "playback": "once",
+   "fps": 15
+  },
+  "curious": {
+   "frames": 16,
+   "cols": 8,
+   "playback": "once",
+   "fps": 15
+  },
+  "thinking": {
+   "frames": 16,
+   "cols": 8,
+   "playback": "once",
+   "fps": 15
+  },
+  "delighted": {
+   "frames": 20,
+   "cols": 8,
+   "playback": "once",
+   "fps": 15
+  },
+  "reassuring": {
+   "frames": 16,
+   "cols": 8,
+   "playback": "once",
+   "fps": 15
+  },
+  "surprised": {
+   "frames": 16,
+   "cols": 8,
+   "playback": "once",
+   "fps": 24
+  },
+  "blink": {
+   "frames": 11,
+   "cols": 8,
+   "playback": "once",
+   "fps": 24
+  },
+  "mouth-levels": {
+   "frames": 9,
+   "cols": 8,
+   "playback": "level",
+   "fps": 0,
+   "levels": [
+    0.0,
+    0.125,
+    0.25,
+    0.375,
+    0.5,
+    0.625,
+    0.75,
+    0.875,
+    1.0
+   ]
+  },
+  "idle-settled": {
+   "frames": 90,
+   "cols": 8,
+   "playback": "loop",
+   "fps": 15
+  },
+  "goodnight": {
+   "frames": 54,
+   "cols": 8,
+   "playback": "once",
+   "fps": 18
+  },
+  "downcast": {
+   "frames": 32,
+   "cols": 8,
+   "playback": "once",
+   "fps": 16
+  },
+  "wary": {
+   "frames": 32,
+   "cols": 8,
+   "playback": "once",
+   "fps": 16
+  },
+  "glance-left": {
+   "frames": 24,
+   "cols": 8,
+   "playback": "once",
+   "fps": 24
+  },
+  "glance-right": {
+   "frames": 24,
+   "cols": 8,
+   "playback": "once",
+   "fps": 24
+  }
+ },
+ "layer": {
+  "frames": 11,
+  "cols": 4,
+  "fps": 30,
+  "skip": [
+   0,
+   10
+  ],
+  "rect": [
+   0.251953125,
+   0.5,
+   0.5703125,
+   0.140625
+  ]
+ }
+}

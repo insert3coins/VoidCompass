@@ -30,12 +30,14 @@ A source checkout with those files present only fetches the shared Piper engine;
 Nova isn't built from 3D geometry like the others. She is an illustrated face projected inside the same instrument housing, from sprite sheets in `web/assets/nova/` (made from the frames in `assets/companions/nova` by `tools/make_nova_frames.py`).
 
 - **Her bezel** is pearl-silver, with a lit ring at each side like the rings at her temples and a four-point star at the top.
-- **States**: idle, listening, working, charging and alert each have their own loop. Going to alert, she looks surprised first.
+- **States**: on watch she breathes, shifts and blinks; after a quiet spell (about 45 seconds) she settles into a slower resting loop. Listening, working, charging and alert each have their own loop. Going to alert she looks surprised first, and reassuring when it ends.
 - **Speaking**: her mouth follows the playback level of her own voice, through nine mouth positions, closing in the pauses, with a blink over her eyes now and then. Microphone input and queued text never move it.
-- **Moods**: a pleased thought brings a warm smile (or delight), curious a curious look, wary a thoughtful one and downcast a reassuring one. Each plays once, then she returns to rest.
+- **Moods**: a pleased thought brings a warm smile (or delight) and a curious one a curious look, each played once. Wary and downcast hold their pose while the mood lasts, then let it go.
+- **Glances**: when something happens on one side of the screen (an overlay or event the crew attention follows), she glances that way and holds the look while it has her attention. Directions are as you see them.
+- **Goodnight**: once she has said her sign-off, she closes her eyes and sleeps until something new happens.
 - **Projection**: faint scan lines, a slow band of light in her colours, and, rarely, a flicker.
 
-Fixed focus keeps her still in the frame. Idle animation Off parks the loop. Reduced motion holds a still face (a mood's peak while it lasts) and closes her mouth. Hidden displays stop rendering.
+Fixed focus keeps her still in the frame and stops the glances. Idle animation Off parks the loop. Reduced motion holds a still face (a mood's peak while it lasts) and closes her mouth. Hidden displays stop rendering.
 
 ## Appearance
 
@@ -53,4 +55,4 @@ Nova has the same capabilities as the other officers: `thought`, `poke`, `answer
 
 ## Resources and packaging
 
-Her sheets total about 4 MB and are served from the deck's own assets (with CORS for sandboxed pages, like the renderer modules). Her model files must be pushed to the project's GitHub under `models/nova/` for other installs to download them.
+Her sheets total about 9.4 MB and are served from the deck's own assets (with CORS for sandboxed pages, like the renderer modules). Her model files must be pushed to the project's GitHub under `models/nova/` for other installs to download them.

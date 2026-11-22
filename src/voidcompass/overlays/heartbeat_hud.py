@@ -600,6 +600,8 @@ class HeartbeatHUD:
                 'voice_state': voice_state,
                 'mood': thought.get('mood') or '', 'side': self.thought_side(),
                 'kind': thought.get('kind') or '', 'heading': thought.get('heading') or '',
+                # 5.8.6: what it's about (Nova closes her eyes on a sign-off).
+                'topic': thought.get('topic') or '',
                 'style': watcher_mind.thought_style(self.config),
                 # 5.6.1: a question to answer (the answer hotkeys, 1 to 3), and
                 # a story moment the eye shows once.

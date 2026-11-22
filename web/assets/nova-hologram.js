@@ -5,15 +5,21 @@ import * as THREE from "../galactic_map/vendor/three.module.min.js";
 // tools/make_nova_frames.py); this layer picks the frame and the crew renderer
 // draws it, on its own clock: no loop or timer of its own.
 //
-// - Idle, listening, working, charging and alert each have their own loop.
+// - On watch she idles (idle); after a quiet spell she settles (idle-settled).
+//   Listening, working, charging and alert each have their own loop.
 // - Speaking shows the mouth frame for the real playback level (never the
 //   microphone or queued text), with the blink layer laid over the eyes now and then.
-// - A mood plays its expression once: pleased a warm smile (or delight),
-//   curious, wary thinking, downcast reassuring; going to alert, surprise first.
+// - A mood plays its expression: pleased a warm smile (or delight), curious a
+//   curious look; wary and downcast hold their pose while the mood lasts, then
+//   let it go. Going to alert, surprise first; out of it, reassurance.
+// - Something happening on one side of the screen: she glances that way and
+//   holds the look while it has her attention.
+// - A sign-off, once said: goodnight, eyes closed until something new.
 // - A faint projection: scan lines, a slow light band and, rarely, a flicker.
-// Reduced motion holds a still face (a mood's peak frame while it lasts).
+// Reduced motion holds a still face (an expression's held or middle frame).
 const BASE = {idle: "idle", listening: "listening", working: "working", charging: "charging", alert: "alert"};
-const MOOD_CLIPS = {joy: ["warm-smile", "delighted"], curious: ["curious"], worry: ["thinking"], sad: ["reassuring"]};
+const MOOD_CLIPS = {joy: ["warm-smile", "delighted"], curious: ["curious"], worry: ["wary"], sad: ["downcast"]};
+const SETTLE_S = 45;
 const EAGER = ["idle", "mouth-levels"];
 const SIZE = 1.96;
 
@@ -87,8 +93,9 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
   plane.name = "nova-hologram"; plane.renderOrder = 1; plane.position.z = .1;
   parent.add(plane);
 
-  let clip = "idle", frame = 0, clock = 0, once = null, onceClock = 0, onceFrame = 0, lastMood = "", lastState = "idle";
+  let clip = "idle", frame = 0, clock = 0, once = null, lastMood = "", lastState = "idle", lastThought = null;
   let joyTurn = 0, blinkAt = 3.2, blinkClock = -1, glitchAt = 18, glitch = 0, shown = "", show = 0, busy = false;
+  let quiet = 0, night = "", live = {pose: {}};   // night: "" awake, "due" after a sign-off, "asleep" eyes closed
 
   function setFrame(uniform, row, index, cols) {
     const rows = Math.ceil(row.frames / cols);
@@ -103,40 +110,75 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
     return best;
   }
 
+  // An expression to play: held at its pose while keep() says so, then released.
+  function play(name, keep = () => false) {
+    once = {name, clock: 0, keep, hold: info.clips[name]?.hold ?? null};
+  }
+
+  // The frame an expression is on, or null once it has finished.
+  function playing(dt, speed, reduced) {
+    const row = info.clips[once.name];
+    const held = once.hold !== null && once.keep();
+    if (reduced) return held ? once.hold : once.keep() ? Math.floor(row.frames / 2) : null;
+    const at = Math.floor(once.clock * (row.fps || 15));
+    if (held && at >= once.hold) { once.clock = once.hold / (row.fps || 15); return once.hold; }
+    once.clock += dt * speed;
+    const next = Math.floor(once.clock * (row.fps || 15));
+    return next >= row.frames ? null : next;
+  }
+
   return {
-    update({dt = 0, state = "idle", mouthOpen = 0, reduced = false, animated = true, expression = {}, activity = 1, pose = {}, focus = "tracking"}) {
+    update({dt = 0, state = "idle", mouthOpen = 0, reduced = false, animated = true, expression = {}, activity = 1, pose = {},
+            focus = "tracking", thought = null}) {
+      live.pose = pose;
       if (!info) { busy = !failed; return; }
       const speed = Math.sqrt(Math.max(.25, activity));
       const mood = moodOf(expression);
-      // A new mood plays its expression once; a new alert starts with surprise.
-      if (state === "alert" && lastState !== "alert") { once = "surprised"; onceClock = 0; }
-      else if (state !== "alert" && mood && mood !== lastMood && MOOD_CLIPS[mood]) {
-        const options = MOOD_CLIPS[mood];
-        once = options[(mood === "joy" ? joyTurn++ : 0) % options.length]; onceClock = 0;
-      }
-      lastMood = mood; lastState = state;
       const speaking = state === "speaking";
+      const fresh = thought && thought.id !== lastThought;
+      if (fresh) {
+        lastThought = thought.id;
+        if (night === "asleep" || night === "due") night = "";
+        if (/^sign_off/.test(String(thought.topic || ""))) night = "due";
+      }
+      if (state !== "idle" && !speaking && night === "asleep") night = "";
+      // What starts an expression.
+      // Surprise and reassurance play out before a new mood shows.
+      const steady = once && (once.name === "surprised" || once.name === "reassuring");
+      if (state === "alert" && lastState !== "alert") play("surprised");
+      else if (lastState === "alert" && state === "idle") play("reassuring");
+      else if (state !== "alert" && !steady && mood && mood !== lastMood && MOOD_CLIPS[mood]) {
+        const options = MOOD_CLIPS[mood];
+        play(options[(mood === "joy" ? joyTurn++ : 0) % options.length], () => moodOf(expression) === mood);
+      } else if (!once && !night && state === "idle" && !reduced && focus !== "off" && pose.attention > 0 && Math.abs(pose.x || 0) > .3) {
+        // Toward the side of the screen something happened on (the viewer's left or right).
+        play(pose.x > 0 ? "glance-right" : "glance-left", () => live.pose.attention > 0);
+      } else if (night === "due" && !speaking && !once) {
+        night = "asleep";
+        play("goodnight", () => night === "asleep");
+      }
+      if (!steady || state === "alert") lastMood = mood;
+      lastState = state;
+      // Settled after a quiet spell on watch.
+      quiet = state === "idle" && !once && !mood && !(pose.attention > 0) ? quiet + dt : 0;
       let name, index;
       if (speaking && ready("mouth-levels")) {
-        // Speech wins: the mouth follows the voice. A pending expression waits.
+        // Speech wins: the mouth follows the voice. An expression waits.
         const levels = info.clips["mouth-levels"].frames;
         name = "mouth-levels"; index = reduced ? 0 : Math.max(0, Math.min(levels - 1, Math.round(mouthOpen * (levels - 1))));
-      } else if (once && ready(once) && !reduced) {
-        const row = info.clips[once];
-        onceClock += dt * speed;
-        onceFrame = Math.floor(onceClock * (row.fps || 15));
-        if (onceFrame >= row.frames) { once = null; }
-        else { name = clip = once; index = onceFrame; }
-      } else if (once && reduced && ready(once)) {
-        // Still: the expression's peak while the mood lasts.
-        if (!mood && state !== "alert") once = null;
-        else { name = once; index = Math.floor(info.clips[once].frames / 2); }
+      } else if (once) {
+        if (!ready(once.name)) texture(once.name);
+        else {
+          const at = playing(dt, speed, reduced);
+          if (at === null) once = null;
+          else { name = clip = once.name; index = at; }
+        }
       }
-      if (once && !ready(once)) texture(once);
       if (!name) {
-        const want = BASE[state] || "idle";
+        const want = state === "idle" && quiet >= SETTLE_S && ready("idle-settled") ? "idle-settled" : BASE[state] || "idle";
         name = ready(want) ? want : "idle";
         if (!ready(want)) texture(want);
+        if (state === "idle") texture("idle-settled");
         const row = info.clips[name];
         if (name !== clip) { clip = name; clock = 0; }
         if (animated && !reduced) clock += dt * speed;
@@ -177,11 +219,13 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
       const tracking = !reduced && focus !== "off";
       plane.position.x = tracking ? (pose.x || 0) * .018 : 0;
       plane.position.y = tracking ? (pose.y || 0) * .014 : 0;
-      busy = Boolean(once) || blinkClock >= 0 || glitch > 0 || show < 1;
+      // A held pose waits on the mood or attention that holds it; asleep, nothing moves.
+      const sleeping = night === "asleep" && once?.name === "goodnight" && frame === once.hold;
+      busy = (Boolean(once) && !sleeping) || night === "due" || blinkClock >= 0 || glitch > 0 || show < 1;
     },
     get busy() { return busy; },
     inspect() {
-      return {design: "projected-android", clip: shown, frame, expressionClip: once, blinking: blinkClock >= 0,
+      return {design: "projected-android", clip: shown, frame, expressionClip: once?.name || null, blinking: blinkClock >= 0, night, quiet,
         glitch, loaded: [...sheets].filter(([, row]) => row.ready).map(([key]) => key), ready: Boolean(info), failed};
     },
     destroy() {

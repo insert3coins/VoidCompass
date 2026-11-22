@@ -3,7 +3,7 @@
  "size": 256,
  "clips": {
   "idle": {
-   "frames": 48,
+   "frames": 96,
    "cols": 8,
    "playback": "loop",
    "fps": 15
@@ -44,12 +44,6 @@
    "playback": "once",
    "fps": 15
   },
-  "thinking": {
-   "frames": 16,
-   "cols": 8,
-   "playback": "once",
-   "fps": 15
-  },
   "delighted": {
    "frames": 20,
    "cols": 8,
@@ -64,12 +58,6 @@
   },
   "surprised": {
    "frames": 16,
-   "cols": 8,
-   "playback": "once",
-   "fps": 24
-  },
-  "blink": {
-   "frames": 11,
    "cols": 8,
    "playback": "once",
    "fps": 24
@@ -90,6 +78,47 @@
     0.875,
     1.0
    ]
+  },
+  "idle-settled": {
+   "frames": 90,
+   "cols": 8,
+   "playback": "loop",
+   "fps": 15
+  },
+  "goodnight": {
+   "frames": 54,
+   "cols": 8,
+   "playback": "once",
+   "fps": 18,
+   "hold": 53
+  },
+  "downcast": {
+   "frames": 32,
+   "cols": 8,
+   "playback": "once",
+   "fps": 16,
+   "hold": 15
+  },
+  "wary": {
+   "frames": 32,
+   "cols": 8,
+   "playback": "once",
+   "fps": 16,
+   "hold": 16
+  },
+  "glance-left": {
+   "frames": 24,
+   "cols": 8,
+   "playback": "once",
+   "fps": 24,
+   "hold": 9
+  },
+  "glance-right": {
+   "frames": 24,
+   "cols": 8,
+   "playback": "once",
+   "fps": 24,
+   "hold": 9
   }
  },
  "layer": {

@@ -177,6 +177,8 @@ export function createCrewDisplay(canvas, identity) {
   // Every officer wears the mood of what it is saying, in its own way (5.7.6).
   const moods=createMood(),expression=moods.expression;
   // Moments in its own line of work: Meridian's heading needle, Axiom's lit facets.
+  // Nova closes her eyes on a sign-off: the thought on show, by id and topic.
+  let thought=null;
   let moment={},needleAngle=null,needleShow=0,needleTarget=0;
   let scanPhase=0,needleMoving=false,wakeAt=-1,lastJumps=null,tallyCount=0,tallyFresh=0,mapShow=0,otherMoving=false;
   function updateNeedle(dt){
@@ -281,7 +283,7 @@ export function createCrewDisplay(canvas, identity) {
       updateNeedle(dt);
     }
     updateOwn(dt);
-    portraitLayer?.update({clock:time,dt,state,activity,pose,mouthOpen,reduced,focus,animated:pose.active,expression,scan:moment.scan||null,bearing:needleAngle,bearingVisible:needleShow>0});
+    portraitLayer?.update({clock:time,dt,state,activity,pose,thought,mouthOpen,reduced,focus,animated:pose.active,expression,scan:moment.scan||null,bearing:needleAngle,bearingVisible:needleShow>0});
     halo?.update({clock:time,reduced,animated:pose.active});
     scanPhase+=dt*activity*(1+worry*1.6);
     scan.position.y=Math.sin(scanPhase*.95)*.67;
@@ -299,6 +301,8 @@ export function createCrewDisplay(canvas, identity) {
     },
     setContext(model){
       const moved=life.context(model),felt=moods.context(model);
+      const said=model?.thought?.id??null,saidChanged=said!==(thought?.id??null);
+      if(saidChanged)thought=said===null?null:{id:said,topic:String(model.thought.topic||"")};
       const next=model?.moment&&typeof model.moment==="object"?model.moment:{};
       // 5.7.7: service pips on the bezel, from your standing with this officer.
       const pips=Math.max(0,Math.min(4,Math.round(Number(next.service)||0)));
@@ -312,7 +316,7 @@ export function createCrewDisplay(canvas, identity) {
         moment=next;
         if(bodiesChanged)placeBodies();
       }
-      if(moved||felt||fresh)changed();
+      if(moved||felt||fresh||(saidChanged&&nova))changed();
     },
     setColour(value,highlight=signature.secondary){if(/^#[0-9a-f]{6}$/i.test(value)&&/^#[0-9a-f]{6}$/i.test(highlight)&&(accent!==value||secondary!==highlight)){accent=value;secondary=highlight;changed();}},
     setFocus(value){const next=["off","tracking","expressive"].includes(value)?value:"tracking";if(focus!==next){focus=next;changed();}},
