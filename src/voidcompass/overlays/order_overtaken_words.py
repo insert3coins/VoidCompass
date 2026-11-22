@@ -67,4 +67,17 @@ OVERTAKEN = {
                           "{title}: overtaken. Fuel's still good for the next one."),
         },
     },
+    "nova": {
+        "plain": {
+            "overtaken": ("Overtaken: {body} already mapped.", "{title}: target taken.", "{body} mapped by another commander.",
+                          "Order closed. Someone else got there first."),
+        },
+        "voiced": {
+            "overtaken": ("Someone mapped {body} before us. Well, they noticed it too. That's something.",
+                          "{body}'s already mapped. Another commander beat us to it. I hope they enjoyed the view.",
+                          "We were overtaken on {body}. I'll find us something fresher.",
+                          "Somebody got to {body} first. I'm not disappointed. Mostly.",
+                          "{title}: overtaken. There's plenty more out there."),
+        },
+    },
 }

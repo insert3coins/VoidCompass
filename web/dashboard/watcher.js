@@ -10,7 +10,7 @@ import {renderOrders} from "./orders.js";
 // (and its life) survives every refresh. While the page is hidden the canvas
 // has no size and the orb stops drawing.
 
-const COMPANION_ICONS = {watcher: "◉", aster: "⬡", axiom: "◌", meridian: "◇", lyra: "✧"};
+const COMPANION_ICONS = {watcher: "◉", aster: "⬡", axiom: "◌", meridian: "◇", lyra: "✧", nova: "✦"};
 const NATURES = {weary: "Depressed", curious: "Curious", stoic: "Stoic", nervous: "Nervous", officer: "Officer on watch"};
 const FREQUENCIES = {off: "Off", rare: "Rare", occasional: "Occasional", chatty: "Chatty"};
 const MOOD_LABELS = {pleased: "PLEASED", wary: "WARY", curious: "CURIOUS", downcast: "DOWNCAST"};
@@ -429,7 +429,7 @@ function renderLore(lore, ui) {
     ui.byId("watcher-books").replaceChildren();
     return;
   }
-  if (["aster", "axiom", "meridian", "lyra"].includes(lore.identity)) { renderCrewLore(lore, ui); return; }
+  if (["aster", "axiom", "meridian", "lyra", "nova"].includes(lore.identity)) { renderCrewLore(lore, ui); return; }
   const chapters = Array.isArray(lore.chapters) ? lore.chapters : [];
   const echoes = Array.isArray(lore.echoes) ? lore.echoes : [];
   const books = Array.isArray(lore.books) ? lore.books : [];
@@ -699,7 +699,7 @@ export function renderWatcher(data = {}, ui) {
   ui.byId("watcher-character").innerHTML = [
     identity !== "watcher" ? ["ROLE", COMPANIONS[identity]?.role || "Companion"] : ["NATURE", NATURES[data.nature] || data.nature || "—"],
     ["THOUGHTS", FREQUENCIES[data.frequency] || data.frequency || "—"],
-    [identity !== "watcher" ? "DISPLAY" : "EYE", identity === "axiom" ? "Precision android" : identity === "lyra" ? "3D robot" : identity === "meridian" ? "Navigator android" : identity === "aster" ? "Command android" : data.eye === "hal" ? "HAL red" : "Theme"],
+    [identity !== "watcher" ? "DISPLAY" : "EYE", identity === "axiom" ? "Precision android" : identity === "lyra" ? "3D robot" : identity === "nova" ? "Projected android" : identity === "meridian" ? "Navigator android" : identity === "aster" ? "Command android" : data.eye === "hal" ? "HAL red" : "Theme"],
     ["OVERLAY", data.enabled ? "ON" : "OFF"],
     ["VOICE", data.voice?.enabled && data.voice?.installed ? "ON" : "OFF"],
   ].map(([label, value]) => `<div><dt>${label}</dt><dd>${ui.escapeHtml(value)}</dd></div>`).join("");
@@ -898,7 +898,7 @@ const option = (value, label) => `<option value="${value}">${label}</option>`;
 const ROTA_DUTIES = [["docked", "Docked"], ["scanning", "Scanning (FSS or DSS)"], ["surface", "On a planet's surface"],
   ["route", "On a plotted route"], ["deep", "Deep space"], ["flight", "Ordinary flight"]];
 const ROTA_DEEP = [250, 500, 1000, 2000, 5000, 10000].map((ly) => [String(ly), `${ly.toLocaleString("en-GB")} ly`]);
-const ROTA_CREW = [["watcher", "The Watcher"], ["aster", "Aster"], ["axiom", "Axiom"], ["meridian", "Meridian"], ["lyra", "Lyra"], ["keep", "Whoever's on watch"]];
+const ROTA_CREW = [["watcher", "The Watcher"], ["aster", "Aster"], ["axiom", "Axiom"], ["meridian", "Meridian"], ["lyra", "Lyra"], ["nova", "Nova"], ["keep", "Whoever's on watch"]];
 // 5.7.7: crew banter, the crew talking to each other: how often, how many, and when.
 const BANTER_GROUPS = [
   ["flight", "In flight", "Fuel, a full scoop, long jump runs, heat, a narrow escape, launch, distance records, black holes and neutron stars."],
@@ -1147,7 +1147,7 @@ function renderName(name, ui) {
   const told = Array.isArray(name.told) ? name.told.length : 0;
   let note = "It hasn't read your name yet. It will the next time you load the game.";
   if (known) {
-    note = activeCompanion === "aster" ? `Aster has read ${known} in the crew register.` : activeCompanion === "axiom" ? `Axiom has read ${known} in the journal and filed it carefully.` : activeCompanion === "meridian" ? `Meridian has read ${known} in the ship’s log.` : activeCompanion === "lyra" ? `Lyra has read ${known} in the ship’s registry.` : `The ship writes ${known} every time you wake it.`;
+    note = activeCompanion === "aster" ? `Aster has read ${known} in the crew register.` : activeCompanion === "axiom" ? `Axiom has read ${known} in the journal and filed it carefully.` : activeCompanion === "meridian" ? `Meridian has read ${known} in the ship’s log.` : activeCompanion === "lyra" ? `Lyra has read ${known} in the ship’s registry.` : activeCompanion === "nova" ? `Nova has read ${known} in your user profile.` : `The ship writes ${known} every time you wake it.`;
     if (!name.call) note += told ? " It has noticed, and will ask you about it. Or choose here." : " Choose what it calls you here, or wait for it to ask.";
     else if (call === "name") note += officer ? " Your name is its regular form of address." : " It may use it now and then, never more than once a session.";
     else if (call === "nickname") note += nickname
@@ -1269,7 +1269,7 @@ function renderVoice(voice, ui) {
 
   const findingPanel = ui.byId("watcher-finding-stage")?.closest("section");
   if (findingPanel) findingPanel.hidden = voice.identity !== "watcher";
-  if (["aster", "axiom", "meridian", "lyra"].includes(voice.identity)) {
+  if (["aster", "axiom", "meridian", "lyra", "nova"].includes(voice.identity)) {
     const name = COMPANIONS[voice.identity].name;
     ui.byId("watcher-voice-orb").textContent = voice.orb_on ? `${name} speaks complete reports from the start. Its story unfolds separately over active service. Set up your microphone and recognition in Settings › Voice.` : `Enable the companion overlay in Overlay Studio to receive ${name}’s replies. TEST THE VOICE works here either way.`;
   }

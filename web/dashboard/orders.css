@@ -3,7 +3,7 @@
    for its markers: the edge of a card, its glyph, its stage dot. */
 
 #orders-workspace {
-  --ord-watcher: #e0574f; --ord-aster: #d9a441; --ord-axiom: #8f9bff; --ord-meridian: #3fbf8f; --ord-lyra: #74ddff;
+  --ord-watcher: #e0574f; --ord-aster: #d9a441; --ord-axiom: #8f9bff; --ord-meridian: #3fbf8f; --ord-lyra: #74ddff; --ord-nova: #e3b0ff;
   container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0;
 }
 #orders-workspace .ord-watcher { --ord: var(--ord-watcher); }
@@ -11,6 +11,7 @@
 #orders-workspace .ord-axiom { --ord: var(--ord-axiom); }
 #orders-workspace .ord-meridian { --ord: var(--ord-meridian); }
 #orders-workspace .ord-lyra { --ord: var(--ord-lyra); }
+#orders-workspace .ord-nova { --ord: var(--ord-nova); }
 #orders-workspace button { cursor: pointer; }
 #orders-workspace button.cockpit-button { min-height: 30px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .12em; }
 #orders-workspace button.cockpit-button.primary { border-color: var(--accent); color: var(--accent); }

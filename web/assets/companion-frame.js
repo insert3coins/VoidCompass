@@ -8,8 +8,9 @@ export const COMPANION_EXTENT = 1.16;
 // 5.7.6: each officer's own bezel, inside the same silhouette (the same size
 // for all): "command" (Aster: six notches, rank chevrons at the top), "scale"
 // (Axiom: a graduated measuring scale), "compass" (Meridian: a brass rose
-// with cardinal points). Anything else is the plain shared bezel.
-const STYLES = {command:1, scale:2, compass:3};
+// with cardinal points). 5.8.6: "nova" (Nova: pearl, a lit ring at each temple
+// like hers and a four-point star at the top). Anything else is the plain shared bezel.
+const STYLES = {command:1, scale:2, compass:3, nova:4};
 // 5.7.7: your standing with the officer (Crew Orders), as service pips set
 // into the bottom of the bezel: one for Trusted up to four for Indispensable,
 // the fourth gilding them all. Inside the same silhouette, so no display grows.
@@ -46,6 +47,15 @@ export function createCompanionFrame({colour, energy, opening = .30, style = "",
           float five=1.0-step(.08,fract(turn*24.0));
           float ten=1.0-step(.06,fract(turn*12.0));
           ticks=stroke(r-1.09,.012)*fine*.8+stroke(r-1.08,.022)*five+stroke(r-1.075,.03)*ten;
+        }else if(uStyle>3.5){
+          // Nova: a ring at each temple (3 and 9 o'clock), a four-point star at the top, fine dots between.
+          float rings=0.0;
+          for(int i=0;i<2;i++){vec2 c=vec2(float(i)*2.0-1.0,0.0)*1.079;float d=length(p-c);
+            rings=max(rings,stroke(d-.034,.008)+ (1.0-smoothstep(.012,.016,d))*.8);}
+          vec2 q=p-vec2(0.0,1.079);
+          float star=1.0-smoothstep(.0,.006,min(abs(q.x)*14.0+abs(q.y),abs(q.y)*14.0+abs(q.x))-.05);
+          float dots=(1.0-step(.06,fract(turn*64.0)))*stroke(r-1.079,.006);
+          ticks=max(max(rings,star*1.3),dots*.6);
         }else if(uStyle>2.5){
           // Compass: cardinal points as long triangles, intercardinals shorter, and a fine rose.
           float d=abs(fract(turn*4.0+.5)-.5)*1.5707963*r;
@@ -69,7 +79,9 @@ export function createCompanionFrame({colour, energy, opening = .30, style = "",
         vec3 dark=vec3(.012,.022,.032);
         vec3 steel=mix(vec3(.065,.10,.13),vec3(.24,.31,.36),sheen);
         // Meridian's bezel is brass.
-        if(uStyle>2.5)steel=mix(vec3(.12,.085,.035),vec3(.46,.35,.17),sheen);
+        if(uStyle>2.5&&uStyle<3.5)steel=mix(vec3(.12,.085,.035),vec3(.46,.35,.17),sheen);
+        // Nova's is pearl-silver, like her plates.
+        if(uStyle>3.5)steel=mix(vec3(.16,.18,.23),vec3(.62,.66,.76),sheen);
         vec3 surface=dark;
         if(uFront>.5){
           surface=mix(dark,steel,housing);

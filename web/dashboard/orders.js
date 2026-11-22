@@ -4,8 +4,8 @@
 // client-only; every button sends a command and the next snapshot redraws.
 
 const TABS = [["orders", "ORDERS"], ["campaign", "CAMPAIGN"], ["record", "SERVICE RECORD"], ["log", "LOG"]];
-const OFFICERS = ["watcher", "aster", "axiom", "meridian", "lyra"];
-const GLYPHS = {watcher: "◉", aster: "✶", axiom: "⬡", meridian: "⌖", lyra: "◈"};
+const OFFICERS = ["watcher", "aster", "axiom", "meridian", "lyra", "nova"];
+const GLYPHS = {watcher: "◉", aster: "✶", axiom: "⬡", meridian: "⌖", lyra: "◈", nova: "✦"};
 let tab = "orders";
 // The officer open on the SERVICE RECORD tab (client-only, like the tabs).
 let recordOfficer = "";

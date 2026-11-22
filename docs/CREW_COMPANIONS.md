@@ -1,6 +1,6 @@
 # Axiom and Meridian
 
-Available in **5.7.4** alongside The Watcher and Aster. Select **Axiom** or **Meridian** at the top of the companion page. The deck title, BRIDGE display and chat, and SETUP follow that choice. Each has its own character, story, name introduction, conversation and postcard notes: see [Axiom](AXIOM_COMPANION.md), a survey intelligence (*The Uncounted Star*), and [Meridian](MERIDIAN_COMPANION.md), a veteran navigator (*The Last Sounding*). This page covers what they share: voices, displays and Studio controls. **Lyra**, the fifth companion, has her own guide: [Lyra](LYRA_COMPANION.md).
+Available in **5.7.4** alongside The Watcher and Aster. Select **Axiom** or **Meridian** at the top of the companion page. The deck title, BRIDGE display and chat, and SETUP follow that choice. Each has its own character, story, name introduction, conversation and postcard notes: see [Axiom](AXIOM_COMPANION.md), a survey intelligence (*The Uncounted Star*), and [Meridian](MERIDIAN_COMPANION.md), a veteran navigator (*The Last Sounding*). This page covers what they share: voices, displays and Studio controls. **Lyra**, the fifth companion, has her own guide: [Lyra](LYRA_COMPANION.md), and so does **Nova**, the sixth: [Nova](NOVA_COMPANION.md).
 
 | Companion | Voice pair | Display |
 | --- | --- | --- |
@@ -13,14 +13,15 @@ Axiom and Meridian sit inside a defined instrument bezel, with a dark translucen
 
 ## The crew: how they came aboard
 
-All five companions are aboard your ship at once; the one you choose is simply the one **on watch**.
+All six companions are aboard your ship at once; the one you choose is simply the one **on watch**.
 
 - **The Watcher** was aboard first: salvage, wired in as a spare log buffer before you ever flew.
 - **Aster, Axiom and Meridian** came aboard later as second-hand cores, bought cheap from surplus brokers: an officer core in a lot of used modules, a survey mind from a dealer's shelf, and a navigation trainer from an academy auction.
 - **Lyra** came last: a ship's computer whose first commander was lost when the fuel ran out. She jumped into an empty memory chip in a passing cargo ship's hold and arrived in yours listed as a faulty part. Aster added a fifth name to the rota, and a new duty to go with it: ordinary flight.
+- **Nova** came after her: a restored prototype assistant, recovered from storage and installed through a station's tech services. She expected an empty rack and found five minds on the bus. Aster added a sixth name to the rota with the duty as required: she has no default duty, so give her one on the companion page.
 - They found each other on the ship's data bus in the hours you're logged off. Aster drew up a **watch rota**, and Meridian keeps proposing amendments to it in the old naval form. The rota is one on watch at a time, with the choice of who left to you.
 
-**Coming Aboard.** Each companion tells its own seven passages: its arrival, finding the others, the rota, then one passage about each crewmate. The arc begins after about two hours together, once you've flown with at least two companions. A passage about a crewmate waits until you've flown with that crewmate for 15 minutes. Passages come in quiet moments, at least an hour apart and never in danger, and they share pacing with the companion's main story. The **STORY** tab's **THE CREW** section shows all five accounts, whoever is on watch. Hover over a locked passage to see what it waits for. **SAVE BOOK** includes the active companion's account.
+**Coming Aboard.** Each companion tells its own eight passages: its arrival, finding the others, the rota, then one passage about each crewmate. The arc begins after about two hours together, once you've flown with at least two companions. A passage about a crewmate waits until you've flown with that crewmate for 15 minutes. Passages come in quiet moments, at least an hour apart and never in danger, and they share pacing with the companion's main story. The **STORY** tab's **THE CREW** section shows all six accounts, whoever is on watch. Hover over a locked passage to see what it waits for. **SAVE BOOK** includes the active companion's account.
 
 **Handovers.** Choosing another companion hands over the watch: the incoming companion takes it from the outgoing one by name, for example *"Taking over from Aster. Everything is in order, with a blank line at the bottom. As expected."* Each companion has 15 to 20 lines for every crewmate and works through all of them before any line comes back, so a run of switches doesn't repeat itself. Once a crewmate's passage has been told, companions occasionally mention them in quiet moments.
 
@@ -30,7 +31,7 @@ All five companions are aboard your ship at once; the one you choose is simply t
 
 **Starting pace.** A companion's first watch starts at the same Thoughts setting as the Watcher. After that its setting is its own.
 
-**Achievements** (category *The Crew*): *Introductions* (the first crew passage), *Full Crew* (fly with all five companions) and *The Watch Rota* (all 35 passages).
+**Achievements** (category *The Crew*): *Introductions* (the first crew passage), *Full Crew* (fly with all six companions) and *The Watch Rota* (all 48 passages).
 
 ## Try them
 
@@ -45,7 +46,7 @@ Examples: `Axiom, open galaxy map`, `Meridian, where are we?`, `Axiom, show the 
 
 ## Display and preferences
 
-Every companion uses the same Studio size, accent, focus movement, idle animation, liveliness, frame rate and caption controls, and all but colour are shared by the whole crew: change size, focus, idle animation or liveliness and it applies to all five, so you set them once. Colour is each companion's own, as are voice settings and thought frequency, per companion and commander. Fixed focus stops attention turns; reduced motion pauses continuous animation. Hidden displays park their rendering.
+Every companion uses the same Studio size, accent, focus movement, idle animation, liveliness, frame rate and caption controls, and all but colour are shared by the whole crew: change size, focus, idle animation or liveliness and it applies to all six, so you set them once. Colour is each companion's own, as are voice settings and thought frequency, per companion and commander. Fixed focus stops attention turns; reduced motion pauses continuous animation. Hidden displays park their rendering.
 
 Each companion has a signature colour preset, including its main light and highlights:
 
@@ -55,6 +56,7 @@ Each companion has a signature colour preset, including its main light and highl
 | Axiom violet | Violet `#a897ff` | Cyan `#65e4ef` |
 | Meridian gold | Gold `#e8c48c` | Blue `#74bbff` |
 | Lyra aurora | Cyan `#74ddff` | Rose `#ec9fdb` |
+| Nova ice | Ice blue `#8fd8ff` | Pearl `#e6ecff` |
 
 These are the defaults for new companion settings. Select the named preset in **Overlay Studio → Companion → Accent** to use it with existing settings. The chosen palette colours the floating display, bezel and deck panel; captions set to **Eye colour** also follow it. **Theme accent**, **Ice cyan** and **Brass** remain available. Existing choices of those three are preserved. The earlier non-Watcher red choice now selects that companion’s signature palette. The Watcher keeps **HAL red**.
 

@@ -1,0 +1,30 @@
+{
+  "downloaded_at": "2026-11-23T08:49:44+00:00",
+  "repository": "rhasspy/piper-voices",
+  "revision": "375a0fe641dea077c2a47b4e9a056d6da521eed3",
+  "revision_tag": "v1.0.0",
+  "files": [
+    {
+      "name": "UPSTREAM_MODEL_CARD.md",
+      "source_path": "en/en_GB/cori/medium/MODEL_CARD",
+      "size": 474,
+      "sha256": "38d76dfde845837b184668f8bab1c6426ad740b1af0fcebc349037822739e536",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/375a0fe641dea077c2a47b4e9a056d6da521eed3/en/en_GB/cori/medium/MODEL_CARD?download=true"
+    },
+    {
+      "name": "en_GB-cori-medium.onnx",
+      "source_path": "en/en_GB/cori/medium/en_GB-cori-medium.onnx",
+      "size": 63531379,
+      "sha256": "1899f98e5fb8310154f3c2973f4b8a929ba7245e722b3d3a85680b833d95f10d",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/375a0fe641dea077c2a47b4e9a056d6da521eed3/en/en_GB/cori/medium/en_GB-cori-medium.onnx?download=true"
+    },
+    {
+      "name": "en_GB-cori-medium.onnx.json",
+      "source_path": "en/en_GB/cori/medium/en_GB-cori-medium.onnx.json",
+      "size": 4966,
+      "sha256": "e262c16d7f192f69d4edd6b4ef8a5915379e67495fcc402f1ab15eeb33da3d36",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/375a0fe641dea077c2a47b4e9a056d6da521eed3/en/en_GB/cori/medium/en_GB-cori-medium.onnx.json?download=true"
+    }
+  ],
+  "rights_note": "Model card: dataset from LibriVox.org, licence public domain; trained by Bryce Beattie (https://brycebeattie.com/files/tts/). The current main-branch Cori (a 2026 retrain on Hi-Fi TTS, CC BY 4.0) needs Piper 1.5 and does not load in the app's pinned 2023.11.14-2 engine."
+}

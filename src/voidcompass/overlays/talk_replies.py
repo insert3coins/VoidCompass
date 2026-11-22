@@ -78,4 +78,21 @@ OFFICERS = {
                              "No position fix yet. Ask me after the next jump.",
                              "I need our coordinates first, Commander. The next jump will give them to me."),
     },
+    "nova": {
+        "station_opening": ("Looking for the nearest {label}. One moment.", "Finding the nearest {label}, Commander.",
+                            "Asking the uplink for the nearest {label}.", "Nearest {label}, coming up."),
+        "distance_opening": ("{name} isn't in our own logs. Asking the uplink.", "Looking up {name}. One moment.",
+                             "No coordinates for {name} aboard. I'll ask the uplink.", "Finding {name}, Commander."),
+        "distance_unknown": ("I've no coordinates for {name}. Turn on trading searches in Settings, under Integrations, "
+                             "and I can look it up.",
+                             "{name} isn't in our logs. With trading searches on, in Settings under Integrations, I can find it.",
+                             "We've never been to {name}, so I can't place it. Trading searches, in Settings under "
+                             "Integrations, would let me look.",
+                             "I don't know where {name} is yet. Switch on trading searches in Settings, under Integrations, "
+                             "and I'll find it."),
+        "distance_nowhere": ("I don't have our position yet. Ask again after the next jump.",
+                             "Our position isn't logged yet. One jump will fix it.",
+                             "No position fix yet. Ask me after the next jump.",
+                             "I need our coordinates first, Commander. The next jump will give them to me."),
+    },
 }

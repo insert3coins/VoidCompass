@@ -56,6 +56,13 @@ LYRA_MODEL_FILES = (
 LYRA_NOTICE = ("Lyra uses a GLaDOS-style robot Piper voice (rokeya71/VITS-Piper-GlaDOS-en-onnx, from the dnhkng/GLaDOS project). "
                "The mirror labels the model MIT; that says nothing about rights in the game recordings or the character voice "
                "it was trained on. Source filenames and attribution are kept in models/lyra. Lyra herself is this app's own character.")
+# 5.8.6: Nova's voice, Cori (British English, the 2023 piper-voices v1.0.0 build: newer Cori models need Piper 1.5).
+NOVA_MODEL_FILES = (
+    {"name": "en_GB-cori-medium.onnx", "sha256": "1899f98e5fb8310154f3c2973f4b8a929ba7245e722b3d3a85680b833d95f10d", "size": 63531379},
+    {"name": "en_GB-cori-medium.onnx.json", "sha256": "e262c16d7f192f69d4edd6b4ef8a5915379e67495fcc402f1ab15eeb33da3d36", "size": 4966},
+)
+NOVA_NOTICE = ("Nova uses the Cori British-English Piper voice (rhasspy/piper-voices), trained by Bryce Beattie on Cori Samuel's "
+               "public-domain LibriVox recordings. Source filenames and attribution are kept in models/nova. Nova herself is this app's own character.")
 _RAW = "https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/"
 # Each companion's voice: (folder under models/, files, download URL, name, receipt folder).
 # Files and URLs are named, not copied, so they are read when used.
@@ -65,6 +72,7 @@ VOICES = {
     "axiom": ("data", "AXIOM_MODEL_FILES", _RAW + "data/", "Axiom voice", "data"),
     "meridian": ("picard", "MERIDIAN_MODEL_FILES", _RAW + "picard/", "Meridian voice", "picard"),
     "lyra": ("lyra", "LYRA_MODEL_FILES", _RAW + "lyra/", "Lyra voice", "lyra"),
+    "nova": ("nova", "NOVA_MODEL_FILES", _RAW + "nova/", "Nova voice", "nova"),
 }
 
 
@@ -80,7 +88,7 @@ def notice(model):
         return (f"{companions.NAMES[model]} uses the {source} Piper model from dividebysandwich/piper-voice-models, "
                 "trained on Star Trek Generations game dialogue. The downloaded source includes no licence or usage terms. "
                 "Source filenames and attribution are retained in models/. The voice source is separate from the companion identity.")
-    return {"aster": ASTER_NOTICE, "lyra": LYRA_NOTICE}.get(model, RIGHTS_NOTICE)
+    return {"aster": ASTER_NOTICE, "lyra": LYRA_NOTICE, "nova": NOVA_NOTICE}.get(model, RIGHTS_NOTICE)
 
 
 def manifest(model="watcher"):

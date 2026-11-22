@@ -23,7 +23,7 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 
 /* ---------------------------------------------------------------- frame -- */
 .by-watcher { --who: #e0574f; } .by-aster { --who: #d9a441; } .by-axiom { --who: #8f9bff; }
-.by-meridian { --who: #3fbf8f; } .by-lyra { --who: #74ddff; }
+.by-meridian { --who: #3fbf8f; } .by-lyra { --who: #74ddff; } .by-nova { --who: #e3b0ff; }
 .stream {
   position: relative; width: 100%; color: var(--text); font-variant-numeric: tabular-nums;
   background:

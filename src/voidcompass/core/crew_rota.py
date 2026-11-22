@@ -39,7 +39,7 @@ DUTIES = (
     ("flight", "Ordinary flight", "lyra"),
 )
 DEFAULT_DUTIES = {duty: who for duty, _label, who in DUTIES}
-CREW = ("watcher", "aster", "axiom", "meridian", "lyra")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra", "nova")
 
 
 def duty_key(duty):
@@ -150,7 +150,7 @@ class Rota:
         waiting (the activity is settling), gap (too soon after the last change)."""
         duty = duty_of(facts)
         target = wanted(facts, rota_duties)
-        names = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra"}
+        names = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova"}
         label = dict((key, title) for key, title, _who in DUTIES).get(duty, "no duty")
         row = {"duty": duty, "wanted": target, "until": None}
         if not enabled:

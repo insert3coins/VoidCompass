@@ -69,7 +69,7 @@ CAPABILITIES = (
 
 
 # 5.7.5: any of the crew, by name (the greeting was "hello watcher" alone).
-_CREW_NAMES = r"(?:the watcher|watcher|aster|axiom|meridian|lyra)"
+_CREW_NAMES = r"(?:the watcher|watcher|aster|axiom|meridian|lyra|nova)"
 
 
 def intent(text):

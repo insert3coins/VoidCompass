@@ -6,6 +6,7 @@ export const COMPANIONS = {
   axiom: {name:"Axiom",role:"Survey intelligence",description:"Survey intelligence · precise and curious"},
   meridian: {name:"Meridian",role:"Veteran navigator",description:"Old navigator · measured and steady"},
   lyra: {name:"Lyra",role:"Ship's computer",description:"A ship's computer · bright, exact and fond of full tanks"},
+  nova: {name:"Nova",role:"Vessel intelligence",description:"A recovered prototype · observant, curious and a little playful"},
 };
 export function companionInfo(source = {}) {
   const selected = source.identity || source.companion_identity;
@@ -22,7 +23,7 @@ export function renderCompanionChrome(source = {}) {
     nav.querySelector("span").textContent = name;
     nav.setAttribute("aria-label", name);
     nav.title = `${name}: replies, story and companion settings`;
-    if (nav.querySelector("i")) nav.querySelector("i").textContent = {watcher:"◉",aster:"⬡",axiom:"◌",meridian:"◇",lyra:"✧"}[identity];
+    if (nav.querySelector("i")) nav.querySelector("i").textContent = {watcher:"◉",aster:"⬡",axiom:"◌",meridian:"◇",lyra:"✧",nova:"✦"}[identity];
   }
   const heading = document.querySelector('[data-page-name="watcher"] .page-title h2');
   if (heading) heading.textContent = name;
@@ -71,7 +72,8 @@ export function renderCompanionDisplay(panel, source = {}) {
     }));
   }
   const note = panel.querySelector("[data-companion-motion-note]");
-  if (note) note.textContent = identity === "axiom" ? "A ceramic android, camera shutters and active temple processors. Off, it still reacts when addressed." : identity === "meridian" ? "A brass navigator, calm optical shutters and moving compass instruments. Off, it still reacts when addressed." : identity === "lyra" ? "A turning halo, blinking optics and a face that follows her mood. Off, she still reacts when addressed." : aster ? "A command android, expressive visor shutters and moving instrument ring. Off, it still reacts when addressed." : "Aperture, breathing and glances between events; off, it only reacts.";
+  if (note) note.textContent = identity === "axiom" ? "A ceramic android, camera shutters and active temple processors. Off, it still reacts when addressed." : identity === "meridian" ? "A brass navigator, calm optical shutters and moving compass instruments. Off, it still reacts when addressed." : identity === "lyra" ? "A turning halo, blinking optics and a face that follows her mood. Off, she still reacts when addressed." : identity === "nova" ? "A projected face that blinks, glances and shows her mood. Off, she still reacts when addressed." : aster ? "A command android, expressive visor shutters and moving instrument ring. Off, it still reacts when addressed." : "Aperture, breathing and glances between events; off, it only reacts.";
   if (note && options.companion_motion && (document.body.classList.contains("reduced-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches)) note.textContent += " Reduced motion is currently on, so continuous animation is paused.";
+  if (note && identity === "nova") note.textContent = "Her projected face breathes and blinks, listens, thinks and smiles with what she says, and her mouth follows her voice. A faint projection flicker now and then." + (options.companion_motion && (document.body.classList.contains("reduced-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches) ? " Reduced motion is currently on, so she holds still." : "");
   if (note && identity === "lyra") note.textContent = "Blinking optics, gentle head movement, antenna motion, a pulsing chest light, a jaw that moves with her voice, and expressions that follow what she says." + (options.companion_motion && (document.body.classList.contains("reduced-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches) ? " Reduced motion is currently on, so continuous animation is paused." : "");
 }

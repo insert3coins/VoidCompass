@@ -60,6 +60,20 @@ LINES = {
         "Docked at {station}. I will run a quiet maintenance pass while we are here.",
         "Docked. Safe, fuelled soon, and nothing on the boards. Perfect.",
     ),
+    "nova": (
+        "Docked.",
+        "Docked at {station}.",
+        "Docking complete, Commander.",
+        "Clamped at {station}. All quiet.",
+        "Docked at {station}. Busy, noisy, full of people. I rather like it.",
+        "Docked. Repairs, fuel and restock, if you need them. I've already looked.",
+        "We're in. Lovely approach, Commander. I was watching.",
+        "Docked at {station}. Stations always sound a little like a lab I used to know.",
+        "Clamps on. Shall I tell you what I noticed on the way in? Later, perhaps.",
+        "Docked. A good place to stop and look around for a bit.",
+        "Docked at {station}. I'll listen to the station while you see to things.",
+        "Alongside {station}. Nothing needs doing. I'll enjoy the view of the hangar.",
+    ),
 }
 
 

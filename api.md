@@ -1887,7 +1887,7 @@ print(survey["enabled"], survey["data"])
 
 ## Companions
 
-Void Compass has five companions: **The Watcher**, **Aster**, **Axiom**, **Meridian** and **Lyra**. One is active at a time for each commander. These routes work the same for all five (5.7.4; Lyra since 5.7.6). Every answer names the companion that gave it, so a script never mistakes one for another.
+Void Compass has six companions: **The Watcher**, **Aster**, **Axiom**, **Meridian**, **Lyra** and **Nova**. One is active at a time for each commander. These routes work the same for all six (5.7.4; Lyra since 5.7.6, Nova since 5.8.6). Every answer names the companion that gave it, so a script never mistakes one for another.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -1902,7 +1902,7 @@ Void Compass has five companions: **The Watcher**, **Aster**, **Axiom**, **Merid
 
 **Make sure it reaches the right companion.** Any of the `POST /companion/...` routes takes an optional `"identity"`. When it names a companion that isn't active (say the commander switched while your request was on its way), the request is refused with `409` rather than reaching the other one. An unknown identity gets a `404`. Nothing ever falls back to the Watcher silently.
 
-**Capabilities.** The Watcher, Aster, Axiom, Meridian and Lyra have `thought`, `poke`, `answer`, `book`, `story`, `name`, `voice`, `share_code` and `meet` (friend codes work between them). Aster, Axiom, Meridian and Lyra also write `postcards` notes in their own hand. Asking a companion for something it doesn't do answers `409` and says so; a companion never answers with another's fiction.
+**Capabilities.** The Watcher, Aster, Axiom, Meridian, Lyra and Nova have `thought`, `poke`, `answer`, `book`, `story`, `name`, `voice`, `share_code` and `meet` (friend codes work between them). Aster, Axiom, Meridian, Lyra and Nova also write `postcards` notes in their own hand. Asking a companion for something it doesn't do answers `409` and says so; a companion never answers with another's fiction.
 
 **Which one spoke.** `thought` events on the event stream carry `"companion": {"identity": "axiom", "name": "Axiom", "generation": 3}`, and `voice` events carry `"companion": "axiom"`. `generation` goes up at each switch, so a client can drop anything from before the latest switch.
 

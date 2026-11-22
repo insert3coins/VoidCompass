@@ -147,3 +147,7 @@ from voidcompass.core.discovery import our_first
 from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
 
 PERSONAS["lyra"] = _lyra.SURVEY_REPORT
+# 5.8.6: Nova.
+from voidcompass.overlays import nova_shared as _nova  # noqa: E402
+
+PERSONAS["nova"] = _nova.SURVEY_REPORT

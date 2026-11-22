@@ -17,11 +17,11 @@ import random
 import string
 import zlib
 
-from voidcompass.overlays import (banter_words_explore, banter_words_flight, banter_words_idle, banter_words_pairs,
-                                  banter_words_port)
+from voidcompass.overlays import (banter_words_explore, banter_words_flight, banter_words_idle, banter_words_nova,
+                                  banter_words_pairs, banter_words_port)
 
-SPEAKERS = ("watcher", "aster", "axiom", "meridian", "lyra")
-NAMES = {"watcher": "THE WATCHER", "aster": "ASTER", "axiom": "AXIOM", "meridian": "MERIDIAN", "lyra": "LYRA"}
+SPEAKERS = ("watcher", "aster", "axiom", "meridian", "lyra", "nova")
+NAMES = {"watcher": "THE WATCHER", "aster": "ASTER", "axiom": "AXIOM", "meridian": "MERIDIAN", "lyra": "LYRA", "nova": "NOVA"}
 
 # How often, and the least time between two exchanges (Its thoughts › Crew banter).
 FREQUENCIES = {"off": None, "sometimes": {"chance": .4, "label": "Now and then"},
@@ -57,7 +57,8 @@ MOMENTS = {
 }
 
 BANTER = {}
-for _module in (banter_words_flight, banter_words_explore, banter_words_port, banter_words_idle, banter_words_pairs):
+for _module in (banter_words_flight, banter_words_explore, banter_words_port, banter_words_idle, banter_words_pairs,
+                banter_words_nova):
     for _moment, _exchanges in _module.BANTER.items():
         BANTER.setdefault(_moment, []).extend(_exchanges)
 

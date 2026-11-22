@@ -272,6 +272,9 @@ def _gain(kind, objective, event, raw, ctx):
     if kind == "screenshot":
         if event != "Screenshot" or not _in_place(objective, raw, ctx):
             return 0
+        # 5.8.6: a picture of one world (Nova's closer look), taken near it.
+        if objective.get("body") and not _same(raw.get("Body"), objective["body"]):
+            return 0
         return 1 if _seen(objective, raw.get("Filename") or raw.get("timestamp")) else 0
     if kind == "dock":
         if event != "Docked":

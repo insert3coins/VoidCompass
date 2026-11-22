@@ -4,6 +4,7 @@ import {createCompanionFrame, COMPANION_EXTENT} from "./companion-frame.js";
 import {SIGNATURES} from "./companion-colours.js";
 import {createCompanionCore} from "./companion-core.js";
 import {addLyraRobot, addLyraHalo} from "./lyra-robot.js";
+import {addNovaHologram} from "./nova-hologram.js";
 import {addAxiomSurveyor, addMeridianNavigator, addOfficerHalo, createOfficerFinish} from "./officer-robots.js";
 import {createMood} from "./companion-mood.js";
 
@@ -12,8 +13,8 @@ const clamp = (n, lo=0, hi=1) => Math.max(lo, Math.min(hi, n));
 
 // Original procedural displays: no image plates, opaque backdrops or character likenesses.
 export function createCrewDisplay(canvas, identity) {
-  const lyra = identity === "lyra";
-  const portrait = identity === "meridian" || lyra || identity === "axiom";
+  const lyra = identity === "lyra", nova = identity === "nova";
+  const portrait = identity === "meridian" || lyra || identity === "axiom" || nova;
   const meridian = identity === "meridian", axiom = identity === "axiom";
   const signature = SIGNATURES[identity];
   const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true, premultipliedAlpha:true});
@@ -32,7 +33,7 @@ export function createCrewDisplay(canvas, identity) {
   if(reactor){reactor.group.position.z=.45;rig.add(reactor.group);}
   const service={value:0};
   scene.add(createCompanionFrame({colour:uniforms.uColour,energy:uniforms.uEnergy,opening:portrait?0:.48,service,
-    style:axiom?"scale":meridian?"compass":""}));
+    style:axiom?"scale":meridian?"compass":nova?"nova":""}));
   const shader = (vertexShader,fragmentShader,extra={}) => new THREE.ShaderMaterial({vertexShader,fragmentShader,uniforms:{...uniforms,uOpacity:{value:1},...extra},
     transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide});
   const lineVertex = `uniform float uTime,uEnergy,uScan;varying vec3 vPos;
@@ -109,11 +110,15 @@ export function createCrewDisplay(canvas, identity) {
      }`));sweep.position.z=.55;rings.add(sweep);
   const halo=lyra?addLyraHalo(rings,uniforms):axiom?addOfficerHalo(rings,uniforms,"axiom"):null;
   if(lyra)for(const object of [rotor,counter,inner,sweep])object.visible=false;
+  // Nova is projected, not built: her bezel and a slow sweep, nothing over her face.
+  if(nova)for(const object of [rotor,counter,inner])object.visible=false;
   if(axiom||meridian){inner.visible=false;rotor.position.z=counter.position.z=-.35;}
   if(axiom)sweep.visible=false;
   let portraitLayer=null,needle=null,needleMaterial=null,bodyMap=null,wake=null;
   if(lyra) {
     portraitLayer=addLyraRobot(field,uniforms,renderer,scene);
+  } else if(nova) {
+    portraitLayer=addNovaHologram(field,uniforms,()=>changed());
   } else if(axiom) {
     portraitLayer=addAxiomSurveyor(field,uniforms,renderer,scene);
     portraitLayer.coreMount.add(reactor.group);reactor.group.position.set(0,0,0);reactor.group.scale.setScalar(.32);
@@ -235,7 +240,7 @@ export function createCrewDisplay(canvas, identity) {
     uniforms.uScale.value=clamp(rect.width/256,.4,1.5);reactor?.resize(rect.width,rect.height);changed();}
   function draw(now){
     frame=0;if(disposed||!visible||document.hidden)return;
-    const active=!reduced&&(idle||state!=="idle"||pose.attention>0||moods.settling||needleMoving||otherMoving);
+    const active=(!reduced&&(idle||state!=="idle"||pose.attention>0||moods.settling||needleMoving||otherMoving))||portraitLayer?.busy;
     if(!active&&!dirty)return;if(now-last<1000/frameRate-.7){schedule();return;}
     const dt=clamp((now-last)/1000,0,.12);last=now;dirty=false;
     pose=life.step(dt,{state,idle,reduced,focus,intensity:activity});if(pose.active)time+=dt*activity;
@@ -248,11 +253,12 @@ export function createCrewDisplay(canvas, identity) {
     rotor.rotation.z=time*(portrait?-.24:.30);counter.rotation.z=time*(portrait?.33:-.23);
     inner.rotation.x=portrait?0:.24*Math.sin(time*.6);
     const drift=idle&&!reduced?1:0;
-    field.rotation.y=portrait?pose.x*.23+drift*Math.sin(time*.55)*.13*(focus==="off"?0:1):pose.x*.16+drift*Math.sin(time*.5)*.30;
+    if(nova){field.rotation.set(0,0,0);field.scale.setScalar(1);field.position.set(0,0,0);}
+    else{field.rotation.y=portrait?pose.x*.23+drift*Math.sin(time*.55)*.13*(focus==="off"?0:1):pose.x*.16+drift*Math.sin(time*.5)*.30;
     field.rotation.x=-pose.y*.12+drift*Math.sin(time*.72)*(portrait?(focus==="off"?0:.045):.16);
     field.rotation.z=portrait?0:time*.065;
     field.scale.setScalar(1+drift*Math.sin(time*1.25)*(portrait?.012:.025));
-    field.position.set(pose.x*.02,pose.y*.02,0);
+    field.position.set(pose.x*.02,pose.y*.02,0);}
     moods.step(dt,reduced);
     const {joy,worry,sad,curious}=expression;
     uniforms.uMood.value.set(joy,worry,sad,curious);
@@ -275,13 +281,13 @@ export function createCrewDisplay(canvas, identity) {
       updateNeedle(dt);
     }
     updateOwn(dt);
-    portraitLayer?.update({clock:time,pose,mouthOpen,reduced,focus,animated:pose.active,expression,scan:moment.scan||null,bearing:needleAngle,bearingVisible:needleShow>0});
+    portraitLayer?.update({clock:time,dt,state,activity,pose,mouthOpen,reduced,focus,animated:pose.active,expression,scan:moment.scan||null,bearing:needleAngle,bearingVisible:needleShow>0});
     halo?.update({clock:time,reduced,animated:pose.active});
     scanPhase+=dt*activity*(1+worry*1.6);
     scan.position.y=Math.sin(scanPhase*.95)*.67;
     scan.visible=false;
     outer.scale.setScalar(1+(pose.pulse||0)*.015);
-    if(finish)drawCalls=finish.render(scene,camera);else{renderer.render(scene,camera);drawCalls=renderer.info.render.calls;}frames++;if(pose.active||moods.settling||needleMoving||otherMoving)schedule();
+    if(finish)drawCalls=finish.render(scene,camera);else{renderer.render(scene,camera);drawCalls=renderer.info.render.calls;}frames++;if(pose.active||moods.settling||needleMoving||otherMoving||portraitLayer?.busy)schedule();
   }
   const observer=new ResizeObserver(resize);observer.observe(canvas);
   function visibility(){if(document.hidden){cancelAnimationFrame(frame);frame=0;}else changed();}
@@ -315,7 +321,7 @@ export function createCrewDisplay(canvas, identity) {
     setReducedMotion(value){if(reduced!==Boolean(value)){reduced=Boolean(value);changed();}},
     setFrameRate(value){const next=[15,24,30,60].includes(Number(value))?Number(value):30;if(frameRate!==next){frameRate=next;changed();}},
     setVisible(value){if(visible!==Boolean(value)){visible=Boolean(value);if(!visible){cancelAnimationFrame(frame);frame=0;}else changed();}},
-    inspect(){return {...pose,identity,design:lyra?"robot-companion":axiom?"precision-android":"navigator-android",frames,state,reduced,idle,focus,frameRate,time,accent,secondary,intensity:activity,
+    inspect(){return {...pose,identity,design:lyra?"robot-companion":nova?"projected-android":axiom?"precision-android":"navigator-android",frames,state,reduced,idle,focus,frameRate,time,accent,secondary,intensity:activity,
       width:canvas.clientWidth,height:canvas.clientHeight,drawCalls,reactor:reactor?.inspect()||null,mouthOpen,mood:moods.mood,expression:{...expression},expressing:moods.settling,smileCurve:uniforms.uSmile.value,
       needle:needle?{visible:needle.visible,angle:needleAngle,show:needleShow,target:needleTarget}:null,
       wake:wake?wakeAt:null,

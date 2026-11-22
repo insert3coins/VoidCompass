@@ -622,7 +622,10 @@
       "event": "LaunchDrone",
       "target": 1,
       "match": {
-        "Type": ["Prospector", "Collection"]
+        "Type": [
+          "Prospector",
+          "Collection"
+        ]
       }
     }
   },
@@ -7571,6 +7574,66 @@
     }
   },
   {
+    "id": "nova_story_begins",
+    "title": "Activation",
+    "desc": "Hear the first entry from Nova's development logs",
+    "icon": "✧",
+    "category": "Nova",
+    "points": 25,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "NovaTold",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "nova_story_complete",
+    "title": "Page Eleven",
+    "desc": "Hear Nova's whole story, to the last of her development logs",
+    "icon": "✧",
+    "category": "Nova",
+    "points": 250,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "NovaComplete",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "nova_every_echo",
+    "title": "Every View Kept",
+    "desc": "Hear all six of Nova's echoes",
+    "icon": "✧",
+    "category": "Nova",
+    "points": 150,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "NovaEchoes",
+      "value": 6,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "nova_request",
+    "title": "The View from the Middle",
+    "desc": "Take Nova to the heart of the galaxy",
+    "icon": "✧",
+    "category": "Nova",
+    "points": 100,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "NovaRequest",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
     "id": "crew_introductions",
     "title": "Introductions",
     "desc": "Hear one of your companions tell how it came aboard",
@@ -7588,7 +7651,7 @@
   {
     "id": "crew_full",
     "title": "Full Crew",
-    "desc": "Fly with all five companions: the Watcher, Aster, Axiom, Meridian and Lyra",
+    "desc": "Fly with all six companions: the Watcher, Aster, Axiom, Meridian, Lyra and Nova",
     "icon": "⚓",
     "category": "The Crew",
     "points": 100,
@@ -7596,14 +7659,14 @@
       "type": "flag",
       "event": "VoidCompassWatcherStory",
       "field": "CrewFlown",
-      "value": 5,
+      "value": 6,
       "compare": "gte"
     }
   },
   {
     "id": "crew_watch_rota",
     "title": "The Watch Rota",
-    "desc": "Hear all five companions' accounts of coming aboard, every passage",
+    "desc": "Hear all six companions' accounts of coming aboard, every passage",
     "icon": "⚓",
     "category": "The Crew",
     "points": 200,
@@ -7611,7 +7674,7 @@
       "type": "flag",
       "event": "VoidCompassWatcherStory",
       "field": "CrewTold",
-      "value": 35,
+      "value": 48,
       "compare": "gte"
     }
   },

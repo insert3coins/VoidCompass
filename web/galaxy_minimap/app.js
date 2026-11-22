@@ -56,7 +56,7 @@ function rgb(hex, fallback = [0, 209, 255]) {
 }
 const css = (colour, alpha) => `rgba(${colour[0]}, ${colour[1]}, ${colour[2]}, ${alpha})`;
 // Each officer's identity hue, for the crew's order flags (5.7.7).
-const ORDER_COLOURS = {watcher: [224, 87, 79], aster: [217, 164, 65], axiom: [143, 155, 255], meridian: [63, 191, 143], lyra: [116, 221, 255]};
+const ORDER_COLOURS = {watcher: [224, 87, 79], aster: [217, 164, 65], axiom: [143, 155, 255], meridian: [63, 191, 143], lyra: [116, 221, 255], nova: [227, 176, 255]};
 
 // The view: which square of the galactic plane the map shows.
 // "Your route" (5.5.3.7, the default): framed on you, this session's trail

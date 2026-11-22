@@ -264,3 +264,7 @@ def persona_banks(identity):
 from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
 
 PERSONAS["lyra"] = _lyra.ROUTE
+# 5.8.6: Nova.
+from voidcompass.overlays import nova_shared as _nova  # noqa: E402
+
+PERSONAS["nova"] = _nova.ROUTE

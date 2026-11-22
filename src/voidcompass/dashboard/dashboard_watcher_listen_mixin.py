@@ -69,7 +69,7 @@ class DashboardWatcherListenMixin:
         """Why it can't listen now, or "" when it can."""
         from voidcompass.core import companions
         if companions.overlay_only(self.config) and not test:
-            return "Lyra is an overlay preview. Dialogue and voice are pending."
+            return f"{companions.name(self.config)} is an overlay preview. Dialogue and voice are pending."
         if not self.config.get("watcher_listen_enabled"):
             return "Talking by voice is off: turn it on in Settings, under Voice."
         if not listen_assets.installed(model=self._watcher_listen_model()):

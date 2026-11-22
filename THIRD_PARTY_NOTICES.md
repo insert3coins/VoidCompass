@@ -187,32 +187,6 @@ also bring every hull's figures, slot layouts and slot names, its armour and its
 current ones; blueprints newer than coriolis-data are listed with their materials from `RecipesEngineering.cs`. The game data in both remains the intellectual property of
 Frontier Developments plc and is used under Frontier's terms, as by the other Elite Dangerous community tools.
 
-## Ship builder: hull illustrations, schematics and layout
-
-The v5.8.5 ship builder's look (a shipyard, a slot ledger, the hull's anatomy and a fitting panel) follows the
-Ship Builder of [Nav Beacon](https://navbeacon.app/) (Elite-Dangerous-Ship-Builder), MIT licence, Copyright (c) 2026
-Elite Dangerous Community. VoidCompass's builder is its own implementation; no Nav Beacon code is used.
-
-`web/dashboard/ship-art/` holds each hull's illustration and top and bottom schematics, recoloured as masks so the
-deck's themes can colour them, and `index.json` with where each hardpoint and utility mount sits on the schematics.
-They come from Nav Beacon's ship assets, which reach it through
-[Elite Dangerous Almanac](https://github.com/Elite-Dangerous-Almanac/Almanac-Core) (MIT licence, Copyright (c) 2026
-Elite Dangerous Community, covering its own code, documentation and the organisation of its data files):
-
-    Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-    documentation files (the "Software"), to deal in the Software without restriction, including without limitation
-    the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
-    to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in all copies or substantial portions
-    of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-    THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
-    CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-    IN THE SOFTWARE.
-
 The ship illustrations and schematics represent ships of Elite Dangerous and are the property of Frontier
 Developments plc, used under Frontier's
 [media-usage rules](https://forums.frontier.co.uk/threads/elite-dangerous-media-usage-rules.510879/):

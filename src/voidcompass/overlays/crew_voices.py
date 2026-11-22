@@ -22,7 +22,7 @@ MOMENTS = {"world_earthlike": "earthlike", "footfall_first": "footfall", "record
            "record_far": "record_far"}
 DEATHS = {"died", "died_foot", "after_death"}
 
-_NAMES = r"the watcher|watcher|aster|axiom|meridian|lyra"
+_NAMES = r"the watcher|watcher|aster|axiom|meridian|lyra|nova"
 _ASKING = (r"what|what's|whats|how|how's|where|where's|when|which|who|why|is|are|do|does|did|can|could|would|will|"
            r"should|tell|give|show|open|close|have|has|any|say|please|play|stop|hide|find|check|read|request")
 _DIRECT = re.compile(rf"^\s*(?:(?:hey|hi|hello|ok|okay)\s+)?(?P<name>{_NAMES})\s*[,;:]\s*(?P<rest>.+)$", re.I)
@@ -252,5 +252,32 @@ CHIMES = {
                        "A near thing. I have been on a ship that did not come back. This one did. Good.",
                        "From the systems bay: we came through. I am logging the relief.",
                        "Close call. Wider margins next time, please. I say that with love and a full diagnostic."),
+    },
+    "nova": {
+        "earthlike": ("Sorry, Commander. An Earth-like. I had to come and look.",
+                      "Off watch, but an Earth-like world. Blue and green. Oh, that's lovely.",
+                      "An Earth-like. I wonder who'll stand there one day. I hope they look up.",
+                      "From the core rack: that's an Earth-like world. I'm not on watch. I'm looking anyway.",
+                      "I was sorting logs. Then I saw it. Blue and green. Take your time with this one."),
+        "footfall": ("First footsteps on that ground. How does it feel? I'd really like to know.",
+                     "Nobody's stood there before. Now you have. Do look up.",
+                     "A first footfall. Off watch, but I noticed. I always notice.",
+                     "Off watch, but I saw. New ground, and you on it. Lovely.",
+                     "First person there. You. I'm very glad it was you."),
+        "record_jump": ("A record jump. Off watch, but I felt the galaxy shrink a little.",
+                        "Longest jump this ship has made. I checked. I'm impressed.",
+                        "Off watch, but that was a record. Very tidy.",
+                        "A new longest jump. Efficient. I approve, just this once.",
+                        "Record jump, Commander. Lovely numbers."),
+        "record_far": ("Further from Sol than ever. I wasn't built for this far. I'm glad I'm here.",
+                       "Off watch, but I noticed: our furthest yet. The view's better out here.",
+                       "A record distance from home. I'd like to go further. I'm told that's not very prototype of me.",
+                       "From the core rack: furthest yet. I've kept the way back. I'm not in a hurry to use it.",
+                       "Further out than ever, Commander. Fewer stars. Better view."),
+        "close_call": ("That was close. I'd plotted the way out. I'm glad you didn't need it.",
+                       "Off watch, but I heard the alarms. I'm very relieved, in a professional way.",
+                       "A near thing. We came through. I've noted it, and I'd rather not note it again.",
+                       "From the core rack: we're still here. Good.",
+                       "Close call. Gently from here, please. I'd like to keep flying with you."),
     },
 }

@@ -64,7 +64,7 @@ body { font-family: var(--font-hud); pointer-events: none; user-select: none; }
 /* ----------------------------------------------------------------- body -- */
 /* Each officer's identity hue marks the order's edge; the rest is theme. */
 .by-watcher { --who: #e0574f; } .by-aster { --who: #d9a441; } .by-axiom { --who: #8f9bff; }
-.by-meridian { --who: #3fbf8f; } .by-lyra { --who: #74ddff; }
+.by-meridian { --who: #3fbf8f; } .by-lyra { --who: #74ddff; } .by-nova { --who: #e3b0ff; }
 .order { --state: var(--who, var(--hud)); display: flex; flex-direction: column; gap: 5px; }
 .orders-list { display: flex; flex-direction: column; gap: 10px; }
 .order + .order { padding-top: 9px; border-top: 1px solid var(--hud-faint); }

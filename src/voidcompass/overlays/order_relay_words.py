@@ -115,4 +115,24 @@ RELAY = {
                            "{title}: progress, says {officer}.", "{officer} has an update. {title}."),
         },
     },
+    "nova": {
+        "plain": {
+            "relay_offer": ("Order from {officer}: {title}.", "{officer}: {title}.", "Relayed order: {title}.",
+                            "{officer} has an order: {title}."),
+            "relay_done": ("{officer}: {title} complete.", "{title}: done, says {officer}.", "Complete: {title}.",
+                           "{officer} reports {title} done."),
+            "relay_news": ("Update from {officer}: {title}.", "{officer} reports on {title}.", "{title}: update.",
+                           "Relayed: {officer} on {title}."),
+        },
+        "voiced": {
+            "relay_offer": ("{officer} has an order for you. {title}. It's on the deck.",
+                            "Passing on an order from {officer}: {title}.", "{officer}'s voice is off, so I'll read it: {title}.",
+                            "An order from {officer}. {title}. I'm curious what you'll say.", "{officer} would like to know: {title}?"),
+            "relay_done": ("{officer} says {title} is done. Lovely.", "Word from {officer}: {title}, finished.",
+                           "{title}: complete. {officer} is very pleased.", "{officer}'s order is done. {title}.",
+                           "Done. {title}, says {officer}."),
+            "relay_news": ("{officer} has news on {title}.", "Update from {officer}: {title}.", "Passing it on: {officer} on {title}.",
+                           "{title}: progress, says {officer}.", "{officer} has an update. {title}."),
+        },
+    },
 }

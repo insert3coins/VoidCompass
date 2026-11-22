@@ -8,12 +8,13 @@ PROFILES = {
     "axiom": {"name": "Axiom", "role": "Survey intelligence", "description": "Survey intelligence · precise and curious", "story": True},
     "meridian": {"name": "Meridian", "role": "Veteran navigator", "description": "Old navigator · measured and steady", "story": True},
     "lyra": {"name": "Lyra", "role": "Ship's computer", "description": "A ship's computer · bright, exact and fond of full tanks", "story": True},
+    "nova": {"name": "Nova", "role": "Vessel intelligence", "description": "A recovered prototype · observant, curious and a little playful", "story": True},
 }
 IDENTITIES = tuple(PROFILES)
-NEW_IDENTITIES = ("axiom", "meridian", "lyra")
+NEW_IDENTITIES = ("axiom", "meridian", "lyra", "nova")
 NAMES = {key: row["name"] for key, row in PROFILES.items()}
 DISPLAY_SIZES = dict.fromkeys(IDENTITIES, (54, 72, 96, 144, 192, 256))
-DISPLAY_DEFAULTS = {"watcher": 54, "aster": 144, "axiom": 144, "meridian": 144, "lyra": 144}
+DISPLAY_DEFAULTS = {"watcher": 54, "aster": 144, "axiom": 144, "meridian": 144, "lyra": 144, "nova": 144}
 ASTER_KEYS = {"heartbeat_thoughts": "aster_thoughts", "watcher_voice_enabled": "aster_voice_enabled",
               "watcher_voice_volume": "aster_voice_volume", "watcher_voice_speed": "aster_voice_speed",
               "watcher_voice_level": "aster_voice_level"}

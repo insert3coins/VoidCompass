@@ -1,4 +1,4 @@
-"""Axiom, Meridian and Lyra: full companions on the shared officer-style mind (5.7.4, Lyra 5.7.6)."""
+"""Axiom, Meridian, Lyra and Nova: full companions on the shared officer-style mind (5.7.4, Lyra 5.7.6, Nova 5.8.6)."""
 from voidcompass.core import companions
 from voidcompass.overlays import companion_personas
 from voidcompass.overlays.aster_mind import AsterMind

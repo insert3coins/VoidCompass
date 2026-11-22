@@ -27,6 +27,11 @@ _SPEC = {
              "watch": "LYRA · SHIP SYSTEMS", "advisory": "LYRA · ADVISORY", "reply": "LYRA'S REPLY",
              "asks": "LYRA ASKS", "pace": 1.0, "signature": "Lyra",
              "test": "Lyra online. Voice check complete. Fuel reserves noted, all systems nominal, and I am very glad to be talking to you, Commander."},
+    "nova": {"lines": "nova_lines", "lore": "nova_lore", "name": "nova_name", "postcards": "nova_postcards", "keepsakes": "nova_keepsakes",
+             "humour": ("Nova’s commentary", (("dry", "Playful"), ("off", "Assistant"))),
+             "watch": "NOVA · OBSERVING", "advisory": "NOVA · ASSISTANCE", "reply": "NOVA'S REPLY",
+             "asks": "NOVA ASKS", "pace": 1.0, "signature": "Nova",
+             "test": "Hello, Commander. This is Nova. Voice check complete. I wasn't built to explore, but I must admit, I'm starting to enjoy the view."},
 }
 IDENTITIES = tuple(_SPEC)
 _CACHE = {}
@@ -44,12 +49,14 @@ def _modules():
         axiom_keepsakes, axiom_lines, axiom_lore, axiom_name, axiom_postcards,
         meridian_keepsakes, meridian_lines, meridian_lore, meridian_name, meridian_postcards,
         lyra_keepsakes, lyra_lines, lyra_lore, lyra_name, lyra_postcards,
+        nova_keepsakes, nova_lines, nova_lore, nova_name, nova_postcards,
     )
     return {module.__name__.rsplit(".", 1)[-1]: module for module in (
         aster_keepsakes, aster_lines, aster_lore, aster_name, aster_postcards,
         axiom_keepsakes, axiom_lines, axiom_lore, axiom_name, axiom_postcards,
         meridian_keepsakes, meridian_lines, meridian_lore, meridian_name, meridian_postcards,
-        lyra_keepsakes, lyra_lines, lyra_lore, lyra_name, lyra_postcards)}
+        lyra_keepsakes, lyra_lines, lyra_lore, lyra_name, lyra_postcards,
+        nova_keepsakes, nova_lines, nova_lore, nova_name, nova_postcards)}
 
 
 def get(identity):

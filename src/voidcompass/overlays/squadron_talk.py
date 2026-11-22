@@ -323,3 +323,8 @@ from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
 
 PERSONAS["lyra"] = _lyra.SQUADRON
 RANK_LINES["lyra"] = _lyra.SQUADRON_RANK
+# 5.8.6: Nova.
+from voidcompass.overlays import nova_shared as _nova  # noqa: E402
+
+PERSONAS["nova"] = _nova.SQUADRON
+RANK_LINES["nova"] = _nova.SQUADRON_RANK

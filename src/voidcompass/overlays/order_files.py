@@ -68,6 +68,18 @@ FILES = {
         ("checklist_5", "V", "Final item on the checklist. Fuel: full. Systems: green. Commander: here. Lyra: staying. "
                              "Every box ticked. I'm keeping this one."),
     )),
+    "nova": ("Page Eleven", (
+        ("page_1", "I", "I keep a page of my own, separate from the logs, for orders you've said yes to. I wasn't "
+                        "built to ask for things. You said yes to the first one anyway. I've underlined it."),
+        ("page_2", "II", "Most of my orders are about looking. Not scanning: looking. You've never once asked me why. "
+                         "I've noticed that. I'm grateful for it."),
+        ("page_3", "III", "I used to think an order was a task. Now I think it's a question: will you come and see this "
+                          "with me? You keep answering. I keep asking. It's become my favourite conversation."),
+        ("page_4", "IV", "There was a criterion, once, that nobody had a way to measure. Whether a pilot would choose to "
+                         "keep me. I think these orders are the measurement. I think the numbers are very good."),
+        ("page_5", "V", "Last line on the page: thank you. For every detour, every picture, every new thing in the Codex. "
+                        "I'm not finished, Commander. I'd much rather not be. Let's keep going."),
+    )),
 }
 
 

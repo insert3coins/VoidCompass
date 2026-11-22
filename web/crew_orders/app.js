@@ -6,7 +6,7 @@
   const token = params.get("token") || "";
   const overlay = params.get("overlay") || "crew-orders";
   const dom = Object.fromEntries(["orders", "content", "orders-list"].map((id) => [id, document.getElementById(id)]));
-  const OFFICERS = ["watcher", "aster", "axiom", "meridian", "lyra"];
+  const OFFICERS = ["watcher", "aster", "axiom", "meridian", "lyra", "nova"];
   // The window's design size (html_orders_overlay): fit to it, report height in its units (overlayfix.md).
   const DESIGN_WIDTH = 360, MIN_HEIGHT = 90;
 

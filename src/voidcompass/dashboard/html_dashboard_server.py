@@ -30,13 +30,15 @@ _MEDIA_ID = re.compile(r"[0-9a-f]{16}")
 _RANGE = re.compile(r"bytes=(\d*)-(\d*)")
 # The skins' fonts (open licences, beside them in web/assets/fonts/).
 _SKIN_FONT = re.compile(r"/assets/fonts/[A-Za-z0-9-]+\.ttf")
+# Nova's face (5.8.6): her sprite sheets and their index.
+_NOVA_ART = re.compile(r"/assets/nova/[a-z-]+\.(?:webp|json)")
 _SANDBOXED_MODULES = frozenset({
     "/assets/heartbeat-3d.js",
     "/assets/aster-companion.js",
     "/assets/aster-3d.js",
     "/assets/crew-companion.js",
     "/assets/crew-3d.js",
-    "/assets/lyra-robot.js", "/assets/officer-robots.js",
+    "/assets/lyra-robot.js", "/assets/officer-robots.js", "/assets/nova-hologram.js",
     "/assets/companion-frame.js",
     "/assets/companion-colours.js",
     "/assets/companion-core.js",
@@ -332,7 +334,7 @@ class HtmlDashboardServer:
                             "/assets/heartbeat-orb.js", "/assets/heartbeat-life.js", "/assets/heartbeat-3d.js",
                             "/assets/aster-companion.js", "/assets/aster-3d.js",
                             "/assets/crew-companion.js", "/assets/crew-3d.js",
-                            "/assets/lyra-robot.js", "/assets/officer-robots.js",
+                            "/assets/lyra-robot.js", "/assets/officer-robots.js", "/assets/nova-hologram.js",
                             "/assets/companion-frame.js",
                             "/assets/companion-colours.js",
                             "/assets/companion-core.js",
@@ -340,7 +342,7 @@ class HtmlDashboardServer:
                             "/assets/companion-caption.js",
                             "/assets/music-visualizers.js", "/assets/rhino-draw.js", "/galactic_map/vendor/three.module.min.js",
                             "/galactic_map/vendor/three.core.min.js", "/assets/skins/deck-skins.css"} \
-                or _SKIN_FONT.fullmatch(request_path):
+                or _SKIN_FONT.fullmatch(request_path) or _NOVA_ART.fullmatch(request_path):
             candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()
             try:
                 candidate.relative_to(self.static_root.parent)
@@ -430,7 +432,7 @@ class HtmlDashboardServer:
             cache=("private, max-age=3600" if path in {
                 "/galactic_map/vendor/three.module.min.js", "/galactic_map/vendor/three.core.min.js",
             } else "no-store" if candidate.name == "index.html" else "no-cache"),
-            cors=path in _SANDBOXED_MODULES,
+            cors=path in _SANDBOXED_MODULES or bool(_NOVA_ART.fullmatch(path)),
         )
 
     def _serve_game_file(self, handler, path):

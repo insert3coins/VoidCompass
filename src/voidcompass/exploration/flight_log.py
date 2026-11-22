@@ -21,8 +21,8 @@ ELITE_YEARS = 1286
 # The night's best moments, best first.
 # 5.7.7: a finished crew order ("ORDER") counts among the night's best moments.
 HIGHLIGHT_ORDER = ("RARE", "ORDER", "CODEX", "BIO", "SALE", "PHOTO", "LOSS", "DEBRIEF")
-_PERSONAS = ("aster", "axiom", "meridian", "lyra")
-_COMPANION_NAMES = {"watcher": "the Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra"}
+_PERSONAS = ("aster", "axiom", "meridian", "lyra", "nova")
+_COMPANION_NAMES = {"watcher": "the Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova"}
 
 def part_of_day(moment):
     """The part of the day a session began in, for "this morning's star"
@@ -143,7 +143,7 @@ def tonights_star(arrivals, end):
 
 
 def companion_words(facts, companion):
-    """An officer's closing paragraph (5.7.4; Lyra too), built like
+    """An officer's closing paragraph (5.7.4; Lyra and Nova too), built like
     the Watcher's: chosen by the session, so the same words every reading."""
     from voidcompass.overlays import companion_personas
     persona = companion_personas.get(companion)

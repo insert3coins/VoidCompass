@@ -22,6 +22,7 @@ RIBBONS = {
     "right_hand_axiom": ("Axiom's Right Hand", "Right hand standing with Axiom"),
     "right_hand_meridian": ("Meridian's Right Hand", "Right hand standing with Meridian"),
     "right_hand_lyra": ("Lyra's Right Hand", "Right hand standing with Lyra"),
+    "right_hand_nova": ("Nova's Right Hand", "Right hand standing with Nova"),
 }
 
 
@@ -78,4 +79,6 @@ POSTCARD_THEMES = {
                                                 "font": "serif", "filter": "sepia"}),
     "right_hand_lyra": ("Lyra's Hand", {"base": "holo", "paper": "#0d1420", "ink": "#eef8ff", "greet": "#74ddff",
                                         "font": "hud", "filter": "vivid"}),
+    "right_hand_nova": ("Nova's Hand", {"base": "airmail", "paper": "#eef3ff", "ink": "#1b2440", "greet": "#5fb8ff",
+                                        "font": "hud", "filter": "cool"}),
 }

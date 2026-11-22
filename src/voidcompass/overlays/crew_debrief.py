@@ -10,12 +10,18 @@ did adds a short postscript to the Captain's Log, signed.
 """
 
 # The order crewmates speak in: the navigator first, the Watcher last.
-ORDER = ("meridian", "axiom", "aster", "lyra", "watcher")
+ORDER = ("meridian", "axiom", "nova", "aster", "lyra", "watcher")
 SPACING_S = 9.0      # between one crewmate's line and the next
 EXPIRES_S = 180.0    # a debrief line not said by then is let go
 
 # {name} is the expedition's.
 DEBRIEF = {
+    "nova": ("{name}. I've looked along the whole route. I've a great many questions. I'll ask them as we go.",
+             "{name}. I wasn't built for long voyages. I'm very glad to be going on one.",
+             "{name}. Help before you're asked, only if you're needed. I'll be watching for both.",
+             "{name}. I've marked the views I'd like to see. You don't have to stop for them. I'd like you to.",
+             "{name}. A long way to go. I'll learn your habits all over again out there.",
+             "{name}. Navigation, observation, assistance. All three ready."),
     "lyra": ("{name}. Fuel tables are ready, every scoopable star flagged. I will get us home from it.",
              "{name}. I have plotted the way back before the way out. My rules.",
              "{name}. Systems green, reserves full, and I am very much looking forward to it.",
@@ -50,6 +56,11 @@ DEBRIEF = {
 
 # The Captain's Log: a crewmate's postscript under the closing paragraph.
 POSTSCRIPTS = {
+    "nova": ("My watch: no faults, three detours, all of them worth it.",
+             "For the log: I stood a watch and noticed a great many things. They're filed.",
+             "A note from my watch: you stopped to look at something. I looked too.",
+             "I stood a watch. I learned something about how you fly. I always do.",
+             "My part of the session was quiet. I enjoyed the quiet."),
     "lyra": ("My watch kept every system green and the tank above a fifth. I checked twice.",
              "For the log: the ship ran well on my watch. She always does when you fly her.",
              "Ship's computer's note: no low-fuel warnings on my watch. My favourite kind of watch.",

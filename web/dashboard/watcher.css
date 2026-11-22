@@ -422,49 +422,49 @@ body.reduced-motion .talk-mic::after { animation: none !important; }
 
 /* 5.7.4: Aster, Axiom and Meridian have their own readings, notes, meetings
    and request; only the Watcher's road, questions and voice arc stay its own. */
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) #watcher-question:not(.asking),
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) #watcher-road,
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-card:has(#watcher-answers),
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-finding { display:none; }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) #watcher-question:not(.asking),
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) #watcher-road,
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-card:has(#watcher-answers),
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-finding { display:none; }
 .watcher-name details { margin-top:16px; padding-top:12px; border-top:1px solid var(--border); }
 .watcher-name summary { cursor:pointer; color:var(--accent); font:11px/1.6 Consolas,monospace; }
 
 .aster-officer-mark, .aster-signal-line { display: none; }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-eye-panel {
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-eye-panel {
   border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
   background: linear-gradient(155deg,color-mix(in srgb,var(--accent) 5%,var(--panel)),var(--panel) 60%);
 }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-optics-stage {
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-optics-stage {
   gap: 12px; padding: 18px 18px 14px; isolation: isolate;
   background: radial-gradient(ellipse at 50% 45%,color-mix(in srgb,var(--accent) 6%,transparent),transparent 66%),var(--bg);
   border-bottom: 1px solid color-mix(in srgb,var(--accent) 22%,var(--border));
 }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-optics-stage::before {
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-optics-stage::before {
   inset: 60px 18px 80px; width: auto; border: 0; z-index: -1;
   background-image: linear-gradient(color-mix(in srgb,var(--accent) 5%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--accent) 5%,transparent) 1px,transparent 1px);
   background-size: 24px 24px; mask-image: radial-gradient(ellipse,black,transparent 72%);
 }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-optics-stage::after {
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-optics-stage::after {
   inset: auto 22% 64px; width: auto; height: 1px; border: 0;
   background: linear-gradient(90deg,transparent,color-mix(in srgb,var(--accent) 32%,transparent),transparent);
 }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-stage-head span { color: var(--text); font-size: 13px; letter-spacing: .24em; }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-stage-head small { font-size: 8px; letter-spacing: .09em; }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .aster-officer-mark { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-stage-head span { color: var(--text); font-size: 13px; letter-spacing: .24em; }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-stage-head small { font-size: 8px; letter-spacing: .09em; }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .aster-officer-mark { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; }
 .aster-officer-mark span, .aster-officer-mark b { color: var(--dim); font: 8px/1.5 Consolas,monospace; letter-spacing: .12em; }
 .aster-officer-mark b { color: var(--muted); font-weight: 400; }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-eye { width: min(100%,288px); margin: 6px 0; }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .aster-signal-line { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 22px; }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-eye { width: min(100%,288px); margin: 6px 0; }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .aster-signal-line { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 22px; }
 .aster-signal-line i { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb,var(--accent) 65%,transparent); }
 .aster-signal-line b { color: var(--accent); font: 700 9px/1.5 Consolas,monospace; letter-spacing: .15em; }
 .aster-signal-line span { color: var(--dim); border-left: 1px solid var(--border); padding-left: 8px; font: 8px/1.5 Consolas,monospace; letter-spacing: .1em; }
 .aster-signal-line b[data-state="alert"] { color: var(--orange); }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-stage-caption { padding-top: 10px; border-top: 1px solid var(--border); min-height: 31px; }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-stage-caption b { font-size: 9px; }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-latest { margin-top: 14px; border-left-color: color-mix(in srgb,var(--accent) 70%,var(--border)); }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-latest span { font-style: normal; font-size: 12px; line-height: 1.6; }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) .watcher-character { border-color: color-mix(in srgb,var(--accent) 16%,var(--border)); }
-:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"]) #watcher-poke { border-color: color-mix(in srgb,var(--accent) 60%,var(--border)); letter-spacing: .08em; }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-stage-caption { padding-top: 10px; border-top: 1px solid var(--border); min-height: 31px; }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-stage-caption b { font-size: 9px; }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-latest { margin-top: 14px; border-left-color: color-mix(in srgb,var(--accent) 70%,var(--border)); }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-latest span { font-style: normal; font-size: 12px; line-height: 1.6; }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) .watcher-character { border-color: color-mix(in srgb,var(--accent) 16%,var(--border)); }
+:is([data-companion="aster"],[data-companion="axiom"],[data-companion="meridian"],[data-companion="lyra"],[data-companion="nova"]) #watcher-poke { border-color: color-mix(in srgb,var(--accent) 60%,var(--border)); letter-spacing: .08em; }
 
 [data-story-pending="true"] .watcher-bond-panel, [data-story-pending="true"] .watcher-now-story, [data-story-pending="true"] .watcher-pair, [data-story-pending="true"] .watcher-story-page > .watcher-side, [data-story-pending="true"] .watcher-card:has(#watcher-memories), [data-story-pending="true"] .watcher-knows-panel { display:none; }
 .watcher-voice-remove button { min-height: 28px; padding: 0 12px; font: 700 10px Consolas, monospace; letter-spacing: .1em; }

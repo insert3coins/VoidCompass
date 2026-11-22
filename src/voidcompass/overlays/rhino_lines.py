@@ -277,6 +277,10 @@ def officer_refining(identity):
 from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
 
 PERSONAS["lyra"] = {"plain": dict(_lyra.RHINO["plain"]), "voiced": dict(_lyra.RHINO["voiced"])}
+# 5.8.6: Nova.
+from voidcompass.overlays import nova_shared as _nova  # noqa: E402
+
+PERSONAS["nova"] = {"plain": dict(_nova.RHINO["plain"]), "voiced": dict(_nova.RHINO["voiced"])}
 
 # 5.7.6: the Rhino survey (centre and edge, half, done) and the best patch.
 from voidcompass.overlays import rhino_survey_lines as _survey  # noqa: E402

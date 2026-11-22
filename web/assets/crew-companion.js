@@ -23,7 +23,7 @@ function update(source, model = {}, live = {}, options = {}) {
   if (!source) return;
   for (const canvas of [...pools.keys()]) if (!canvas.isConnected) dispose(canvas);
   const identity = model.orb?.identity;
-  const active = ["axiom", "meridian", "lyra"].includes(identity);
+  const active = ["axiom", "meridian", "lyra", "nova"].includes(identity);
   let pool = pools.get(source);
   if (!pool) { pool = {byId: new Map(), current: null}; pools.set(source, pool); }
   const now = performance.now();
@@ -52,7 +52,7 @@ function update(source, model = {}, live = {}, options = {}) {
       const message = document.createElement("span");
       message.className = "crew-renderer-error";
       message.style.cssText = "position:absolute;inset:15%;display:grid;place-items:center;text-align:center;font:11px/1.5 Consolas,monospace;color:var(--text,#d8e6ee)";
-      message.textContent = `${{axiom:"Axiom",meridian:"Meridian",lyra:"Lyra"}[identity]} display unavailable. Check WebGL / hardware acceleration.`;
+      message.textContent = `${{axiom:"Axiom",meridian:"Meridian",lyra:"Lyra",nova:"Nova"}[identity]} display unavailable. Check WebGL / hardware acceleration.`;
       source.insertAdjacentElement("afterend", message);
       pool.byId.set(identity, {canvas, identity, display: null, error: message, used: now});
       source.style.opacity = "0";

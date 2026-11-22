@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nova · animation preview</title>
+<style>
+:root{color-scheme:dark;font:16px/1.45 "Segoe UI",Arial,sans-serif;background:#0c1422;color:#e5efff}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px}main{width:min(100%,650px)}
+h1{font-size:26px;font-weight:600;letter-spacing:.06em;margin:0 0 14px}.stage{min-height:min(435px,53vh);display:grid;place-items:center;background:radial-gradient(ellipse at center,#2b3a53,#131e30 73%);border:1px solid #34465f;border-radius:14px;overflow:hidden}.stage.light{background:#eceef4}.stage canvas{max-width:100%;height:auto}
+.controls{display:flex;flex-wrap:wrap;gap:14px 18px;margin-top:21px;align-items:end}label{display:grid;gap:5px;color:#a8bbd4;font-size:13px}select,button{font:inherit;color:#e4efff;background:#1b2a40;border:1px solid #455c77;border-radius:6px;padding:7px 12px;min-height:36px}button{cursor:pointer}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #71ddff;outline-offset:3px}
+#play{background:#c5edff;color:#0c2532;font-weight:600}#scrub{grid-column:1/-1;display:flex;align-items:center;gap:14px;width:100%;margin-top:16px}#frame{flex:1;accent-color:#87dfff}output{min-width:58px;font-variant-numeric:tabular-nums}#error{color:#ffd1b8}
+</style><main><h1>Nova</h1>
+<div class="stage" id="stage"><canvas width="512" height="512" role="img" aria-label="Front-facing illustrated head of Nova"></canvas></div>
+<div class="controls"><label>Animation<select id="clip"></select></label><label>HUD size<select id="size"></select></label><label>Background<select id="background"><option>Dark</option><option>Light</option></select></label><button id="play" type="button">Play</button><button id="blink" type="button" hidden>Blink now</button></div>
+<label id="scrub"><span id="rangeName">Frame</span><input id="frame" type="range" min="0" value="0"><output id="count"></output></label><p role="alert" id="error" hidden></p>
+</main><script>
+"use strict";
+const spec = {"name":"Nova","source":"Front-facing illustrated head","width":512,"height":512,"transparent":true,"defaultDisplayPx":144,"displaySizesPx":[54,72,96,144,192,256],"poster":"idle/000.png","frameCount":336,"clips":[{"id":"idle","label":"Idle","playback":"loop","frameCount":48,"files":["idle/000.png","idle/001.png","idle/002.png","idle/003.png","idle/004.png","idle/005.png","idle/006.png","idle/007.png","idle/008.png","idle/009.png","idle/010.png","idle/011.png","idle/012.png","idle/013.png","idle/014.png","idle/015.png","idle/016.png","idle/017.png","idle/018.png","idle/019.png","idle/020.png","idle/021.png","idle/022.png","idle/023.png","idle/024.png","idle/025.png","idle/026.png","idle/027.png","idle/028.png","idle/029.png","idle/030.png","idle/031.png","idle/032.png","idle/033.png","idle/034.png","idle/035.png","idle/036.png","idle/037.png","idle/038.png","idle/039.png","idle/040.png","idle/041.png","idle/042.png","idle/043.png","idle/044.png","idle/045.png","idle/046.png","idle/047.png"],"fps":15},{"id":"listening","label":"Listening","playback":"loop","frameCount":24,"files":["listening/000.png","listening/001.png","listening/002.png","listening/003.png","listening/004.png","listening/005.png","listening/006.png","listening/007.png","listening/008.png","listening/009.png","listening/010.png","listening/011.png","listening/012.png","listening/013.png","listening/014.png","listening/015.png","listening/016.png","listening/017.png","listening/018.png","listening/019.png","listening/020.png","listening/021.png","listening/022.png","listening/023.png"],"fps":15},{"id":"speaking","label":"Speaking","playback":"loop","frameCount":36,"files":["speaking/000.png","speaking/001.png","speaking/002.png","speaking/003.png","speaking/004.png","speaking/005.png","speaking/006.png","speaking/007.png","speaking/008.png","speaking/009.png","speaking/010.png","speaking/011.png","speaking/012.png","speaking/013.png","speaking/014.png","speaking/015.png","speaking/016.png","speaking/017.png","speaking/018.png","speaking/019.png","speaking/020.png","speaking/021.png","speaking/022.png","speaking/023.png","speaking/024.png","speaking/025.png","speaking/026.png","speaking/027.png","speaking/028.png","speaking/029.png","speaking/030.png","speaking/031.png","speaking/032.png","speaking/033.png","speaking/034.png","speaking/035.png"],"fps":24},{"id":"speaking-blink","label":"Speaking with a blink","playback":"loop","frameCount":36,"fps":24,"files":["speaking-blink/000.png","speaking-blink/001.png","speaking-blink/002.png","speaking-blink/003.png","speaking-blink/004.png","speaking-blink/005.png","speaking-blink/006.png","speaking-blink/007.png","speaking-blink/008.png","speaking-blink/009.png","speaking-blink/010.png","speaking-blink/011.png","speaking-blink/012.png","speaking-blink/013.png","speaking-blink/014.png","speaking-blink/015.png","speaking-blink/016.png","speaking-blink/017.png","speaking-blink/018.png","speaking-blink/019.png","speaking-blink/020.png","speaking-blink/021.png","speaking-blink/022.png","speaking-blink/023.png","speaking-blink/024.png","speaking-blink/025.png","speaking-blink/026.png","speaking-blink/027.png","speaking-blink/028.png","speaking-blink/029.png","speaking-blink/030.png","speaking-blink/031.png","speaking-blink/032.png","speaking-blink/033.png","speaking-blink/034.png","speaking-blink/035.png"]},{"id":"working","label":"Working","playback":"loop","frameCount":24,"files":["working/000.png","working/001.png","working/002.png","working/003.png","working/004.png","working/005.png","working/006.png","working/007.png","working/008.png","working/009.png","working/010.png","working/011.png","working/012.png","working/013.png","working/014.png","working/015.png","working/016.png","working/017.png","working/018.png","working/019.png","working/020.png","working/021.png","working/022.png","working/023.png"],"fps":15},{"id":"charging","label":"Charging","playback":"loop","frameCount":24,"files":["charging/000.png","charging/001.png","charging/002.png","charging/003.png","charging/004.png","charging/005.png","charging/006.png","charging/007.png","charging/008.png","charging/009.png","charging/010.png","charging/011.png","charging/012.png","charging/013.png","charging/014.png","charging/015.png","charging/016.png","charging/017.png","charging/018.png","charging/019.png","charging/020.png","charging/021.png","charging/022.png","charging/023.png"],"fps":24},{"id":"alert","label":"Alert","playback":"loop","frameCount":24,"files":["alert/000.png","alert/001.png","alert/002.png","alert/003.png","alert/004.png","alert/005.png","alert/006.png","alert/007.png","alert/008.png","alert/009.png","alert/010.png","alert/011.png","alert/012.png","alert/013.png","alert/014.png","alert/015.png","alert/016.png","alert/017.png","alert/018.png","alert/019.png","alert/020.png","alert/021.png","alert/022.png","alert/023.png"],"fps":24},{"id":"warm-smile","label":"Warm smile","playback":"once","frameCount":16,"files":["warm-smile/000.png","warm-smile/001.png","warm-smile/002.png","warm-smile/003.png","warm-smile/004.png","warm-smile/005.png","warm-smile/006.png","warm-smile/007.png","warm-smile/008.png","warm-smile/009.png","warm-smile/010.png","warm-smile/011.png","warm-smile/012.png","warm-smile/013.png","warm-smile/014.png","warm-smile/015.png"],"fps":15},{"id":"curious","label":"Curious","playback":"once","frameCount":16,"files":["curious/000.png","curious/001.png","curious/002.png","curious/003.png","curious/004.png","curious/005.png","curious/006.png","curious/007.png","curious/008.png","curious/009.png","curious/010.png","curious/011.png","curious/012.png","curious/013.png","curious/014.png","curious/015.png"],"fps":15},{"id":"thinking","label":"Thinking","playback":"once","frameCount":16,"files":["thinking/000.png","thinking/001.png","thinking/002.png","thinking/003.png","thinking/004.png","thinking/005.png","thinking/006.png","thinking/007.png","thinking/008.png","thinking/009.png","thinking/010.png","thinking/011.png","thinking/012.png","thinking/013.png","thinking/014.png","thinking/015.png"],"fps":15},{"id":"delighted","label":"Delighted","playback":"once","frameCount":20,"files":["delighted/000.png","delighted/001.png","delighted/002.png","delighted/003.png","delighted/004.png","delighted/005.png","delighted/006.png","delighted/007.png","delighted/008.png","delighted/009.png","delighted/010.png","delighted/011.png","delighted/012.png","delighted/013.png","delighted/014.png","delighted/015.png","delighted/016.png","delighted/017.png","delighted/018.png","delighted/019.png"],"fps":15},{"id":"reassuring","label":"Reassuring","playback":"once","frameCount":16,"files":["reassuring/000.png","reassuring/001.png","reassuring/002.png","reassuring/003.png","reassuring/004.png","reassuring/005.png","reassuring/006.png","reassuring/007.png","reassuring/008.png","reassuring/009.png","reassuring/010.png","reassuring/011.png","reassuring/012.png","reassuring/013.png","reassuring/014.png","reassuring/015.png"],"fps":15},{"id":"surprised","label":"Surprised","playback":"once","frameCount":16,"files":["surprised/000.png","surprised/001.png","surprised/002.png","surprised/003.png","surprised/004.png","surprised/005.png","surprised/006.png","surprised/007.png","surprised/008.png","surprised/009.png","surprised/010.png","surprised/011.png","surprised/012.png","surprised/013.png","surprised/014.png","surprised/015.png"],"fps":24},{"id":"blink","label":"Blink","playback":"once","frameCount":11,"files":["blink/000.png","blink/001.png","blink/002.png","blink/003.png","blink/004.png","blink/005.png","blink/006.png","blink/007.png","blink/008.png","blink/009.png","blink/010.png"],"fps":24},{"id":"mouth-levels","label":"Mouth opening","playback":"level","frameCount":9,"files":["mouth-levels/000.png","mouth-levels/001.png","mouth-levels/002.png","mouth-levels/003.png","mouth-levels/004.png","mouth-levels/005.png","mouth-levels/006.png","mouth-levels/007.png","mouth-levels/008.png"],"levels":[0.0,0.125,0.25,0.375,0.5,0.625,0.75,0.875,1.0]}],"layers":{"blink":{"id":"blink","label":"Blink over speech","playback":"once","fps":30,"frameCount":11,"rect":{"x":129,"y":256,"width":292,"height":72},"composite":"replace","appliesTo":["speaking","mouth-levels"],"skipFrames":[0,10],"files":["layers/blink/000.png","layers/blink/001.png","layers/blink/002.png","layers/blink/003.png","layers/blink/004.png","layers/blink/005.png","layers/blink/006.png","layers/blink/007.png","layers/blink/008.png","layers/blink/009.png","layers/blink/010.png"]}},"layerFrameCount":11};
+const $ = id => document.getElementById(id);
+const canvas = document.querySelector("canvas"), ctx = canvas.getContext("2d");
+const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+const layer = spec.layers.blink;
+let frames = [], eyeFrames = [], clip, index = 0, loadNumber = 0;
+let playing = false, start = 0, timer = 0, blinkStart = null, nextBlink = Infinity, lastEye = -1;
+
+for (const c of spec.clips) $("clip").add(new Option(c.label,c.id));
+$("clip").value = "speaking";
+for (const size of spec.displaySizesPx) $("size").add(new Option(size+" px",size));
+$("size").add(new Option("512 px · source",512));
+$("size").value = String(spec.defaultDisplayPx);
+function resize(){canvas.style.width = $("size").value+"px";}
+resize(); $("size").onchange = resize;
+$("background").onchange = () => $("stage").classList.toggle("light",$("background").value==="Light");
+
+function paint(i, eye) {
+  index=i; lastEye=eye;
+  ctx.clearRect(0,0,512,512); ctx.drawImage(frames[i],0,0);
+  if (eye>0 && eye<layer.frameCount-1 && eyeFrames.length) {
+    const {x,y,width,height}=layer.rect;
+    ctx.clearRect(x,y,width,height); ctx.drawImage(eyeFrames[eye],x,y);
+  }
+  $("frame").value=i; $("count").value=(i+1)+" / "+clip.frameCount;
+}
+function requestTick() {
+  if (!timer && !document.hidden && (playing || blinkStart!==null)) timer=requestAnimationFrame(tick);
+}
+function tick(now) {
+  timer=0;
+  if (!frames.length) return;
+  let i=index;
+  if (playing) {
+    const age=Math.max(0,Math.floor((now-start)*clip.fps/1000));
+    if (clip.playback==="once" && age>=clip.frameCount) {
+      i=clip.frameCount-1;playing=false;$("play").textContent="Play";
+    } else i=age%clip.frameCount;
+  }
+  if (playing && now>=nextBlink && blinkStart===null) startBlink(now);
+  let eye=blinkStart===null?-1:Math.max(0,Math.floor((now-blinkStart)*layer.fps/1000));
+  if (eye>=layer.frameCount) {blinkStart=null;eye=-1;}
+  if (i!==index || eye!==lastEye) paint(i,eye);
+  requestTick();
+}
+function startBlink(now) {
+  if (!eyeFrames.length) return;
+  blinkStart=now;
+  nextBlink=playing && clip.id==="speaking" && !reduced.matches ? now+3400+Math.random()*2100 : Infinity;
+}
+function stop() {
+  cancelAnimationFrame(timer); timer=0; playing=false;blinkStart=null;nextBlink=Infinity;
+  $("play").textContent="Play";
+  if (frames.length && lastEye!==-1) paint(index,-1);
+}
+function play() {
+  if (!frames.length || clip.playback==="level") return;
+  if (clip.playback==="once" && index===clip.frameCount-1) paint(0,-1);
+  const now=performance.now();
+  start=now-index*1000/clip.fps;playing=true;$("play").textContent="Pause";
+  nextBlink=clip.id==="speaking" && !reduced.matches ? now+760 : Infinity;
+  requestTick();
+}
+function readImgs(files) {
+  return Promise.all(files.map(file=>new Promise((resolve,reject)=>{
+    const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error("Extract the full folder before opening the preview. Could not load "+file));
+    img.src=file;
+  })));
+}
+async function load(){
+  const stamp=++loadNumber;stop();frames=[];eyeFrames=[];lastEye=-1;
+  clip=spec.clips.find(c=>c.id===$("clip").value);
+  const isLevel=clip.playback==="level", hasEyes=layer.appliesTo.includes(clip.id);
+  $("play").disabled=true;$("blink").hidden=!hasEyes;$("blink").disabled=true;
+  $("frame").disabled=true;$("error").hidden=true;
+  $("rangeName").textContent=isLevel?"Mouth opening":"Frame";$("frame").max=clip.frameCount-1;
+  try {
+    const [base, eyes]=await Promise.all([readImgs(clip.files),hasEyes?readImgs(layer.files):Promise.resolve([])]);
+    if (stamp!==loadNumber)return;
+    frames=base;eyeFrames=eyes;paint(0,-1);
+    $("frame").disabled=false;$("play").disabled=isLevel;$("blink").disabled=!hasEyes;
+    if(!isLevel && !reduced.matches && !document.hidden)play();
+  } catch(e) {
+    if(stamp===loadNumber){$("error").textContent=e.message;$("error").hidden=false;}
+  }
+}
+$("clip").onchange=load;
+$("play").onclick=()=>playing?stop():play();
+$("blink").onclick=()=>{if(eyeFrames.length){startBlink(performance.now());requestTick();}};
+$("frame").oninput=()=>{
+  if(!frames.length)return;
+  if(clip.playback!=="level")stop();
+  paint(Number($("frame").value),lastEye);
+};
+document.addEventListener("visibilitychange",()=>{if(document.hidden)stop();});
+reduced.addEventListener("change",()=>{if(reduced.matches)stop();});
+load();
+
+</script></html>
+

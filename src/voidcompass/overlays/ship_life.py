@@ -397,6 +397,10 @@ def persona_banks(identity):
 from voidcompass.overlays import lyra_shared as _lyra  # noqa: E402
 
 PERSONAS["lyra"] = {"plain": dict(_lyra.SHIP_LIFE["plain"]), "voiced": dict(_lyra.SHIP_LIFE["voiced"])}
+# 5.8.6: Nova.
+from voidcompass.overlays import nova_shared as _nova  # noqa: E402
+
+PERSONAS["nova"] = {"plain": dict(_nova.SHIP_LIFE["plain"]), "voiced": dict(_nova.SHIP_LIFE["voiced"])}
 
 # 5.7.6: the docking request, and the station cancelling or timing it out.
 from voidcompass.overlays import docking_talk as _docking  # noqa: E402

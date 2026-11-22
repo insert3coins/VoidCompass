@@ -47,6 +47,8 @@ KINDS = {
     "merits": ("aster", "powerplay", "merit targets"),
     "place": ("watcher", "watcher", "long journeys"),
     "errand": ("watcher", "watcher", "errands"),
+    "new_codex": ("nova", "exploration", "Codex searches"),
+    "closer_look": ("nova", "exploration", "closer looks"),
 }
 
 WORTHY = ("earthlike", "earth-like", "water world", "ammonia world")
@@ -159,6 +161,44 @@ def lyra_cash_bio(facts):
         fields={"value": spoken_credits(value), "rebuy": spoken_credits(rebuy) if rebuy else ""},
         why=[_why(f"{obj.short_credits(value)} CR of unsold samples aboard", "Your journal")]
             + ([_why(f"Rebuy {obj.short_credits(rebuy)} CR", "Your journal")] if rebuy else []),
+    )]
+
+
+# -- Nova: observation (5.8.6) --------------------------------------------------
+# A world she'd like a proper look at: the kinds people stop for.
+REMARKABLE = ("earthlike", "earth-like", "water world", "ammonia world")
+
+
+def nova_new_codex(facts):
+    """New Codex entries: out past the bubble, where there's still something to notice."""
+    if facts.get("docked") or float(facts.get("home_ly") or 0) < 200:
+        return []
+    day = int(float(facts.get("now") or time.time()) // 86400)
+    return [draft(
+        "new_codex", "Three new Codex entries", "Anything at all the Codex hasn't seen us log. Out here, there's always something.",
+        [obj.make("codex", 3, label="New Codex entries", new_only=True)], key=f"codex:{day}", score=35,
+        fields={"count": 3, "system": facts.get("system")},
+        why=[_why(f"{facts.get('system')} is {_ly(facts.get('home_ly'))} from home", "Your journal")],
+    )]
+
+
+def nova_closer_look(facts):
+    """A closer look and a picture of a remarkable world in this system."""
+    if not facts.get("address"):
+        return []
+    worlds = [row for row in facts.get("system_bodies") or ()
+              if row.get("name") and any(word in str(row.get("type") or "").casefold() for word in REMARKABLE)]
+    if not worlds:
+        return []
+    world = sorted(worlds, key=lambda row: -(row.get("value") or 0))[0]
+    body, system = world["name"], facts.get("system")
+    return [draft(
+        "closer_look", f"A closer look at {body}", f"{body} in {system}: no scan needed. Fly close and take a picture of it.",
+        [obj.make("screenshot", label=f"A picture of {body}", address=facts["address"], body=body)],
+        key=f"look:{facts['address']}", score=42,
+        fields={"body": body, "system": system},
+        why=[_why(f"{body}: {world.get('type') or 'a remarkable world'}", "Your scans (journal)")],
+        target={"system": system, "address": facts["address"]},
     )]
 
 
@@ -397,7 +437,7 @@ def watcher_errand(facts):
 
 GENERATORS = (lyra_bio_hunt, lyra_cash_bio, axiom_map_worlds, axiom_first_discoveries, axiom_finish_system,
               meridian_neutron, meridian_new_region, meridian_record, aster_sell_price, aster_cash_carto,
-              aster_colony, aster_merits, watcher_place, watcher_errand)
+              aster_colony, aster_merits, watcher_place, watcher_errand, nova_new_codex, nova_closer_look)
 
 
 def candidates(facts, *, categories=DEFAULT_CATEGORIES, watcher=True, muted=lambda officer, kind: False,
