@@ -16,7 +16,10 @@ LOCKER_EVENTS = {"ShipLocker", "Backpack", "BackpackChange", "ShipLockerMaterial
 SUIT_EVENTS = {"SuitLoadout", "CreateSuitLoadout", "SwitchSuitLoadout", "RenameSuitLoadout", "DeleteSuitLoadout",
                "LoadoutEquipModule", "LoadoutRemoveModule"}
 NEAREST = {"raw": ("Raw material trader", "Raw"), "manufactured": ("Manufactured material trader", "Manufactured"),
-           "encoded": ("Encoded material trader", "Encoded"), "broker": ("Technology broker", None)}
+           "encoded": ("Encoded material trader", "Encoded"), "broker": ("Technology broker", None),
+           # Guardian and Human brokers unlock different things: each can be looked up on its own.
+           "broker_guardian": ("Guardian technology broker", None), "broker_human": ("Human technology broker", None)}
+BROKER_KIND = {"broker_guardian": "Guardian", "broker_human": "Human"}
 NEAREST_TTL_S = 600
 BUILD_BYTES = 40_000
 WANTED_GAP_S = 15
@@ -150,6 +153,12 @@ class HtmlMaterialsMixin:
         changed = False
         if ev in ("FSDJump", "Location", "CarrierJump"):
             self._materials_where = mp.system_factions(raw)
+        if ev in ("Docked", "Location"):
+            self._materials_station = mp.docked_station(raw)
+        elif ev == "Undocked":
+            self._materials_station = None
+        if ev == "TechnologyBroker":
+            changed = mp.note_broker(state, raw, getattr(self, "_materials_station", None)) or changed
         if ev in ("SupercruiseEntry", "FSDJump", "Shutdown", "Died", "LoadGame"):
             self._materials_hge_open = None
         if ev == "USSDrop" and mp.is_hge(raw):
@@ -219,7 +228,7 @@ class HtmlMaterialsMixin:
         position = self._galaxy_minimap_position() if hasattr(self, "_galaxy_minimap_position") else None
         return {"system": str(getattr(self, "current_sys", "") or ""), "coords": list(position) if position else None}
 
-    _HISTORY_SCAN = 3   # 1: blueprint figures; 2: and the ship types you've flown; 3: and every ship you own
+    _HISTORY_SCAN = 4   # 1: blueprint figures; 2: and the ship types you've flown; 3: and every ship you own; 4: and brokers you've used
 
     def _materials_learn_from_history(self, state):
         """Once per commander: read the journal history for blueprint figures and ship types from before 5.8.4."""
@@ -301,6 +310,17 @@ class HtmlMaterialsMixin:
             "online": bool(self._trading_online()) if hasattr(self, "_trading_online") else False,
         }
 
+    def _html_ship_builder_workspace(self):
+        """The Ship Builder page (5.8.5): your ships, your builds and what the builder learns, without the wishlists."""
+        state = self._materials_state()
+        self._materials_learn_from_history(state)
+        return {
+            "ship_builds": state.get("ship_builds") or [], "ship_loadout": state.get("ship_loadout"),
+            "fleet": mp.fleet_list(state), "seen_hulls": state.get("seen_hulls") or {}, "ship_names": state.get("ship_names") or {},
+            "learned_figures": mp.learned_figures(state), "imported_build": state.get("imported_build"),
+            "have": {"horizons": mp.horizons_have(state)}, "options": self._materials_options(),
+        }
+
     def _materials_data(self, name, query):
         """GET /api/data/materials-reference: the page's fixed tables."""
         if name == "materials-reference":
@@ -332,10 +352,25 @@ class HtmlMaterialsMixin:
         def work():
             if trader:
                 return spansh.material_traders(here["system"], trader, size=5, coords=here["coords"])
-            return spansh.service_stations(here["system"], "Technology Broker", size=5, coords=here["coords"])
+            rows = spansh.service_stations(here["system"], "Technology Broker", size=5, coords=here["coords"], broker=BROKER_KIND.get(kind))
+            if kind in BROKER_KIND and self._materials_state().get("brokers"):
+                # Brokers Spansh can't type but you've used: the nearby ones, sorted in below.
+                rows += spansh.service_stations(here["system"], "Technology Broker", size=25, coords=here["coords"])
+            return rows
 
         def done(result, error):
-            cache[kind] = {"label": label, "waiting": False, "rows": [row for row in (result or []) if not row.get("carrier")][:5],
+            state = self._materials_state()
+            rows, seen = [], set()
+            for row in sorted(result or (), key=lambda row: row.get("distance") or 0):
+                if row.get("carrier") or (row.get("station"), row.get("system")) in seen:
+                    continue
+                if not row.get("broker") and mp.broker_kind(state, row.get("market_id")):
+                    row = {**row, "broker": mp.broker_kind(state, row.get("market_id")), "learned": True}
+                if kind in BROKER_KIND and row.get("broker") != BROKER_KIND[kind]:
+                    continue
+                seen.add((row.get("station"), row.get("system")))
+                rows.append(row)
+            cache[kind] = {"label": label, "waiting": False, "rows": rows[:5],
                            "error": str(error or "")[:200], "system": here["system"], "at": time.time()}
             self._refresh_html_workspace()
 

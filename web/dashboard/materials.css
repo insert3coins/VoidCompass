@@ -1,22 +1,22 @@
 /* The Materials page (materials.js, materials-ship.js). Colours are theme tokens. */
 
-#materials-workspace { container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0; }
-#materials-workspace button { cursor: pointer; }
-#materials-workspace input, #materials-workspace select {
+:is(#materials-workspace, #ship-builder-workspace) { container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0; }
+:is(#materials-workspace, #ship-builder-workspace) button { cursor: pointer; }
+:is(#materials-workspace, #ship-builder-workspace) input, :is(#materials-workspace, #ship-builder-workspace) select {
   min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--input); color: var(--text);
   font: 12px "Segoe UI", sans-serif; outline: none;
 }
-#materials-workspace input:focus, #materials-workspace select:focus { border-color: var(--accent); }
-#materials-workspace input[type="checkbox"] { height: auto; }
-#materials-workspace h3 { margin: 0; color: var(--text); font: 600 15px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
-#materials-workspace h4 { margin: 6px 0 0; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
-#materials-workspace button:not(.mt-chip):not(.mt-tab):not(.mt-group):not(.mt-rail-item):not(.mt-mod):not(.mt-hull):not(.mt-eye):not(.mt-goalcard):not(.mt-global-row):not(.mt-pick) {
+:is(#materials-workspace, #ship-builder-workspace) input:focus, :is(#materials-workspace, #ship-builder-workspace) select:focus { border-color: var(--accent); }
+:is(#materials-workspace, #ship-builder-workspace) input[type="checkbox"] { height: auto; }
+:is(#materials-workspace, #ship-builder-workspace) h3 { margin: 0; color: var(--text); font: 600 15px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
+:is(#materials-workspace, #ship-builder-workspace) h4 { margin: 6px 0 0; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+:is(#materials-workspace, #ship-builder-workspace) button:not(.mt-chip):not(.mt-tab):not(.mt-group):not(.mt-rail-item):not(.mt-mod):not(.mt-hull):not(.mt-eye):not(.mt-goalcard):not(.mt-global-row):not(.mt-pick):not(.mt-seg-btn):not(.mt-mark):not(.mt-fit-item):not(.mt-onoff):not(.sb-mode):not(.sb-tab) {
   min-height: 28px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--accent); font: 700 9.5px Consolas, monospace; letter-spacing: .1em;
 }
-#materials-workspace button.ghost { border-color: var(--border); background: transparent; color: var(--muted); }
-#materials-workspace button.ghost:hover { color: var(--text); border-color: var(--accent); }
-#materials-workspace button.danger:hover { color: var(--red); border-color: var(--red); }
+:is(#materials-workspace, #ship-builder-workspace) button.ghost { border-color: var(--border); background: transparent; color: var(--muted); }
+:is(#materials-workspace, #ship-builder-workspace) button.ghost:hover { color: var(--text); border-color: var(--accent); }
+:is(#materials-workspace, #ship-builder-workspace) button.danger:hover { color: var(--red); border-color: var(--red); }
 .mt-loading, .mt-empty { margin: 0; padding: 14px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
 .mt-note { margin: 0; padding: 8px 12px; border-left: 2px solid var(--accent); background: var(--panel); color: var(--muted); font: 11.5px/1.5 "Segoe UI", sans-serif; }
 .mt-dim { margin: 0; color: var(--dim); font: 11px/1.5 "Segoe UI", sans-serif; }
@@ -195,25 +195,12 @@
 /* The ship builder. */
 .mt-ship { display: grid; gap: 12px; min-width: 0; }
 .mt-ship-bar select[data-ms-saved] { max-width: 260px; }
-.mt-ship-split { grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); }
-@container (max-width: 1100px) { .mt-ship-split { grid-template-columns: minmax(0, 1fr); } }
-.mt-slots td { padding: 4px 8px; }
-.mt-slots select { width: 100%; max-width: 330px; height: 26px !important; font-size: 11.5px !important; }
-.mt-slot-name { width: 150px; color: var(--muted); }
-.mt-slot-name small { display: block; color: var(--dim); font-size: 10px; }
-.mt-slot-eng { display: flex; flex-wrap: wrap; gap: 4px; }
-.mt-slot-eng select { width: auto; max-width: 200px; }
 .mt-ship-tiles { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
 .mt-ship-tiles .mt-tile b { font-size: 15px; }
 .mt-power { display: grid; gap: 4px; color: var(--muted); font: 700 9px Consolas, monospace; letter-spacing: .1em; }
 .mt-power .mt-bar { height: 6px; }
 .mt-power.short .mt-bar i { background: var(--red); }
 .mt-power.short b { color: var(--red); font: 11px "Segoe UI", sans-serif; letter-spacing: 0; }
-.mt-hulls { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
-.mt-hull { display: grid; gap: 3px; justify-items: start; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); color: var(--text); text-align: left; }
-.mt-hull:hover { border-color: var(--accent); }
-.mt-hull b { font: 600 13px "Segoe UI", sans-serif; }
-.mt-hull small { color: var(--dim); font: 11px "Segoe UI", sans-serif; }
 .mt-wishmats { table-layout: fixed; }
 .mt-wishmats td:nth-child(1) { width: 38%; }
 .mt-wishmats td:nth-child(2) { width: 16%; }
@@ -221,6 +208,214 @@
 .mt-compare td.ok { color: var(--green); }
 .mt-compare td.short, .mt-table td.short { color: var(--yellow); }
 .mt-ship .mt-codebar { margin-top: -4px; }
+
+/* The ship builder's look (5.8.5): shipyard, slot ledger, hull anatomy, fitting panel. Theme tokens only. */
+.mt-art { display: block; width: 100%; height: 100%; background: var(--accent); -webkit-mask: var(--art) center / contain no-repeat; mask: var(--art) center / contain no-repeat; }
+.mt-art-plan { position: absolute; inset: 0; background: color-mix(in srgb, var(--muted) 70%, var(--accent)); opacity: .8; }
+.mt-seg { display: flex; flex-wrap: wrap; border: 1px solid var(--border); }
+.mt-seg-btn { padding: 7px 12px; border: 0; border-right: 1px solid var(--border); background: transparent; color: var(--muted); font: 700 9.5px Consolas, monospace; letter-spacing: .12em; }
+.mt-seg-btn:last-child { border-right: 0; }
+.mt-seg-btn.on { background: var(--accent); color: var(--panel); }
+.mt-seg-btn small { opacity: .7; font-size: 8.5px; }
+.mt-chipbox { display: inline-flex; align-items: baseline; gap: 3px; padding: 3px 7px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); color: var(--accent); font: 700 11px Consolas, monospace; }
+.mt-chipbox small { color: var(--muted); font-size: 8.5px; letter-spacing: .1em; }
+.mt-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* Shipyard: the sortable table and the picked hull's card. */
+.mt-yard { display: grid; gap: 10px; min-width: 0; }
+.mt-yard-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+.mt-yard-head h3 { color: var(--accent); letter-spacing: .3em; }
+.mt-yard-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; }
+.mt-yard-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); gap: 14px; align-items: start; }
+.mt-yard-list { display: grid; gap: 8px; min-width: 0; }
+.mt-yard-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.mt-yard-tools .mt-search { flex: 1 1 220px; }
+.mt-yard-tools .mt-search input { width: 100%; }
+.mt-yard-table th.mt-sort { cursor: pointer; user-select: none; }
+.mt-yard-table th.mt-sort.on { color: var(--accent); }
+.mt-yard-row { cursor: pointer; }
+.mt-yard-row td { padding: 9px 10px; }
+.mt-yard-row b { color: var(--text); font: 600 13px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .04em; text-transform: uppercase; }
+.mt-yard-row:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.mt-yard-row.on td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.mt-yard-row.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.mt-yard-row.on b { color: var(--accent); }
+.mt-card { position: sticky; top: 8px; display: grid; gap: 8px; align-content: start; padding: 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.mt-card-art { display: grid; place-items: center; aspect-ratio: 3 / 2; border: 1px solid var(--border-soft);
+  background: repeating-linear-gradient(135deg, var(--inset) 0 10px, color-mix(in srgb, var(--inset) 70%, var(--panel)) 10px 20px); }
+.mt-card h3 { color: var(--accent); font-size: 20px; letter-spacing: .06em; text-transform: uppercase; }
+.mt-card-sub { margin: -6px 0 0; color: var(--muted); font: 700 9.5px Consolas, monospace; letter-spacing: .14em; text-transform: uppercase; }
+.mt-card-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border-soft); border: 1px solid var(--border-soft); }
+.mt-card-stats div { display: grid; gap: 2px; padding: 7px 10px; background: var(--inset); }
+.mt-card-stats span { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; }
+.mt-card-stats b { color: var(--text); font: 600 15px Consolas, monospace; }
+.mt-card h4 small { float: right; color: var(--dim); }
+.mt-card-price { display: flex; justify-content: space-between; align-items: baseline; padding-top: 8px; border-top: 1px solid var(--border-soft); }
+.mt-card-price span { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.mt-card-price b { color: var(--accent); font: 600 18px Consolas, monospace; }
+.mt-card-price small { color: var(--dim); font-size: 10px; }
+:is(#materials-workspace, #ship-builder-workspace) .mt-hull { min-height: 34px; padding: 0 14px; border: 1px solid var(--accent); background: var(--accent); color: var(--panel); font: 700 10px Consolas, monospace; letter-spacing: .16em; }
+:is(#materials-workspace, #ship-builder-workspace) .mt-hull:hover { filter: brightness(1.1); }
+
+/* Outfitting: the stats strip, then ledger | anatomy and fitting | stats. */
+.mt-outfit .mt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.mt-outfit .mt-head h3 { color: var(--accent); font-size: 19px; letter-spacing: .08em; text-transform: uppercase; }
+.mt-strip { display: flex; flex-wrap: wrap; gap: 1px; background: var(--border-soft); border: 1px solid var(--border-soft); }
+.mt-strip > div { flex: 1 1 90px; display: grid; gap: 2px; padding: 6px 10px; background: var(--panel); }
+.mt-strip span { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.mt-strip b { color: var(--text); font: 600 16px Consolas, monospace; }
+.mt-strip-power b { color: var(--green); }
+.mt-strip-power.short b { color: var(--red); }
+.mt-outfit-grid { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 14px; align-items: start; }
+@container (max-width: 900px) { .mt-outfit-grid, .mt-yard-split { grid-template-columns: minmax(0, 1fr); } .mt-card, .mt-ledger { position: static; } .mt-ledger { max-height: none; } }
+.mt-bench { display: grid; gap: 12px; min-width: 0; }
+
+/* The ledger keeps beside the bench and scrolls on its own, its tabs pinned to its top. */
+.mt-ledger { position: sticky; top: 8px; display: grid; gap: 3px; align-content: start; min-width: 0; max-height: calc(100vh - 150px); overflow-y: auto;
+  padding-right: 4px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.mt-ledger-tabs { position: sticky; top: 0; z-index: 2; margin-bottom: 4px; background: var(--panel); }
+.mt-ledger-tabs .mt-seg-btn { flex: 1 1 auto; padding: 7px 6px; }
+.mt-ledger h4 small { float: right; color: var(--dim); }
+.mt-led { display: grid; grid-template-columns: 24px 24px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid transparent;
+  border-left: 2px solid transparent; background: var(--panel); cursor: pointer; }
+.mt-led:hover { border-color: var(--border-soft); }
+.mt-led.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+.mt-led-size, .mt-led-num { display: grid; place-items: center; height: 22px; border: 1px solid var(--border); color: var(--muted); font: 700 10px Consolas, monospace; }
+.mt-led-num { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--accent); }
+.mt-led.on .mt-led-num { background: var(--accent); color: var(--panel); }
+.mt-led-main { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 0 6px; min-width: 0; }
+.mt-led-main b { overflow: hidden; color: var(--text); font: 600 12.5px "Segoe UI", sans-serif; white-space: nowrap; text-overflow: ellipsis; }
+.mt-led-chip { padding: 0 4px; border: 1px solid var(--border); color: var(--muted); font: 700 9px Consolas, monospace; font-style: normal; }
+.mt-led-main small { grid-column: 1 / -1; overflow: hidden; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; text-overflow: ellipsis; }
+.mt-led.empty .mt-led-main b { color: var(--dim); font-style: italic; font-weight: 400; }
+.mt-led.empty .mt-led-num { border-style: dashed; color: var(--dim); }
+.mt-led.off .mt-led-main b { color: var(--muted); text-decoration: line-through; }
+.mt-led-eng { color: var(--accent); font-size: 13px; }
+.mt-onoff { min-width: 38px; padding: 2px 6px; border: 1px solid var(--border); background: transparent; color: var(--green); font: 700 8.5px Consolas, monospace; letter-spacing: .1em; }
+.mt-onoff::before { content: "●  "; }
+.mt-onoff.off { border-color: currentColor; color: var(--orange, var(--yellow)); }
+.mt-onoff.off::before { content: "○  "; }
+
+.mt-anatomy { display: grid; gap: 6px; min-width: 0; }
+.mt-plates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@container (max-width: 620px) { .mt-plates { grid-template-columns: minmax(0, 1fr); } }
+.mt-plate { margin: 0; padding: 6px; border: 1px solid var(--border-soft);
+  background: repeating-linear-gradient(135deg, var(--inset) 0 12px, color-mix(in srgb, var(--inset) 75%, var(--panel)) 12px 24px); }
+.mt-plate figcaption { color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.mt-plate-box { position: relative; width: 100%; max-width: 560px; margin: 0 auto; }
+.mt-mark { position: absolute; display: grid; place-items: center; width: 22px; height: 22px; margin: -11px 0 0 -11px; padding: 0; border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--panel) 85%, transparent); color: var(--accent); font: 700 10px Consolas, monospace; z-index: 1; }
+.mt-mark.utility { border-color: var(--blue, var(--muted)); color: var(--blue, var(--muted)); width: 18px; height: 18px; margin: -9px 0 0 -9px; font-size: 9px; }
+.mt-mark.empty { border-style: dashed; color: var(--dim); border-color: var(--dim); }
+.mt-mark.off { opacity: .55; }
+.mt-mark.on { background: var(--accent); color: var(--panel); border-color: var(--accent); z-index: 2; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.mt-mark:hover { z-index: 3; transform: scale(1.12); }
+.mt-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.mt-legend .mt-mark { position: static; width: 12px; height: 12px; margin: 0 4px 0 0; display: inline-block; vertical-align: middle; }
+
+.mt-fit { display: grid; gap: 8px; min-width: 0; }
+.mt-fit-head { display: flex; align-items: center; gap: 10px; }
+.mt-fit-head h4 { margin: 0; }
+.mt-fit-head button { margin-left: auto; }
+.mt-fit-cols { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(0, 1.4fr) minmax(0, 1.4fr); gap: 8px; align-items: start; }
+.mt-fit-two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@container (max-width: 1200px) { .mt-fit-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .mt-fit-cols > .mt-fit-col:last-child { grid-column: 1 / -1; } }
+@container (max-width: 700px) { .mt-fit-cols { grid-template-columns: minmax(0, 1fr); } }
+.mt-fit-col { display: grid; gap: 2px; align-content: start; max-height: 440px; overflow: auto; padding: 6px; border: 1px solid var(--border-soft); background: var(--panel); }
+.mt-fit-col h5 { margin: 0 0 4px; color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em; }
+.mt-fit-item { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 7px 8px; border: 0; border-left: 2px solid transparent;
+  background: transparent; color: var(--text); text-align: left; }
+.mt-fit-item b { font: 600 12px "Segoe UI", sans-serif; }
+.mt-fit-item small { flex: none; color: var(--dim); font: 700 9.5px Consolas, monospace; }
+.mt-fit-item:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.mt-fit-item.on { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.mt-fit-item.on b { color: var(--accent); }
+.mt-fit-eng { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mt-fit-eng select { flex: 1 1 140px; }
+.mt-details td { padding: 3px 6px; font-size: 11.5px; }
+.mt-details td.ok { color: var(--green); }
+
+/* The Ship Builder page (5.8.5): the ship on the bench as a hero, then OUTFITTING, SHIPYARD and HANGAR. */
+.sb-page { display: grid; gap: 12px; min-width: 0; }
+.sb-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-areas: "id art" "read read"; gap: 10px 18px;
+  overflow: hidden; padding: 18px 20px 14px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: radial-gradient(120% 140% at 85% 30%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, var(--panel)), var(--panel)); }
+.sb-hero::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, var(--accent), transparent 70%); }
+.sb-hero-art { grid-area: art; position: relative; min-height: 170px; max-height: 230px; aspect-ratio: 3 / 2; justify-self: end; width: 100%; }
+.sb-hero-illustration { position: absolute; inset: -6% -2%; filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 45%, transparent)); }
+.sb-hero-id { grid-area: id; display: grid; align-content: center; gap: 8px; min-width: 0; z-index: 1; }
+.sb-kicker { margin: 0; color: var(--muted); font: 700 10px Consolas, monospace; letter-spacing: .2em; }
+.sb-hull { margin: 0; color: var(--accent); font: 600 clamp(26px, 3.4vw, 44px)/1 "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent); }
+:is(#ship-builder-workspace) input.sb-name { max-width: 380px; height: 34px; border-color: transparent; border-bottom-color: var(--border); background: transparent;
+  color: var(--text); font: 500 17px "Segoe UI", sans-serif; padding: 0 2px; }
+:is(#ship-builder-workspace) input.sb-name:focus { border-bottom-color: var(--accent); }
+.sb-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-readouts { grid-area: read; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 1px; z-index: 1; border: 1px solid var(--border-soft); background: var(--border-soft); }
+.sb-readout { display: grid; gap: 2px; align-content: start; padding: 8px 12px; background: color-mix(in srgb, var(--panel) 88%, transparent); }
+.sb-readout span { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .16em; }
+.sb-readout b { color: var(--text); font: 600 21px Consolas, monospace; white-space: nowrap; }
+.sb-readout b small { color: var(--muted); font-size: 11px; font-weight: 400; }
+.sb-readout > small { color: var(--muted); font: 10.5px "Segoe UI", sans-serif; white-space: nowrap; }
+.sb-readout.warn b, .sb-readout.warn > small { color: var(--red); }
+@container (max-width: 1200px) { .sb-readouts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (max-width: 760px) { .sb-hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: "art" "id" "read"; } .sb-hero-art { justify-self: center; }
+  .sb-readouts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.sb-modes { display: flex; flex-wrap: wrap; align-items: stretch; border-bottom: 1px solid var(--border); }
+.sb-mode { padding: 11px 22px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: 700 12px Consolas, monospace; letter-spacing: .2em; }
+.sb-mode small { color: var(--dim); font-size: 10px; letter-spacing: 0; }
+.sb-mode:hover:not(:disabled) { color: var(--text); }
+.sb-mode.on { color: var(--accent); border-bottom-color: var(--accent); background: linear-gradient(0deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent); }
+.sb-mode:disabled { opacity: .4; cursor: default; }
+.sb-modes-right { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0; }
+.sb-modes-right select { max-width: 280px; }
+.sb-fitbar { padding: 2px 0; }
+
+.sb-hangar { display: grid; gap: 16px; }
+.sb-hangar h4 small { color: var(--dim); }
+.sb-bays { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-top: 8px; }
+.sb-bay { display: grid; gap: 4px; align-content: start; padding: 10px 12px 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.sb-bay:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.sb-bay-art { position: relative; aspect-ratio: 3 / 2; margin: -2px -4px 4px;
+  background: repeating-linear-gradient(135deg, var(--inset) 0 10px, color-mix(in srgb, var(--inset) 70%, var(--panel)) 10px 20px); }
+.sb-bay-illustration { position: absolute; inset: 4%; }
+.sb-badge { position: absolute; top: 6px; left: 6px; padding: 2px 6px; background: var(--green); color: var(--panel); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.sb-bay h3 { overflow: hidden; color: var(--text); white-space: nowrap; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: .04em; }
+.sb-bay p { margin: 0 0 4px; color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.sb-bay button { justify-self: start; }
+
+/* The bench's analysis tabs (5.8.5). */
+.sb-analysis { display: grid; gap: 8px; min-width: 0; }
+.sb-tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.sb-tab { padding: 9px 16px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: 700 10.5px Consolas, monospace; letter-spacing: .16em; }
+.sb-tab:hover { color: var(--text); }
+.sb-tab.on { color: var(--accent); border-bottom-color: var(--accent); background: linear-gradient(0deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent); }
+.sb-tab small { color: var(--accent); }
+.sb-tab small.warn { color: var(--red); }
+.sb-analysis-body { display: grid; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.sb-analysis-body .mt-ship-tiles { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.sb-analysis-body h4:first-child { margin-top: 0; }
+
+/* The workbench (5.8.5): the hull, one side at a time, and fitting for the picked slot beside it. */
+.sb-workbench { display: grid; grid-template-columns: minmax(260px, .85fr) minmax(0, 1.5fr); gap: 12px; align-items: start; }
+@container (max-width: 1250px) { .sb-workbench { grid-template-columns: minmax(0, 1fr); } }
+.sb-anatomy-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sb-anatomy-head h4 { margin: 0; }
+.sb-workbench .mt-plate-box { max-width: 520px; }
+/* Left: the hull, the picked slot's engineering under it. Right: categories and modules, as tall as the left.
+   (Not a container query: a fitting panel sized by its own width inside this grid cost a second's layout per click.) */
+.sb-workbench { align-items: stretch; }
+.sb-workbench-left { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.sb-workbench > .mt-fit { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.sb-workbench .mt-fit-cols { flex: 1 1 auto; grid-template-columns: minmax(150px, .8fr) minmax(0, 1.4fr); align-items: stretch; min-height: 0; }
+.sb-workbench .mt-fit-cols.mt-fit-one { grid-template-columns: minmax(0, 1fr); }
+.sb-workbench .mt-fit-col { max-height: none; min-height: 260px; grid-auto-rows: max-content; }
+/* Side by side, the lists take the hull column's height (scrolling inside), never less than a usable 300px. */
+@container (min-width: 1251px) { .sb-workbench .mt-fit-cols { height: 0; min-height: 300px; } .sb-workbench .mt-fit-col { min-height: 0; } }
+.sb-engineering { display: grid; gap: 8px; align-content: start; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--panel); }
+.sb-engineering h4 { margin: 0; }
 
 /* Pinned blueprints on an engineer's card and under a blueprint. */
 .mt-pins { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -305,8 +500,6 @@
 .mt-route li[data-mt-op]:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .mt-wishmats tr[data-mt-op] { cursor: pointer; }
 .mt-unknown { display: block; margin-top: 2px; font-size: 10.5px; overflow-wrap: anywhere; }
-.mt-power { margin-left: 6px; min-width: 0; padding: 2px 6px; font: 700 9px Consolas, monospace; letter-spacing: .08em; opacity: .55; }
-.mt-power.off { opacity: 1; color: var(--orange, #e8902f); border-color: currentColor; }
 /* Slot tags (GAME FIGURES, a blueprint by name) sit centred beside the selects, not stretched to them. */
 .mt-slot-eng { align-items: center; }
 .mt-slot-eng .mt-tag { display: inline-flex; align-items: center; align-self: center; height: auto; padding: 4px 7px; font-size: 9px; line-height: 1; letter-spacing: .1em; white-space: nowrap; }

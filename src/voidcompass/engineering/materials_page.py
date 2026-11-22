@@ -1362,14 +1362,49 @@ def fleet_list(state):
              "at": row.get("timestamp") or "", "now": key == flying} for key, row in rows]
 
 
+# -- technology brokers you've used (5.8.5) ------------------------------------------
+# Spansh doesn't know every broker's kind (colony starports, rescue megaships). Each unlock you
+# make writes TechnologyBroker with its BrokerType, at the station you're docked at: that station's
+# broker is known from then on. {MarketID: {"kind", "station", "system", "at"}}
+def docked_station(raw):
+    """The station a Docked (or docked Location) event puts you at, or None."""
+    if raw.get("event") == "Location" and not raw.get("Docked"):
+        return None
+    if not raw.get("MarketID") or not raw.get("StationName"):
+        return None
+    return {"market_id": raw["MarketID"], "station": str(raw["StationName"]), "system": str(raw.get("StarSystem") or "")}
+
+
+def note_broker(state, raw, station=None):
+    """A TechnologyBroker unlock: the broker's kind at that station; True when it's new."""
+    kind = str(raw.get("BrokerType") or "").strip().title()
+    market = raw.get("MarketID") or (station or {}).get("market_id")
+    if not kind or not market:
+        return False
+    here = station if station and str(station.get("market_id")) == str(market) else {}
+    brokers = state.setdefault("brokers", {})
+    old = brokers.get(str(market)) or {}
+    row = {**old, "kind": kind, "at": str(raw.get("timestamp") or old.get("at") or ""),
+           **({"station": here["station"], "system": here["system"]} if here else {})}
+    if row == old:
+        return False
+    brokers[str(market)] = row
+    return True
+
+
+def broker_kind(state, market_id):
+    return ((state.get("brokers") or {}).get(str(market_id)) or {}).get("kind", "") if market_id else ""
+
+
 def scan_journal_history(paths, fid=""):
     """Every Loadout, roll and shipyard name in these journals, oldest first: a state of its own to merge.
     The fleet is only the commander with this FID's (the folder can hold others' journals)."""
     import json
     scanned = {}
     wanted = str(fid or "").strip().upper()
-    markers = ('"Loadout"', '"EngineerCraft"', '"Commander"', '"LoadGame"') + tuple(
+    markers = ('"Loadout"', '"EngineerCraft"', '"Commander"', '"LoadGame"', '"TechnologyBroker"', '"Docked"', '"Location"') + tuple(
         f'"{event}"' for event in set(_SHIPYARD_NAMES) | set(FLEET_EVENTS))
+    station = None
     for path in paths:
         mine = not wanted
         try:
@@ -1395,9 +1430,13 @@ def scan_journal_history(paths, fid=""):
                         note_hull_name(scanned, raw)
                     if event in FLEET_EVENTS and mine:
                         note_fleet(scanned, event, raw)
+                    if event in ("Docked", "Location"):
+                        station = docked_station(raw)
+                    elif event == "TechnologyBroker":
+                        note_broker(scanned, raw, station)
         except OSError:
             continue
-    return {key: scanned.get(key) or {} for key in ("learned_figures", "seen_hulls", "ship_names", "fleet", "_fleet_gone")}
+    return {key: scanned.get(key) or {} for key in ("learned_figures", "seen_hulls", "ship_names", "fleet", "_fleet_gone", "brokers")}
 
 
 def scan_journal_figures(paths):
@@ -1415,6 +1454,10 @@ def merge_journal_history(state, scanned):
     for symbol, name in (scanned.get("ship_names") or {}).items():
         names.setdefault(symbol, name)
     merge_fleet(state, scanned.get("fleet"), scanned.get("_fleet_gone"))
+    brokers = state.setdefault("brokers", {})
+    for market, row in (scanned.get("brokers") or {}).items():
+        if market not in brokers or str(brokers[market].get("at") or "") < str(row.get("at") or ""):
+            brokers[market] = {**brokers.get(market, {}), **row}
 
 
 def merge_learned_figures(state, learned):

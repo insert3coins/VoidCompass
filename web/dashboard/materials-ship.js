@@ -25,7 +25,7 @@ let openNewest = null;
 let importedAt = 0;
 const OPENED_AT = Date.now() / 1000 - 2;
 let shipFilter = "";
-let picking = false;
+let mode = "outfit";   // the Ship Builder page (5.8.5): "outfit", "yard" or "hangar"
 let signature = "";
 let host = null;
 let ui = null;
@@ -73,7 +73,7 @@ function load() {
 
 export function shipBuilderReset() {
   build = null;
-  picking = false;
+  mode = "outfit";
   signature = "";
 }
 
@@ -317,7 +317,7 @@ function fromLoadout(loadout, hull) {
     ships.ships[key] = described;
   }
   const fresh = newBuild(key);
-  fresh.name = loadout.ShipName || ships.ships[key].name;
+  fresh.name = String(loadout.ShipName || "").trim() || ships.ships[key].name;
   const bySlot = Object.fromEntries((loadout.Modules || []).map((row) => [row.Slot, row]));
   const engineer = (slot, row) => {
     const eng = row?.Engineering;
@@ -606,8 +606,9 @@ function slotLabel(slot) {
   return slot.name ? `${slot.name.replace(/([a-z])([A-Z])/g, "$1 $2")} ${slot.size}` : `Internal ${slot.size}`;
 }
 
-function options(slot) {
-  const fits = Object.entries(ships.modules).filter(([, m]) => {
+// Every module that fits a slot, as [id, module].
+function fits(slot) {
+  return Object.entries(ships.modules).filter(([, m]) => {
     if (slot.group === "standard") return m.grp === ships.standard[slot.index] && m.class <= slot.size;
     const kind = ships.groups[m.grp]?.kind;
     if (slot.group === "utility") return kind === "hardpoints" && m.class === 0;
@@ -618,13 +619,10 @@ function options(slot) {
     if (slot.eligible) return slot.eligible.includes(m.grp);
     return !["pas"].includes(m.grp);
   });
-  const groups = {};
-  for (const [id, m] of fits) (groups[ships.groups[m.grp]?.label || m.grp] ||= []).push([id, m]);
-  const label = (m) => `${m.class}${m.rating || ""} ${m.name || ""}${m.mount ? ` (${{F: "fixed", G: "gimballed", T: "turret"}[m.mount] || m.mount})` : ""}`;
-  return `<option value="">— empty —</option>${Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([group, rows]) =>
-    `<optgroup label="${esc(group)}">${rows.sort(([, a], [, b]) => b.class - a.class || String(a.rating).localeCompare(String(b.rating))).map(([id, m]) =>
-      `<option value="${esc(id)}"${id === slot.module ? " selected" : ""}>${esc(label(m))}</option>`).join("")}</optgroup>`).join("")}`;
 }
+
+const MOUNT_WORD = {F: "Fixed", G: "Gimballed", T: "Turreted"};
+const moduleTitle = (m) => `${m.name || groupLabel(m)}${m.mount ? ` · ${MOUNT_WORD[m.mount] || m.mount}` : ""}`;
 
 function armourControls() {
   const eligible = ships.eligible.bh || {};
@@ -662,20 +660,11 @@ function engineeringControls(slot) {
       `<option value="${esc(key)}"${key === slot.special ? " selected" : ""}>${esc(ships.specials[key]?.name || key)}</option>`).join("")}</select>` : ""}`;
 }
 
-function slotRows(group, title) {
-  const rows = build.slots.filter((slot) => slot.group === group);
-  if (!rows.length) return "";
-  return `<h4>${title}</h4><table class="mt-table mt-slots"><tbody>${rows.map((slot) => {
-    const m = engineered(slot);
-    const index = build.slots.indexOf(slot);
-    return `<tr><td class="mt-slot-name">${esc(slotLabel(slot))}<small>${slot.size ? `size ${slot.size}` : ""}</small></td>
-      <td><select data-ms-slot="module" data-slot="${index}">${options(slot)}</select>${slot.module ? `<button type="button" class="ghost mt-power${slot.off ? " off" : ""}" data-ms-op="power" data-slot="${index}" title="${slot.off ? "Switched off: adds no shields, draws no power, fires nothing. Switch it on" : "Switch this module off"}">${slot.off ? "OFF" : "ON"}</button>` : ""}${slot.unknown ? `<small class="mt-dim mt-unknown">Fitted: ${esc(slot.unknown)} (not in the builder's tables yet)</small>` : ""}</td>
-      <td class="mt-slot-eng">${engineeringControls(slot)}</td>
-      <td class="num mt-dim">${m ? `${fixed(m.mass || 0)} t · ${fixed(m.power || 0, 2)} MW` : ""}</td></tr>`;
-  }).join("")}</tbody></table>`;
-}
+// Under the fitting panel (5.8.5): the build's figures, one tab at a time.
+const ANALYSIS = [["figures", "FIGURES"], ["defence", "DEFENCE"], ["heat", "HEAT & POWER"], ["compare", "COMPARE"], ["materials", "MATERIALS"]];
+let analysisTab = "figures";
 
-function statsPanel() {
+function analysis() {
   const s = stats();
   const ship = ships.ships[build.ship];
   const tiles = [["UNLADEN", `${fixed(s.unladen)} t`], ["LADEN", `${fixed(s.laden)} t`], ["JUMP (MAX)", `${fixed(s.jumpEmpty, 2)} ly`],
@@ -705,14 +694,22 @@ function statsPanel() {
   const resistances = `<h4>RESISTANCES</h4><table class="mt-table"><thead><tr><th></th><th class="num">KIN</th><th class="num">THERM</th><th class="num">EXPL</th><th class="num">CAUS</th></tr></thead>
     <tbody>${resRow("Hull", s.hullRes)}${s.shields ? resRow("Shields", s.shieldRes) : ""}</tbody></table>
     <p class="mt-dim">Stacked as fitted; the game softens resistances above about 30%.</p>`;
-  return `<div class="mt-tiles mt-ship-tiles">${tiles.map(([label, value]) => `<div class="mt-tile"><span>${label}</span><b>${esc(value)}</b></div>`).join("")}</div>
-    <div class="mt-power ${powerShare > 1 ? "short" : "ok"}"><span>POWER ${fixed(s.draw, 2)} / ${fixed(s.power, 2)} MW</span><span class="mt-bar"><i style="width:${Math.min(100, powerShare * 100).toFixed(1)}%"></i></span>
-      ${powerShare > 1 ? "<b>Over the plant's output: some modules will shut down</b>" : ""}</div>
-    ${ship.described && !ship.hullMass ? `<p class="mt-note">The ${esc(ship.name)} isn't in the builder's tables yet: its slots and modules come from your build, but its own figures (mass, speed, shields, armour) aren't known, so jump range, speed and defences here leave the hull out.</p>` : ""}
+  const power = `<div class="mt-power ${powerShare > 1 ? "short" : "ok"}"><span>POWER ${fixed(s.draw, 2)} / ${fixed(s.power, 2)} MW</span><span class="mt-bar"><i style="width:${Math.min(100, powerShare * 100).toFixed(1)}%"></i></span>
+      ${powerShare > 1 ? "<b>Over the plant's output: some modules will shut down</b>" : ""}</div>`;
+  const notes = `${ship.described && !ship.hullMass ? `<p class="mt-note">The ${esc(ship.name)} isn't in the builder's tables yet: its slots and modules come from your build, but its own figures (mass, speed, shields, armour) aren't known, so jump range, speed and defences here leave the hull out.</p>` : ""}
     ${ship.massFromJournal ? `<p class="mt-note">The ${esc(ship.name)}'s hull mass is ${fixed(ship.hullMass)} t, from your journal: the game's own figures for the one you fly put it there, not at the ${fixed(ship.tableHullMass)} t the builder's tables give.</p>` : ""}
     ${ship.described && ship.hullMass && ship.learned ? `<p class="mt-note">The ${esc(ship.name)} isn't in the builder's tables yet, so it was learned from your journal: its slots from your Loadout, and its mass (${fixed(ship.hullMass)} t, with the armour you fly) from the ship's unladen mass less its modules. Jump range and mass are right; speed, shields and armour aren't known yet, so those leave the hull out.</p>` : ""}
-    <p class="mt-dim">${esc(ship.manufacturer || "")} · class ${esc(ship.class || "")} landing pad · mass lock ${esc(ship.masslock || "")} · rolls at ${whole(build.roll)}%. Figures are worked out here and can differ a little from the game's; slots marked GAME FIGURES use what your ship reported.</p>
-    ${resistances}${heat}${compare}`;
+`;
+  const about = `<p class="mt-dim">${esc(ship.manufacturer || "")} · class ${esc(ship.class || "")} landing pad · mass lock ${esc(ship.masslock || "")} · rolls at ${whole(build.roll)}%. Figures are worked out here and can differ a little from the game's; slots marked GAME FIGURES use what your ship reported.</p>`;
+  const defence = `<div class="mt-tiles mt-ship-tiles sb-defence-tiles">${[["SHIELDS", `${whole(s.shields)} MJ`], ["ARMOUR", whole(s.armour)],
+    ["HARDNESS", ship.hardness ? whole(ship.hardness) : "—"]].map(([label, value]) => `<div class="mt-tile"><span>${label}</span><b>${esc(value)}</b></div>`).join("")}</div>${resistances}`;
+  const body = {
+    figures: `<div class="mt-tiles mt-ship-tiles">${tiles.map(([label, value]) => `<div class="mt-tile"><span>${label}</span><b>${esc(value)}</b></div>`).join("")}</div>${about}`,
+    defence, heat: `${power}${heat}`, compare, materials: materialsPanel(),
+  }[analysisTab] || "";
+  const tabs = ANALYSIS.map(([key, label]) => `<button type="button" class="sb-tab${analysisTab === key ? " on" : ""}" data-ms-op="analysis" data-tab="${key}">${label}${
+    key === "compare" && cmp ? " <small>●</small>" : key === "heat" && powerShare > 1 ? " <small class=\"warn\">!</small>" : ""}</button>`).join("");
+  return `<section class="sb-analysis">${notes}<nav class="sb-tabs">${tabs}</nav><div class="sb-analysis-body">${body}</div></section>`;
 }
 
 function materialsPanel() {
@@ -737,18 +734,15 @@ function importBar() {
   return `<form class="mt-codebar" data-ms-import><input name="code" placeholder="Paste a build: SLEF (EDSY: Outfitting › Export...), a journal Loadout, an EDMC ship link or a shared build code" autocomplete="off" spellcheck="false"><button type="submit">IMPORT BUILD</button></form>`;
 }
 
-function picker() {
-  const wanted = shipFilter.toLowerCase();
-  const rows = Object.entries(ships.ships).filter(([, ship]) => !wanted || `${ship.name} ${ship.manufacturer}`.toLowerCase().includes(wanted))
-    .sort(([, a], [, b]) => a.name.localeCompare(b.name));
-  return `<div class="mt-toolbar"><label class="mt-search"><input type="search" data-ms-filter value="${esc(shipFilter)}" placeholder="Find a hull" autocomplete="off"></label>
-    ${build ? `<button type="button" class="ghost" data-ms-op="pick_close">BACK TO THE BUILD</button>` : ""}</div>${importBar()}
-    <div class="mt-hulls">${rows.map(([key, ship]) => `<button type="button" class="mt-hull" data-ms-op="new" data-ship="${esc(key)}"><b>${esc(ship.name)}</b>
-      <small>${ship.learned ? "New · learned from your journal" : `${esc(ship.manufacturer || "")} · ${["", "S", "M", "L"][ship.class] || ""} pad · ${money(ship.cost)} CR`}</small></button>`).join("")}</div>`;
-}
+// Your ships and builds in alphabetical order, by name, then hull.
+const byName = (name, hull) => (a, b) => name(a).localeCompare(name(b), undefined, {sensitivity: "base"}) || hull(a).localeCompare(hull(b));
+const fleetName = (row) => String(row.name || "").trim() || fleetHull(row);
+const fleetHull = (row) => Object.values(ships.ships).find((ship) => ship.symbol === row.ship)?.name || (data.ship_names || {})[row.ship] || row.ship;
+const sortedFleet = () => [...(data.fleet || [])].sort(byName(fleetName, fleetHull));
+const sortedBuilds = () => [...(data.ship_builds || [])].sort(byName((row) => String(row.name || ""), (row) => ships.ships[row.ship]?.name || String(row.ship)));
 
 function savedList() {
-  const builds = data.ship_builds || [];
+  const builds = sortedBuilds();
   return `<select data-ms-saved><option value="">${builds.length ? "Saved builds…" : "No saved builds"}</option>${builds.map((row) =>
     `<option value="${esc(row.id)}"${row.id === build?.id ? " selected" : ""}>${esc(row.name)} · ${esc(ships.ships[row.ship]?.name || row.ship)}</option>`).join("")}</select>`;
 }
@@ -756,11 +750,22 @@ function savedList() {
 // Every ship you own (its latest Loadout), the one you're in first. Only names come with
 // each refresh; a ship's whole Loadout is fetched when you open it.
 function fleetList() {
-  const fleet = data.fleet || [];
+  const fleet = sortedFleet();
   if (!fleet.length) return data.ship_loadout ? `<button type="button" class="ghost" data-ms-op="current">YOUR SHIP NOW</button>` : "";
   const type = (row) => Object.values(ships.ships).find((ship) => ship.symbol === row.ship)?.name || (data.ship_names || {})[row.ship] || row.ship;
   return `<select data-ms-fleet title="Open one of your ships as you last flew it"><option value="">Your ships…</option>${fleet.map((row) =>
-    `<option value="${esc(row.id)}"${row.id === build?.fleet ? " selected" : ""}>${esc(row.name || type(row))}${row.ident ? ` [${esc(row.ident)}]` : ""} · ${esc(type(row))}${row.now ? " (flying)" : ""}</option>`).join("")}</select>`;
+    `<option value="${esc(row.id)}"${row.id === build?.fleet ? " selected" : ""}>${esc(String(row.name || "").trim() || type(row))}${row.ident ? ` [${esc(row.ident)}]` : ""} · ${esc(type(row))}${row.now ? " (flying)" : ""}</option>`).join("")}</select>`;
+}
+
+function openSaved(id) {
+  const saved = (data.ship_builds || []).find((row) => row.id === id);
+  const loaded = saved ? fromSaved(saved) : null;
+  if (!loaded) return;
+  build = loaded;
+  mode = "outfit";
+  // Saved on a hull that was new then and is in the tables now: keep it on the real hull, so it
+  // stays there and its share code no longer has to describe the hull.
+  if (String(saved.ship).startsWith("described:") && loaded.ship !== saved.ship) op("build_save", {build: plain(loaded)});
 }
 
 async function openShip(id) {
@@ -771,38 +776,357 @@ async function openShip(id) {
     if (!loaded) { ui.showToast?.("That ship's loadout isn't one the builder can read yet"); return; }
     loaded.fleet = id;
     build = loaded;
-    picking = false;
+      mode = "outfit";
   } catch {
     ui.showToast?.("Couldn't open that ship");
   }
   draw();
 }
 
+// -- the look (5.8.5): a shipyard, a slot ledger, the hull's anatomy and a fitting panel ----------
+// The hulls' illustrations and top and bottom schematics (with where each mount sits) are masks the
+// theme colours fill: ship-art/<symbol>/ and ship-art/index.json, credited in THIRD_PARTY_NOTICES.md.
+let art = null;
+let artState = "idle";
+let selected = null;        // the slot being fitted: an index into build.slots, or "armour"
+let selectedFor = null;     // the build that selection belongs to
+let category = "";
+let side = "top";          // the hull view: its "top" or "bottom" schematic
+let ledgerTab = "all";
+let yardSize = "all";
+let yardSort = ["name", 1];
+let yardPick = "";
+
+const PAD = ["", "Small", "Medium", "Large"];
+const SIZE_LETTER = {4: "H", 3: "L", 2: "M", 1: "S"};
+const LEDGER = [["hardpoints", "HARDPOINTS"], ["utility", "UTILITY MOUNTS"], ["standard", "CORE INTERNALS"], ["internal", "OPTIONAL INTERNALS"]];
+const CORE_SHORT = ["PWR", "THR", "FSD", "LIFE", "DIST", "SENS", "FUEL"];
+
+function loadArt() {
+  if (artState !== "idle") return;
+  artState = "loading";
+  fetch(ui.apiUrl("/ship-art/index.json"), {cache: "no-cache"})
+    .then((response) => (response.ok ? response.json() : {}))
+    .catch(() => ({}))
+    .then((json) => { art = json || {}; artState = "ready"; draw(); });
+}
+
+const artUrl = (ship, file) => ui.apiUrl(`/ship-art/${encodeURIComponent(ship.symbol)}/${file}.webp`);
+const artMask = (ship, file, cls) => `<i class="mt-art ${cls}" style="--art: url('${artUrl(ship, file)}')" aria-hidden="true"></i>`;
+
+function hullSlots(ship) {
+  const hp = (ship.slots.hardpoints || []).map((x) => (typeof x === "object" ? x.class : x));
+  const internal = (ship.slots.internal || []).filter((x) => !(typeof x === "object" && x.name === "PlanetaryApproachSuite"))
+    .map((x) => (typeof x === "object" ? x.class : x));
+  return {hard: hp.filter((x) => x > 0), utility: hp.filter((x) => x === 0).length, core: ship.slots.standard || [], internal};
+}
+
+function mountSummary(ship) {
+  const counts = {};
+  for (const size of hullSlots(ship).hard) counts[size] = (counts[size] || 0) + 1;
+  return [4, 3, 2, 1].filter((size) => counts[size]).map((size) => `${counts[size]}${SIZE_LETTER[size]}`).join(" ");
+}
+
+function sizeChips(sizes) {
+  const counts = {};
+  for (const size of sizes) counts[size] = (counts[size] || 0) + 1;
+  return Object.keys(counts).map(Number).sort((a, b) => b - a)
+    .map((size) => `<span class="mt-chipbox">${counts[size] > 1 ? `<small>${counts[size]} ×</small> ` : ""}${size}</span>`).join("");
+}
+
+// -- the shipyard -------------------------------------------------------------------------------
+function yardRows() {
+  const wanted = shipFilter.toLowerCase();
+  const [key, dir] = yardSort;
+  const value = (ship) => key === "name" ? ship.name : key === "maker" ? ship.manufacturer || "" : key === "size" ? n(ship.class)
+    : key === "mounts" ? hullSlots(ship).hard.reduce((sum, size) => sum + size * 10 + 1, 0) : n(ship.cost);
+  return Object.entries(ships.ships)
+    .filter(([, ship]) => !wanted || `${ship.name} ${ship.manufacturer}`.toLowerCase().includes(wanted))
+    .filter(([, ship]) => yardSize === "all" || PAD[ship.class]?.toLowerCase() === yardSize)
+    .sort(([, a], [, b]) => {
+      const x = value(a), y = value(b);
+      return (typeof x === "string" ? x.localeCompare(y) : x - y) * dir || a.name.localeCompare(b.name);
+    });
+}
+
+function shipCard(key) {
+  const ship = ships.ships[key];
+  if (!ship) return `<aside class="mt-card"><p class="mt-dim">Pick a hull.</p></aside>`;
+  const slots = hullSlots(ship);
+  const stat = (label, value) => `<div><span>${label}</span><b>${value || "—"}</b></div>`;
+  return `<aside class="mt-card">
+    <div class="mt-card-art">${art?.[ship.symbol] ? artMask(ship, "illustration", "mt-art-illustration") : `<span class="mt-dim">No illustration yet</span>`}</div>
+    <h3>${esc(ship.name)}</h3>
+    <p class="mt-card-sub">${ship.learned ? "New · learned from your journal" : `${esc(ship.manufacturer || "")}${ship.class ? ` · ${PAD[ship.class]} landing pad` : ""}`}</p>
+    <div class="mt-card-stats">${stat("SPEED m/s", ship.speed && whole(ship.speed))}${stat("BOOST m/s", ship.boost && whole(ship.boost))}
+      ${stat("SHIELD MJ", ship.baseShieldStrength && whole(ship.baseShieldStrength))}${stat("ARMOUR", ship.baseArmour && whole(ship.baseArmour))}
+      ${stat("HULL MASS t", ship.hullMass && whole(ship.hullMass))}${stat("HARDNESS", ship.hardness && whole(ship.hardness))}
+      ${stat("CREW", ship.crew && whole(ship.crew))}${stat("MASS LOCK", ship.masslock && whole(ship.masslock))}</div>
+    <h4>HARDPOINTS <small>${slots.hard.length}</small></h4><div class="mt-chips">${[4, 3, 2, 1].filter((size) => slots.hard.includes(size))
+      .map((size) => `<span class="mt-chipbox">${slots.hard.filter((x) => x === size).length} <small>${["", "SMALL", "MED", "LARGE", "HUGE"][size]}</small></span>`).join("") || `<span class="mt-dim">None</span>`}</div>
+    <h4>UTILITY MOUNTS <small>${slots.utility}</small></h4>
+    <h4>CORE INTERNALS</h4><div class="mt-chips">${slots.core.map((size, i) => `<span class="mt-chipbox"><small>${CORE_SHORT[i]}</small> ${size}</span>`).join("")}</div>
+    <h4>OPTIONAL INTERNALS <small>${slots.internal.length}</small></h4><div class="mt-chips">${sizeChips(slots.internal)}</div>
+    <div class="mt-card-price"><span>HULL PRICE</span><b>${ship.cost ? `${whole(ship.cost)} <small>cr</small>` : "—"}</b></div>
+    <button type="button" class="mt-hull" data-ms-op="new" data-ship="${esc(key)}">BUILD THIS HULL</button>
+  </aside>`;
+}
+
+function shipyard() {
+  const rows = yardRows();
+  const pick = yardPick && ships.ships[yardPick] ? yardPick : rows[0]?.[0] || "";
+  const head = (key, label, num) => `<th class="${num ? "num " : ""}mt-sort${yardSort[0] === key ? " on" : ""}" data-ms-op="yard_sort" data-key="${key}">${label}${yardSort[0] === key ? (yardSort[1] > 0 ? " ▲" : " ▼") : ""}</th>`;
+  return `<div class="mt-yard">
+    <div class="mt-yard-split"><div class="mt-yard-list">
+      <div class="mt-yard-tools"><label class="mt-search"><input type="search" data-ms-filter value="${esc(shipFilter)}" placeholder="Search ships or makers" autocomplete="off"></label>
+        <div class="mt-seg">${["all", "small", "medium", "large"].map((size) => `<button type="button" class="mt-seg-btn${yardSize === size ? " on" : ""}" data-ms-op="yard_size" data-size="${size}">${size.toUpperCase()}</button>`).join("")}</div></div>
+      <table class="mt-table mt-yard-table"><thead><tr>${head("name", "SHIP")}${head("maker", "MAKER")}${head("size", "SIZE")}${head("mounts", "HARDPOINTS", true)}${head("price", "PRICE Mcr", true)}</tr></thead>
+      <tbody>${rows.map(([key, ship]) => `<tr class="mt-yard-row${key === pick ? " on" : ""}" data-ms-op="yard_pick" data-ship="${esc(key)}">
+        <td><b>${esc(ship.name)}</b>${ship.learned ? ` <span class="mt-tag">NEW</span>` : ""}</td><td>${esc(ship.manufacturer || "")}</td>
+        <td class="mt-dim">${["", "SML", "MED", "LRG"][ship.class] || ""}</td><td class="num">${mountSummary(ship)}</td>
+        <td class="num">${ship.cost ? (n(ship.cost) / 1e6).toFixed(2) : "—"}</td></tr>`).join("")}</tbody></table></div>
+      ${shipCard(pick)}</div></div>`;
+}
+
+// -- outfitting ---------------------------------------------------------------------------------
+// Each slot's number within its group, as the ledger and the hull's anatomy show it.
+function slotNumbers() {
+  const counts = {}, numbers = new Map();
+  for (const slot of build.slots) {
+    counts[slot.group] = (counts[slot.group] || 0) + 1;
+    numbers.set(slot, counts[slot.group]);
+  }
+  return numbers;
+}
+
+function engineeringLine(slot, m) {
+  const parts = [];
+  if (m?.mount) parts.push(MOUNT_WORD[m.mount] || m.mount);
+  if (slot.bp) parts.push(`${ships.blueprints[slot.bp]?.name || slot.bp} G${slot.grade}`);
+  else if (slot.bpName) parts.push(`${slot.bpName} G${slot.bpGrade}`);
+  if (slot.special) parts.push(ships.specials[slot.special]?.name || slot.special);
+  return parts.join(" · ");
+}
+
+function ledgerRow(slot, numbers) {
+  const index = build.slots.indexOf(slot);
+  const m = moduleOf(slot.module);
+  const title = m ? moduleTitle(m).split(" · ")[0] : slot.unknown ? slot.unknown : slot.group === "standard" ? slotLabel(slot) : "Empty";
+  const engineered = slot.bp || slot.special || slot.bpName || slot.jmods;
+  return `<div class="mt-led${index === selected ? " on" : ""}${m || slot.unknown ? "" : " empty"}${slot.off ? " off" : ""}" role="button" tabindex="0"
+      data-ms-op="select" data-slot="${index}" data-group="${slot.group}" data-module="${esc(slot.module || "")}" data-bp="${esc(slot.bp || "")}">
+    <span class="mt-led-size">${slot.size}</span><span class="mt-led-num">${numbers.get(slot)}</span>
+    <span class="mt-led-main"><b>${esc(title)}</b>${m ? `<i class="mt-led-chip">${m.class}${esc(m.rating || "")}</i>` : ""}
+      <small>${esc(slot.unknown && !m ? "not in the builder's tables yet" : engineeringLine(slot, m) || (slot.group === "standard" && m ? slotLabel(slot) : ""))}</small></span>
+    ${m ? `<button type="button" class="mt-onoff${slot.off ? " off" : ""}" data-ms-op="power" data-slot="${index}" title="${slot.off ? "Switched off: adds no shields, draws no power, fires nothing. Switch it on" : "Switch this module off"}">${slot.off ? "OFF" : "ON"}</button>` : ""}
+    ${engineered ? `<span class="mt-led-eng" title="Engineered">⚙</span>` : ""}</div>`;
+}
+
+function ledger() {
+  const numbers = slotNumbers();
+  const ship = ships.ships[build.ship];
+  const bulkhead = ship.bulkheads[build.bulkhead] || {};
+  const armourEng = build.armourEng?.bp ? `${ships.blueprints[build.armourEng.bp]?.name || build.armourEng.bp} G${build.armourEng.grade}` : "";
+  const tabs = [["all", "ALL"], ...LEDGER.map(([group, label]) => [group, label.split(" ")[0]])].map(([key, label]) => {
+    const rows = key === "all" ? build.slots : build.slots.filter((slot) => slot.group === key);
+    return `<button type="button" class="mt-seg-btn${ledgerTab === key ? " on" : ""}" data-ms-op="ledger_tab" data-tab="${key}">${label} <small>${rows.filter((slot) => slot.module).length}/${rows.length}</small></button>`;
+  }).join("");
+  const groups = LEDGER.filter(([group]) => ledgerTab === "all" || ledgerTab === group).map(([group, label]) => {
+    const rows = build.slots.filter((slot) => slot.group === group);
+    if (!rows.length) return "";
+    const armour = group === "standard" ? `<div class="mt-led${selected === "armour" ? " on" : ""}" role="button" tabindex="0" data-ms-op="select" data-slot="armour">
+        <span class="mt-led-size" title="Armour">◆</span><span class="mt-led-num">·</span>
+        <span class="mt-led-main"><b>${esc(bulkhead.name || "Armour")}</b><small>${esc(armourEng || "Armour")}</small></span>
+        ${armourEng || build.armour ? `<span class="mt-led-eng" title="Engineered">⚙</span>` : ""}</div>` : "";
+    return `<h4>${label} <small>${rows.length}</small></h4>${armour}${rows.map((slot) => ledgerRow(slot, numbers)).join("")}`;
+  }).join("");
+  return `<section class="mt-ledger"><div class="mt-seg mt-ledger-tabs">${tabs}</div>${groups}</section>`;
+}
+
+function anatomy() {
+  const ship = ships.ships[build.ship];
+  const plan = art?.[ship.symbol];
+  if (!plan) return `<section class="mt-anatomy"><h4>HULL ANATOMY</h4><p class="mt-dim">${artState === "ready" ? "No schematic for this hull yet." : "Loading the hull's schematic…"}</p></section>`;
+  const numbers = slotNumbers();
+  const byName = new Map(build.slots.filter((slot) => slot.jname).map((slot) => [slot.jname, slot]));
+  const plate = (view) => {
+    const marks = view.mounts.map((mount) => {
+      const slot = byName.get(mount.slot);
+      if (!slot) return "";
+      const index = build.slots.indexOf(slot);
+      const cls = [slot.group === "utility" ? "utility" : "", slot.module ? "fitted" : "empty", index === selected ? "on" : "", slot.off ? "off" : ""].join(" ");
+      const m = moduleOf(slot.module);
+      return `<button type="button" class="mt-mark ${cls}" style="left: ${(mount.x / view.view[0] * 100).toFixed(2)}%; top: ${(mount.y / view.view[1] * 100).toFixed(2)}%"
+        data-ms-op="select" data-slot="${index}" title="${esc(slotLabel(slot))} ${numbers.get(slot)}${m ? `: ${m.class}${m.rating || ""} ${moduleTitle(m)}` : ": empty"}">${numbers.get(slot)}</button>`;
+    }).join("");
+    return `<figure class="mt-plate">
+      <div class="mt-plate-box" style="aspect-ratio: ${view.view[0]} / ${view.view[1]}">${artMask(ship, side, "mt-art-plan")}${marks}</div></figure>`;
+  };
+  const toggle = ["top", "bottom"].map((key) => `<button type="button" class="mt-seg-btn${side === key ? " on" : ""}" data-ms-op="side" data-side="${key}">${key.toUpperCase()}</button>`).join("");
+  return `<section class="mt-anatomy"><header class="sb-anatomy-head"><h4>HULL ANATOMY</h4><div class="mt-seg">${toggle}</div></header>${plate(plan[side])}
+    <p class="mt-legend"><i class="mt-mark on"></i> selected <i class="mt-mark fitted"></i> fitted <i class="mt-mark empty"></i> empty <i class="mt-mark utility fitted"></i> utility</p></section>`;
+}
+
+const DETAILS = [["mass", "Mass", " t", 2], ["power", "Power draw", " MW", 2], ["integrity", "Integrity", "", 0], ["pgen", "Power capacity", " MW", 1],
+  ["eff", "Heat efficiency", "", 2], ["optmass", "Optimal mass", " t", 1], ["maxfuel", "Max fuel per jump", " t", 2], ["jumpboost", "Jump range", " ly", 2],
+  ["optmul", "Optimal multiplier", "%", 0], ["damage", "Damage", "", 2], ["range", "Range", " m", 0], ["distdraw", "Distributor draw", " MW", 2],
+  ["thermload", "Thermal load", "", 2], ["shieldboost", "Shield boost", "%", 1], ["hullreinforcement", "Hull reinforcement", "", 0],
+  ["kinres", "Kinetic resistance", "%", 1], ["thermres", "Thermal resistance", "%", 1], ["explres", "Explosive resistance", "%", 1],
+  ["cargo", "Cargo", " t", 0], ["fuel", "Fuel", " t", 0], ["wepcap", "Weapons capacitor", " MJ", 0], ["engcap", "Engines capacitor", " MJ", 0],
+  ["syscap", "Systems capacitor", " MJ", 0], ["passengers", "Passengers", "", 0], ["bays", "Bays", "", 0]];
+
+function moduleDetails(slot) {
+  const base = moduleOf(slot.module);
+  const out = engineered(slot);
+  if (!base || !out) return "";
+  const percent = (key) => ["optmul", "shieldboost", "kinres", "thermres", "explres"].includes(key);
+  const show = (key, value, digits) => percent(key) ? fixed(n(value) * 100, digits) : fixed(value, digits);
+  const rows = DETAILS.filter(([key]) => base[key] != null && base[key] !== 0).map(([key, label, unit, digits]) => {
+    const changed = Math.abs(n(out[key]) - n(base[key])) > 1e-9;
+    return `<tr><td>${label}</td><td class="num mt-dim">${show(key, base[key], digits)}${unit}</td><td class="num${changed ? " ok" : ""}">${changed ? `${show(key, out[key], digits)}${unit}` : ""}</td></tr>`;
+  }).join("");
+  return rows ? `<h4>MODULE DETAILS</h4><table class="mt-table mt-details"><thead><tr><th></th><th class="num">STOCK</th><th class="num">FITTED</th></tr></thead><tbody>${rows}</tbody></table>` : "";
+}
+
+// Fitting the slot picked (5.8.5): what goes in it on the right ({lists}), and its engineering under the
+// hull ({engineering}), so the two columns of the workbench come out even.
+function fitting() {
+  const numbers = slotNumbers();
+  if (selected === "armour") {
+    const ship = ships.ships[build.ship];
+    return {
+      lists: `<section class="mt-fit"><header class="mt-fit-head"><h4>FITTING · ARMOUR</h4></header>
+        <div class="mt-fit-cols mt-fit-one"><div class="mt-fit-col"><h5>GRADE</h5>${ship.bulkheads.map((b, i) => `<button type="button" class="mt-fit-item${i === build.bulkhead ? " on" : ""}" data-ms-op="bulkhead" data-index="${i}">
+          <b>${esc(b.name)}</b><small>${fixed(b.mass || 0)} t · hull +${whole(n(b.hullboost) * 100)}%</small></button>`).join("")}</div></div></section>`,
+      engineering: `<section class="sb-engineering"><h4>ENGINEERING · ARMOUR</h4><div class="mt-fit-eng">${armourControls()}
+        ${build.armour ? `<span class="mt-tag" title="The figures your ship reported, until you change the armour">GAME FIGURES</span>` : ""}</div></section>`,
+    };
+  }
+  const slot = build.slots[selected];
+  if (!slot) return {lists: "", engineering: ""};
+  const families = {};
+  for (const [id, m] of fits(slot)) (families[groupLabel(m) || m.grp] ||= []).push([id, m]);
+  const names = Object.keys(families).sort((a, b) => a.localeCompare(b));
+  const current = moduleOf(slot.module);
+  const family = category && families[category] ? category : current && families[groupLabel(current)] ? groupLabel(current) : names[0] || "";
+  const list = (families[family] || []).sort(([, a], [, b]) => b.class - a.class || String(a.rating).localeCompare(String(b.rating)) || String(a.mount || "").localeCompare(String(b.mount || "")));
+  const label = `${esc(slotLabel(slot).toUpperCase())} ${numbers.get(slot)}`;
+  // One kind of module only (a core slot): no CATEGORY column, the modules take the width.
+  const single = names.length <= 1;
+  return {
+    lists: `<section class="mt-fit"><header class="mt-fit-head"><h4>FITTING · ${label}</h4>
+        ${slot.module ? `<button type="button" class="ghost" data-ms-op="fit" data-module="">REMOVE MODULE</button>` : ""}</header>
+      ${slot.unknown && !current ? `<p class="mt-dim mt-unknown">Fitted: ${esc(slot.unknown)} (not in the builder's tables yet)</p>` : ""}
+      <div class="mt-fit-cols${single ? " mt-fit-one" : ""}">
+        ${single ? "" : `<div class="mt-fit-col"><h5>CATEGORY</h5>${names.map((name) => `<button type="button" class="mt-fit-item${name === family ? " on" : ""}" data-ms-op="category" data-category="${esc(name)}">
+          <b>${esc(name.toUpperCase())}</b><small>${families[name].length}</small></button>`).join("")}</div>`}
+        <div class="mt-fit-col"><h5>${single ? esc(family.toUpperCase()) || "MODULE" : "MODULE"}</h5>${list.map(([id, m]) => `<button type="button" class="mt-fit-item${id === slot.module ? " on" : ""}" data-ms-op="fit" data-module="${esc(id)}">
+          <b>${esc(moduleTitle(m))}</b><small>${m.class}${esc(m.rating || "")} · ${m.cost ? `${whole(m.cost)} cr` : "—"}</small></button>`).join("") || `<p class="mt-dim">Nothing fits here.</p>`}</div>
+      </div></section>`,
+    engineering: `<section class="sb-engineering"><h4>ENGINEERING · ${label}</h4>${current ? `<div class="mt-fit-eng">${engineeringControls(slot)}</div>${moduleDetails(slot)}`
+      : `<p class="mt-dim">Fit a module to engineer it.</p>`}</section>`,
+  };
+}
+
+// -- the page (5.8.5): a hero for the ship on the bench, then OUTFITTING, SHIPYARD and HANGAR --------------
+function hero() {
+  const ship = ships.ships[build.ship];
+  const s = stats();
+  const share = s.power ? s.draw / s.power : 0;
+  const owned = build.fleet && (data.fleet || []).find((row) => row.id === build.fleet);
+  const kicker = [ship.manufacturer, ship.class ? `${PAD[ship.class]} landing pad` : "", owned ? (owned.now ? "the ship you're flying" : "your ship")
+    : build.id ? "saved build" : "new build"].filter(Boolean).join(" · ");
+  const readout = (label, value, sub, cls = "") => `<div class="sb-readout ${cls}"><span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+  return `<header class="sb-hero">
+    <div class="sb-hero-art">${art?.[ship.symbol] ? artMask(ship, "illustration", "sb-hero-illustration") : ""}</div>
+    <div class="sb-hero-id"><p class="sb-kicker">${esc(kicker.toUpperCase())}</p>
+      <h2 class="sb-hull">${esc(ship.name)}</h2>
+      <input class="mt-name sb-name" data-ms-name value="${esc(build.name)}" maxlength="40" aria-label="Build name">
+      <div class="sb-actions"><button type="button" data-ms-op="save">SAVE</button><button type="button" class="ghost" data-ms-op="save_as">CLONE</button>
+        <button type="button" data-ms-op="wish">+ WISHLIST</button>
+        ${build.id ? `<button type="button" class="ghost" data-ms-op="share">SHARE CODE</button><button type="button" class="ghost danger" data-ms-op="delete">DELETE</button>` : ""}</div></div>
+    <div class="sb-readouts">${readout("JUMP", `${fixed(s.jumpEmpty, 2)}<small> ly</small>`, `${fixed(s.jumpFull, 2)} ly laden`)}
+      ${readout("SPEED", `${whole(s.speed)}<small> m/s</small>`, s.canBoost ? `${whole(s.boost)} m/s boost` : "can't boost", s.canBoost ? "" : "warn")}
+      ${readout("SHIELDS", `${whole(s.shields)}<small> MJ</small>`)}${readout("ARMOUR", whole(s.armour))}
+      ${readout("DPS", fixed(s.dps))}${readout("CARGO", `${whole(s.cargo)}<small> t</small>`)}
+      ${readout("MASS", `${whole(s.unladen)}<small> t</small>`, `${whole(s.laden)} t laden`)}
+      ${readout("POWER", `${Math.round(share * 100)}<small>%</small>`, `${fixed(s.draw, 1)} / ${fixed(s.power, 1)} MW`, share > 1 ? "warn" : "")}</div>
+  </header>`;
+}
+
+function modeBar() {
+  const count = (data.fleet || []).length + (data.ship_builds || []).length;
+  const tab = (key, op, label, extra = "") => `<button type="button" class="sb-mode${mode === key ? " on" : ""}" data-ms-op="${op}"${key === "outfit" && !build ? " disabled" : ""}>${label}${extra}</button>`;
+  return `<nav class="sb-modes">${tab("outfit", "pick_close", "OUTFITTING")}${tab("yard", "pick", "SHIPYARD", ` <small>${Object.keys(ships.ships).length}</small>`)}
+    ${tab("hangar", "hangar", "HANGAR", count ? ` <small>${count}</small>` : "")}
+    <span class="sb-modes-right">${savedList()}${fleetList()}</span></nav>`;
+}
+
+// Your ships and your saved builds, each a card with its hull's illustration.
+function hangar() {
+  const card = (ship, title, lines, op, id, badge = "") => `<article class="sb-bay">
+    <div class="sb-bay-art">${ship && art?.[ship.symbol] ? artMask(ship, "illustration", "sb-bay-illustration") : ""}${badge}</div>
+    <h3>${esc(title)}</h3><p>${lines.filter(Boolean).map(esc).join(" · ")}</p>
+    <button type="button" class="ghost" data-ms-op="${op}" data-id="${esc(id)}">OPEN</button></article>`;
+  const hullOf = (symbol) => Object.values(ships.ships).find((ship) => ship.symbol === symbol);
+  const fleet = sortedFleet().map((row) => {
+    const ship = hullOf(row.ship);
+    return card(ship, String(row.name || "").trim() || ship?.name || row.ship, [ship?.name || (data.ship_names || {})[row.ship] || row.ship, row.ident, row.at ? `last flown ${String(row.at).slice(0, 10)}` : ""],
+      "open_ship", row.id, row.now ? `<span class="sb-badge">FLYING</span>` : "");
+  }).join("");
+  const builds = sortedBuilds().map((row) => {
+    const ship = ships.ships[row.ship];
+    return card(ship, row.name, [ship?.name || row.ship, row.updated ? `saved ${new Date(n(row.updated) * 1000).toISOString().slice(0, 10)}` : ""], "open_saved", row.id);
+  }).join("");
+  return `<div class="sb-hangar">
+    <section><h4>YOUR SHIPS <small>${(data.fleet || []).length}</small></h4>${fleet ? `<div class="sb-bays">${fleet}</div>`
+      : `<p class="mt-dim">Your ships appear here as you fly them: each one's latest loadout from your journal.</p>`}</section>
+    <section><h4>SAVED BUILDS <small>${(data.ship_builds || []).length}</small></h4>${builds ? `<div class="sb-bays">${builds}</div>`
+      : `<p class="mt-dim">Builds you SAVE (and shared codes you import) are kept here, each a file in your profile's ship_builds folder.</p>`}</section></div>`;
+}
+
+function strip() {
+  const s = stats();
+  const cell = (label, value) => `<div><span>${label}</span><b>${value}</b></div>`;
+  const share = s.power ? s.draw / s.power : 0;
+  return `<div class="mt-strip">${cell("DPS", fixed(s.dps))}${cell("SHIELD", whole(s.shields))}${cell("ARMOUR", whole(s.armour))}${cell("JUMP", fixed(s.jumpEmpty, 1))}
+    ${cell("SPEED", whole(s.speed))}${cell("MASS", whole(s.unladen))}<div class="mt-strip-power${share > 1 ? " short" : ""}"><span>POWER</span><b>${Math.round(share * 100)}%</b></div></div>`;
+}
+
+// The workbench: the hull with the picked slot's engineering under it, and what goes in the slot beside them.
+function workbench() {
+  const fit = fitting();
+  return `<div class="sb-workbench"><div class="sb-workbench-left">${anatomy()}${fit.engineering}</div>${fit.lists}</div>`;
+}
+
+function outfitting() {
+  const ship = ships.ships[build.ship];
+  if (selectedFor !== build) {
+    // A build just opened: the first hardpoint, else the first slot, is the one being fitted.
+    selectedFor = build;
+    const first = build.slots.findIndex((slot) => slot.group === "hardpoints");
+    selected = first >= 0 ? first : 0;
+    category = "";
+    side = "top";
+    }
+  return `<div class="mt-outfit">
+    <header class="mt-head sb-fitbar">
+      <label class="mt-select">ARMOUR <select data-ms-bulkhead>${ship.bulkheads.map((b, i) => `<option value="${i}"${i === build.bulkhead ? " selected" : ""}>${esc(b.name)}</option>`).join("")}</select></label>
+      <label class="mt-select">ROLLS <select data-ms-roll>${[0, 25, 50, 75, 100].map((r) => `<option value="${r}"${r === n(build.roll) ? " selected" : ""}>${r}%</option>`).join("")}</select></label></header>
+    <div class="mt-outfit-grid">${ledger()}<div class="mt-bench">${workbench()}${analysis()}</div></div></div>`;
+}
+
 function draw() {
   if (!host || !host.isConnected) return;
   if (!ships) { load(); host.innerHTML = `<p class="mt-loading">Loading the hulls and modules…</p>`; return; }
-  if (!build && !picking) {
+  loadArt();
+  if (!build && mode === "outfit") {
     const current = data.ship_loadout ? fromLoadout(data.ship_loadout) : null;
     if (current) { build = current; build.fleet = data.ship_loadout.ShipID != null ? String(data.ship_loadout.ShipID) : ""; }
-    else picking = true;
+    else mode = "yard";
   }
-  if (picking) { host.innerHTML = picker(); return; }
-  const ship = ships.ships[build.ship];
-  host.innerHTML = `<div class="mt-toolbar mt-ship-bar">${savedList()}
-      <input class="mt-name" data-ms-name value="${esc(build.name)}" maxlength="40" aria-label="Build name">
-      <button type="button" data-ms-op="save">SAVE</button><button type="button" class="ghost" data-ms-op="save_as">CLONE</button>
-      <button type="button" data-ms-op="wish">+ WISHLIST</button>
-      ${build.id ? `<button type="button" class="ghost" data-ms-op="share">SHARE CODE</button><button type="button" class="ghost danger" data-ms-op="delete">DELETE</button>` : ""}
-      <button type="button" class="ghost" data-ms-op="pick">NEW HULL</button>
-      ${fleetList()}</div>
-    ${importBar()}
-    <div class="mt-split mt-ship-split"><div><header class="mt-head"><h3>${esc(ship.name)}</h3>
-      <label class="mt-select">ARMOUR <select data-ms-bulkhead>${ship.bulkheads.map((b, i) => `<option value="${i}"${i === build.bulkhead ? " selected" : ""}>${esc(b.name)}</option>`).join("")}</select></label>
-      ${armourControls()}
-      ${build.armour ? `<span class="mt-tag" title="${esc(ships.blueprints[blueprintKey(build.armour.blueprint)]?.name || build.armour.blueprint)} G${n(build.armour.grade)}: the figures your ship reported, until you change the armour">GAME FIGURES</span>` : ""}
-      <label class="mt-select">ROLLS <select data-ms-roll>${[0, 25, 50, 75, 100].map((r) => `<option value="${r}"${r === n(build.roll) ? " selected" : ""}>${r}%</option>`).join("")}</select></label></header>
-      ${slotRows("standard", "CORE")}${slotRows("hardpoints", "HARDPOINTS")}${slotRows("utility", "UTILITY")}${slotRows("internal", "OPTIONAL INTERNAL")}</div>
-      <aside class="mt-side">${statsPanel()}${materialsPanel()}</aside></div>`;
+  host.innerHTML = `<div class="sb-page">${build ? hero() : ""}${modeBar()}${importBar()}
+    ${mode === "yard" ? shipyard() : mode === "hangar" ? hangar() : outfitting()}</div>`;
 }
 
 export function renderShipBuilder(element, snapshot, reference, deckUi, fresh) {
@@ -817,14 +1141,14 @@ export function renderShipBuilder(element, snapshot, reference, deckUi, fresh) {
     if (added) {
       openNewest = null;
       const loaded = fromSaved(added);
-      if (loaded) { build = loaded; picking = false; fresh = true; }
+      if (loaded) { build = loaded; mode = "outfit"; fresh = true; }
     }
   }
   // Only a build imported while the page is open (not one from an earlier session).
   if (ships && imported?.at && imported.at > importedAt && imported.at > OPENED_AT) {
     importedAt = imported.at;
     const loaded = fromLoadout(imported.loadout);
-    if (loaded) { build = loaded; picking = false; fresh = true; }
+    if (loaded) { build = loaded; mode = "outfit"; fresh = true; }
   }
   const sig = JSON.stringify([(data.ship_builds || []).map((row) => [row.id, row.name, row.updated]), data.ship_loadout?.timestamp || "", data.options?.roll,
     Object.keys(data.seen_hulls || {}), (data.fleet || []).map((row) => [row.id, row.name, row.ident, row.at, row.now])]);
@@ -841,9 +1165,34 @@ export function handleShipClick(event, deckUi, snapshot, reference) {
   event.preventDefault();
   ui = deckUi; data = snapshot || data; ref = reference || ref;
   const action = control.dataset.msOp;
-  if (action === "pick") { picking = true; }
-  else if (action === "pick_close") { picking = false; }
-  else if (action === "new") { build = newBuild(control.dataset.ship); picking = false; }
+  if (action === "pick") { mode = "yard"; yardPick = build ? build.ship : yardPick; }
+  else if (action === "hangar") { mode = "hangar"; }
+  else if (action === "open_ship") { openShip(control.dataset.id); return true; }
+  else if (action === "open_saved") { openSaved(control.dataset.id); }
+  else if (action === "yard_pick") { yardPick = control.dataset.ship; }
+  else if (action === "yard_size") { yardSize = control.dataset.size; }
+  else if (action === "yard_sort") {
+    const key = control.dataset.key;
+    yardSort = [key, yardSort[0] === key ? -yardSort[1] : key === "name" || key === "maker" ? 1 : -1];
+  } else if (action === "select") {
+    selected = control.dataset.slot === "armour" ? "armour" : Number(control.dataset.slot);
+    category = "";
+    // A mount that's only on the other side of the hull turns the view over to show it.
+    const plan = art?.[ships.ships[build.ship]?.symbol];
+    const jname = build.slots[selected]?.jname;
+    const on = (view) => (plan?.[view]?.mounts || []).some((mount) => mount.slot === jname);
+    if (jname && plan && !on(side) && on(side === "top" ? "bottom" : "top")) side = side === "top" ? "bottom" : "top";
+  } else if (action === "side") { side = control.dataset.side === "bottom" ? "bottom" : "top"; }
+  else if (action === "ledger_tab") { ledgerTab = control.dataset.tab; }
+  else if (action === "category") { category = control.dataset.category; }
+  else if (action === "analysis") { analysisTab = control.dataset.tab; }
+  else if (action === "bulkhead") { build.bulkhead = Number(control.dataset.index); build.armour = null; }
+  else if (action === "fit") {
+    const slot = build.slots[selected];
+    if (slot) Object.assign(slot, {module: control.dataset.module || null, bp: "", grade: 0, special: "", roll: null, jmods: null, unknown: "", bpName: "", off: false});
+  }
+  else if (action === "pick_close") { mode = "outfit"; }
+  else if (action === "new") { build = newBuild(control.dataset.ship); mode = "outfit"; }
   else if (action === "power") { const slot = build.slots[Number(control.dataset.slot)]; if (slot) slot.off = !slot.off; }
   else if (action === "current") { const current = fromLoadout(data.ship_loadout); if (current) { build = current; build.fleet = String(data.ship_loadout.ShipID ?? ""); } }
   else if (action === "save" || action === "save_as") {
@@ -867,18 +1216,22 @@ export function handleShipChange(event, deckUi, snapshot, reference) {
   if (!host?.contains(target)) return false;
   ui = deckUi; data = snapshot || data; ref = reference || ref;
   const d = target.dataset || {};
-  if ("msFilter" in d) { shipFilter = target.value; draw(); const input = host.querySelector("[data-ms-filter]"); input?.focus(); return true; }
+  // Typing filters as it goes (the input event); its change, fired as the box loses focus, has nothing to add
+  // and redrawing then would pull the box out from under its own blur.
+  if ("msFilter" in d) {
+    if (event.type === "change") return true;
+    shipFilter = target.value;
+    draw();
+    const input = host.querySelector("[data-ms-filter]");
+    input?.focus();
+    input?.setSelectionRange?.(input.value.length, input.value.length);
+    return true;
+  }
   if ("msName" in d) { build.name = target.value.slice(0, 40); return true; }
-  if ("msCompare" in d) { compareId = target.value; draw(); return true; }
+  if ("msCompare" in d) { compareId = target.value; analysisTab = "compare"; draw(); return true; }
   if ("msFleet" in d) { if (target.value) openShip(target.value); return true; }
-  if ("msSaved" in d) {
-    const saved = (data.ship_builds || []).find((row) => row.id === target.value);
-    const loaded = saved ? fromSaved(saved) : null;
-    if (loaded) build = loaded;
-    // Saved on a hull that was new then and is in the tables now: keep it on the real hull, so it
-    // stays there and its share code no longer has to describe the hull.
-    if (loaded && String(saved.ship).startsWith("described:") && loaded.ship !== saved.ship) op("build_save", {build: plain(loaded)});
-  } else if ("msBulkhead" in d) { build.bulkhead = Number(target.value); build.armour = null; }
+  if ("msSaved" in d) openSaved(target.value);
+  else if ("msBulkhead" in d) { build.bulkhead = Number(target.value); build.armour = null; }
   else if (d.msArmour) {
     // Engineering the armour here: the game's figures give way to the blueprint's.
     const eng = build.armourEng || {bp: "", grade: 0, roll: null, special: ""};

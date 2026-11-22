@@ -137,7 +137,7 @@ _HTML_WORKSPACE_PAGES = {
     "planet-materials", "explore", "profile", "chronicle", "mission", "ground", "mining", "rhino",
     "powerplay", "carrier", "achievements", "settings",
     "colonisation", "bgs", "trading", "watcher", "postcards", "screenshots", "capsules", "constellation",
-    "wrapped", "games", "system-map", "materials",
+    "wrapped", "games", "system-map", "materials", "ship-builder",
 }
 
 
@@ -2841,6 +2841,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "rhino": self._html_rhino_workspace,
             # The Materials page (5.8.4): on-foot and ship engineering.
             "materials": self._html_materials_workspace,
+            # The Ship Builder page (5.8.5): its own page, on the Materials page's ship data.
+            "ship-builder": self._html_ship_builder_workspace,
             "powerplay": self._html_powerplay_workspace,
             "carrier": self._html_carrier_workspace,
             "achievements": self._html_achievements_workspace,
@@ -3495,7 +3497,7 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             if changed:
                 self.update_ground_target_ui()
 
-        elif page == "materials":
+        elif page in ("materials", "ship-builder"):
             done = self._html_materials_operation(operation, payload)
             self._schedule_html_dashboard_publish(immediate=True)
             return done

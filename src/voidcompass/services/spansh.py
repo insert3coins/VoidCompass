@@ -773,14 +773,15 @@ def material_traders(reference_system, kind, size=8, coords=None):
     ]
 
 
-def service_stations(reference_system, service, size=8, coords=None):
-    """Return nearby stations offering a named service."""
+def service_stations(reference_system, service, size=8, coords=None, broker=None):
+    """Return nearby stations offering a named service; ``broker`` ("Guardian" or "Human") keeps to that
+    kind of technology broker. Each row says which kind its broker or material trader is."""
     if not reference_system and not (coords and len(coords) == 3):
         raise SpanshError("No reference system known yet.")
     if not service:
         raise SpanshError("Enter a station service to search for.")
     body = {
-        "filters": {"services": [{"name": [service]}]},
+        "filters": {"services": [{"name": [service]}], **({"technology_broker": {"value": [broker]}} if broker else {})},
         "sort": [{"distance": {"direction": "asc"}}],
         "size": int(size), "page": 0,
     }
@@ -804,6 +805,9 @@ def service_stations(reference_system, service, size=8, coords=None):
         "dist_ls": row.get("distance_to_arrival"), "type": row.get("type"),
         "large_pad": bool(row.get("has_large_pad")), "updated_at": row.get("updated_at"),
         "carrier": (row.get("type") or "") == "Drake-Class Carrier",
+        # Which kind of technology broker (Guardian or Human) or material trader (Raw, Manufactured, Encoded) it is.
+        "broker": row.get("technology_broker") or "", "trader": row.get("material_trader") or "",
+        "market_id": row.get("market_id"),
     } for row in resp.json().get("results") or []]
 
 

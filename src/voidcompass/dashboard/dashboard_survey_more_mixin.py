@@ -1089,6 +1089,9 @@ class DashboardSurveyMoreMixin:
         dssa = bool(payload.get("dssa"))
         max_age = _num(payload.get("max_age_days"))
         trader = _text(payload.get("trader"), 20).casefold()
+        broker = _text(payload.get("broker"), 20).casefold()
+        # Brokers you've used (5.8.5): their kind where Spansh doesn't know it.
+        learned = dict((getattr(self, "engineer_materials", None) or {}).get("brokers") or {})
         generation = state["generation"] + 1
         state.update(generation=generation, status="working", detail=f"Looking round {centre['name']}…")
         self._survey_bump()
@@ -1104,12 +1107,24 @@ class DashboardSurveyMoreMixin:
                 filters["medium_pads"] = {"value": [1, 999], "comparison": "<=>"}
             if trader in ("raw", "manufactured", "encoded"):
                 filters["material_trader"] = {"value": [trader.title()]}
+            # Guardian and Human technology brokers unlock different things.
+            if broker in ("guardian", "human"):
+                filters["technology_broker"] = {"value": [broker.title()]}
             body = {"filters": filters, "reference_coords": {"x": coords[0], "y": coords[1], "z": coords[2]},
                     "sort": [{"distance": {"direction": "asc"}}], "size": 50, "page": 0}
             answer = spansh._call("POST", "stations/search", body=body, ttl=120)
+            results = list(answer.get("results") or ())
+            want = broker.title() if broker in ("guardian", "human") else ""
+            if want and any(row.get("kind") == want for row in learned.values() if isinstance(row, dict)):
+                # Brokers Spansh can't type but you've used: its broker filter leaves them out, so ask again without it.
+                loose = {key: value for key, value in filters.items() if key != "technology_broker"}
+                again = spansh._call("POST", "stations/search", body={**body, "filters": loose}, ttl=120)
+                have = {row.get("market_id") for row in results}
+                results += [row for row in again.get("results") or () if not row.get("technology_broker")
+                            and row.get("market_id") not in have and (learned.get(str(row.get("market_id"))) or {}).get("kind") == want]
             rows = []
             cutoff = time.time() - max_age * 86400 if max_age else None
-            for row in answer.get("results") or ():
+            for row in results:
                 kind = str(row.get("type") or "")
                 carrier = "carrier" in kind.casefold()
                 if carrier and not carriers:
@@ -1125,6 +1140,9 @@ class DashboardSurveyMoreMixin:
                              "ls": _num(row.get("distance_to_arrival")), "type": kind, "carrier": carrier,
                              "large": bool(row.get("has_large_pad")), "updated": stamp[:10],
                              "services": sorted(str(s.get("name") or "") for s in row.get("services") or () if isinstance(s, dict))[:20],
+                             "broker": str(row.get("technology_broker") or ((learned.get(str(row.get("market_id"))) or {}).get("kind") or "")),
+                             "broker_learned": not row.get("technology_broker") and bool((learned.get(str(row.get("market_id"))) or {}).get("kind")),
+                             "trader": str(row.get("material_trader") or ""),
                              "dssa": False})
             if dssa:
                 try:

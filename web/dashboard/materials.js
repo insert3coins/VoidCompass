@@ -10,12 +10,12 @@
 // finds anything. The fixed tables come once from /api/data/materials-reference;
 // each refresh brings only what you hold, your lists, designs and the plan.
 
-import {renderShipBuilder, handleShipClick, handleShipChange, handleShipSubmit, shipBuilderReset} from "./materials-ship.js";
 
 const SIDE_TABS = [["plan", "PLAN"], ["hold", "HOLD"], ["recipes", "RECIPES"], ["build", "BUILD"], ["sources", "SOURCES"]];
 const GROUPS = [
   ["odyssey", "ON FOOT", SIDE_TABS],
-  ["horizons", "SHIP", SIDE_TABS],
+  // The ship builder is a page of its own (5.8.5).
+  ["horizons", "SHIP", SIDE_TABS.filter(([key]) => key !== "build")],
   ["other", "OTHER", [["goals", "COMMUNITY GOALS"], ["permits", "PERMITS"]]],
 ];
 // Tabs with the inspector beside them.
@@ -472,7 +472,7 @@ function planView(game) {
   let body;
   if (!items.length && !pins.length) {
     body = empty(game === "odyssey" ? "No goals yet: add upgrades and mods from RECIPES, or a loadout from BUILD."
-      : "No goals yet: add blueprints from RECIPES (or PIN one to an engineer), or engineering from the ship BUILD.");
+      : "No goals yet: add blueprints from RECIPES (or PIN one to an engineer), or engineering from the Ship Builder.");
   } else if (planTab[game] === "goals") body = goalsTable(game, sum, pins);
   else if (planTab[game] === "shopping") body = shoppingList(game, sum);
   else if (planTab[game] === "engineers") body = engineerRoute(game);
@@ -589,7 +589,7 @@ function sourcesView(game) {
     return `${bartenderView()}<h4>WHERE YOUR SHORT ITEMS TURN UP</h4>${where ? `<div class="mt-table-wrap"><table class="mt-table"><tbody>${where}</tbody></table></div>` : empty("Nothing short, or nothing with a known place.")}`;
   }
   const trades = summary("horizons")?.trades || [];
-  return `<h4>MATERIAL TRADERS AND BROKERS</h4><div class="mt-toolbar">${nearestButtons(["raw", "manufactured", "encoded", "broker"]) || `<span class="mt-dim">Switch on Trading searches (Settings › Integrations) to find the nearest traders and brokers.</span>`}</div>${nearestResults()}
+  return `<h4>MATERIAL TRADERS AND BROKERS</h4><div class="mt-toolbar">${nearestButtons(["raw", "manufactured", "encoded", "broker_guardian", "broker_human", "broker"]) || `<span class="mt-dim">Switch on Trading searches (Settings › Integrations) to find the nearest traders and brokers.</span>`}</div>${nearestResults()}
     ${trades.length ? `<div class="mt-table-wrap"><table class="mt-table"><thead><tr><th>SWAP FOR YOUR WISHLIST</th><th class="num">SPEND</th><th class="num">GET</th></tr></thead><tbody>${trades.map((t) => `<tr><td>${esc(t.from)} → ${esc(t.for)}</td><td class="num">${whole(t.spend)}</td><td class="num">${whole(t.covers)}</td></tr>`).join("")}</tbody></table></div>` : ""}
     <h4>HIGH GRADE EMISSIONS</h4>${hgeView()}`;
 }
@@ -651,7 +651,7 @@ function recipeInspector(type, id, extra) {
   const data = type === "broker" ? `data-fdname="${esc(row.fdname)}" data-name="${esc(row.name)}"` : type === "synthesis" ? `data-name="${esc(row.name)}" data-level="${esc(row.level)}"` : `data-fdname="${esc(row.fdname)}"`;
   const kicker = type === "broker" ? `TECH BROKER · ${row.broker} · ${row.module}` : type === "synthesis" ? `SYNTHESIS · ${row.level}` : `EXPERIMENTAL · ${(row.modules || []).join(", ")}`;
   return inspectorCard(esc(row.name), kicker.toUpperCase(), `${ingredients(row.ingredients, "horizons")}
-    <div class="mt-actions mt-insp-actions"><button type="button" data-mt-op="wish_add_simple" data-type="${type}" ${data}>+ WISHLIST</button>${type === "broker" ? nearestButtons(["broker"]) : ""}</div>`);
+    <div class="mt-actions mt-insp-actions"><button type="button" data-mt-op="wish_add_simple" data-type="${type}" ${data}>+ WISHLIST</button>${type === "broker" ? nearestButtons([brokerKind(row.broker)]) : ""}</div>`);
 }
 
 // A suit or weapon: its grade upgrades and every mod, each against what you hold.
@@ -865,17 +865,25 @@ function materialsView() {
     <p class="mt-note">Traders swap within a family: one grade down gives 3, one grade up takes 6. Your wishlist's swaps are in its PLAN.</p>`;
 }
 
+// A broker unlock's broker: Guardian (and Guardian Weapons) or Human.
+const brokerKind = (broker) => /^guardian/i.test(String(broker || "")) ? "broker_guardian" : "broker_human";
+
 function nearestButtons(kinds) {
   if (!last.online) return "";
-  const label = {raw: "NEAREST RAW TRADER", manufactured: "NEAREST MANUFACTURED", encoded: "NEAREST ENCODED", broker: "NEAREST BROKER"};
+  const label = {raw: "NEAREST RAW TRADER", manufactured: "NEAREST MANUFACTURED", encoded: "NEAREST ENCODED", broker: "NEAREST BROKER (ANY KIND)",
+    broker_guardian: "NEAREST GUARDIAN BROKER", broker_human: "NEAREST HUMAN BROKER"};
   return `<span class="mt-nearest-buttons">${kinds.map((kind) => `<button type="button" class="ghost" data-mt-op="nearest" data-kind="${kind}">${label[kind]}</button>`).join("")}</span>`;
 }
 
 function nearestResults() {
   const rows = Object.entries(last.nearest || {});
   if (!rows.length) return "";
-  return `<div class="mt-nearest">${rows.map(([, row]) => `<div><b>${esc(row.label)}</b>${row.waiting ? "<span>Asking Spansh…</span>" : row.error ? `<span>${esc(row.error)}</span>`
-    : (row.rows || []).map((station) => `<span><button type="button" class="ghost" data-mt-op="copy" data-text="${esc(station.system)}">${esc(station.system)}</button> ${esc(station.station)} · ${ly(station.distance)}${station.large_pad ? " · L" : ""}</span>`).join("") || "<span>None found.</span>"}</div>`).join("")}</div>`;
+  // Spansh doesn't know every broker's kind (colony starports, rescue megaships): those say so.
+  const kindOf = (key, station) => station.broker ? ` · <b class="mt-broker-kind">${esc(station.broker)} broker</b>${station.learned
+    ? ` <span class="mt-dim" title="Spansh doesn't know; you've unlocked something there">(from your visit)</span>` : ""}`
+    : key.startsWith("broker") ? ` · <span class="mt-dim" title="Spansh hasn't been told whether this is a Guardian or Human broker">kind not reported</span>` : "";
+  return `<div class="mt-nearest">${rows.map(([key, row]) => `<div><b>${esc(row.label)}</b>${row.waiting ? "<span>Asking Spansh…</span>" : row.error ? `<span>${esc(row.error)}</span>`
+    : (row.rows || []).map((station) => `<span><button type="button" class="ghost" data-mt-op="copy" data-text="${esc(station.system)}">${esc(station.system)}</button> ${esc(station.station)}${kindOf(key, station)} · ${ly(station.distance)}${station.large_pad ? " · L" : ""}</span>`).join("") || "<span>None found.</span>"}</div>`).join("")}</div>`;
 }
 
 // -- SHIP: high grade emissions ----------------------------------------------------
@@ -988,7 +996,7 @@ function brokerView(tabsRow) {
   if (!keys.includes(brokerPick)) brokerPick = order.find((key) => wanted.has(key)) || order[0] || "";
   const [broker, module] = brokerPick.split("|");
   const picked = rows.filter((row) => keyOf(row) === brokerPick).sort((a, b) => a.name.localeCompare(b.name));
-  return `<div class="mt-toolbar">${tabsRow}${search("broker", "Find a broker unlock")}${nearestButtons(["broker"])}</div>${nearestResults()}
+  return `<div class="mt-toolbar">${tabsRow}${search("broker", "Find a broker unlock")}${nearestButtons(["broker_guardian", "broker_human", "broker"])}</div>${nearestResults()}
     <div class="mt-picker">${pickBlock(groups, "brokerPick", brokerPick, wanted, label) || empty("No broker unlock matches.")}</div>
     ${brokerPick ? `<h4>${esc(broker.toUpperCase())} BROKER · ${esc(label(brokerPick).toUpperCase())} · ${picked.length}</h4>${recipeTable(picked, "broker")}` : ""}`;
 }
@@ -1142,7 +1150,7 @@ function body() {
   else if (view === "hold") main = holdView(game);
   else if (view === "recipes") main = recipesView(game);
   else if (view === "sources") main = sourcesView(game);
-  else main = game === "horizons" ? `<div id="mt-ship-builder" class="mt-ship"></div>` : loadoutsView();
+  else main = loadoutsView();
   if (!INSPECTED.has(view)) return main;
   return `<div class="mt-layout${inspect ? " inspecting" : ""}"><div class="mt-main">${main}</div><aside class="mt-inspector">${inspectorView(game)}</aside></div>`;
 }
@@ -1165,17 +1173,12 @@ export function renderMaterials(data, ui, force = false) {
     root.dataset.markup = "";
     return;
   }
-  const builder = group === "horizons" && sub.horizons === "build";
   const markup = `${tabs()}<div class="mt-body mt-view-${group}-${sub[group]}">${body()}</div>`;
-  if (!force && root.dataset.markup === markup) {
-    if (builder) renderShipBuilder(ui.byId("mt-ship-builder"), last, ref, ui, false);
-    return;
-  }
+  if (!force && root.dataset.markup === markup) return;
   const focused = document.activeElement;
   if (!force && root.contains(focused) && focused.matches("input, textarea, select")) return;
   root.dataset.markup = markup;
   root.innerHTML = markup;
-  if (builder) renderShipBuilder(ui.byId("mt-ship-builder"), last, ref, ui, true);
 }
 
 function redraw(keepFocus) {
@@ -1197,7 +1200,6 @@ export function resetMaterials() {
   inspect = null;
   designPick = null;
   draft = null;
-  shipBuilderReset();
   const root = document.getElementById("materials-workspace");
   if (root) root.dataset.markup = "";
 }
@@ -1223,7 +1225,6 @@ function draftPart(kind, index) {
 }
 
 function onClick(event) {
-  if (handleShipClick(event, lastUi, last, ref)) return;
   const control = event.target.closest("[data-mt-op]");
   if (!control || control.disabled) return;
   event.preventDefault();
@@ -1345,14 +1346,12 @@ function onInput(event) {
     if (box) box.innerHTML = globalResults();
     return;
   }
-  if (("msFilter" in ds || "msName" in ds) && handleShipChange(event, lastUi, last, ref)) return;
   const key = ds.mtSearch;
   if (key) { query[key] = event.target.value; redraw(event.target); return; }
   if (event.target.dataset?.mtDraft === "name" && draft) draft.name = event.target.value.slice(0, 40);
 }
 
 function onChange(event) {
-  if (handleShipChange(event, lastUi, last, ref)) return;
   const target = event.target;
   const d = target.dataset || {};
   if ("mtGlobal" in d) return;
@@ -1384,7 +1383,6 @@ function onChange(event) {
 }
 
 function onSubmit(event) {
-  if (handleShipSubmit(event, lastUi)) return;
   const form = event.target.closest("[data-mt-form='code']");
   if (!form) return;
   event.preventDefault();

@@ -48,6 +48,7 @@ import {handleTradingClick, handleTradingInput, handleTradingSubmit, renderTradi
 import {handleMiningClick, handleMiningInput, handleMiningSubmit, renderMining, resetMining} from "./mining.js";
 import {handleRhinoClick, handleRhinoInput, handleRhinoSubmit, renderRhino, resetRhino} from "./rhino.js";
 import {renderMaterials, resetMaterials} from "./materials.js";
+import {renderShipBuilderPage, resetShipBuilderPage} from "./ship-builder.js";
 import {handleThemeWorkshopClick, handleThemeWorkshopInput, themeSettings, themeWorkshopOpen, workshopTheme} from "./theme-workshop.js";
 import {groupChips, groupChipsFingerprint, handleOverlayGroupsClick, handleOverlayGroupsInput, handleOverlayGroupsSubmit,
   renderGroupMembership, renderOverlayGroups} from "./overlay-groups.js";
@@ -3977,6 +3978,7 @@ function renderWorkspace(state) {
     mining: renderMiningWorkspace,
     rhino: (data) => renderRhino(data, WORKSHOP_UI),
     materials: (data) => renderMaterials(data, WORKSHOP_UI),
+    "ship-builder": (data) => renderShipBuilderPage(data, WORKSHOP_UI),
     powerplay: renderPowerplayWorkspace,
     carrier: renderCarrierWorkspace,
     achievements: renderAchievementsWorkspace,
@@ -4024,6 +4026,7 @@ function renderDashboard(state) {
     resetMining();
     resetRhino();
     resetMaterials();
+    resetShipBuilderPage();
     resetExpeditions();
     resetPlanetary();
     analyticsView = "trends";

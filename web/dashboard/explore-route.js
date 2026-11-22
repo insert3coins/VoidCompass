@@ -18,7 +18,7 @@ function form() {
   return pref(st.profile, "route.form", {plotter: "neutron", to: "", ship: "", range: "", conservative: false, conservative_ly: 2,
     efficiency: 60, radius: 25, max_results: 100, max_distance: 50, min_value: 1000000, loop: true, use_mapping_value: true,
     avoid_thargoids: true, injections: false, exclude_secondary: false, no_neutrons: false, supercharged: false,
-    dock: {centre: "here", services: ["uc"], pad: "L", carriers: true, dssa: false, max_age_days: 30, trader: ""}});
+    dock: {centre: "here", services: ["uc"], pad: "L", carriers: true, dssa: false, max_age_days: 30, trader: "", broker: ""}});
 }
 
 function formMarkup(data) {
@@ -100,7 +100,7 @@ function dockMarkup(data) {
   const f = form().dock;
   const dock = data.dock || {};
   const services = DOCK_SERVICES.map(([id, label]) => `<label><input type="checkbox" data-xr-dock-service value="${id}" ${f.services.includes(id) ? "checked" : ""}> ${label}</label>`).join("");
-  const rows = (dock.rows || []).map((row) => `<tr><td><b>${esc(row.name)}</b>${row.dssa ? ` <em class="xr-dssa" title="Deep Space Support Array carrier">DSSA</em>` : ""}<div class="xn-dim">${esc(row.type)}</div></td><td>${esc(row.system)}</td>
+  const rows = (dock.rows || []).map((row) => `<tr><td><b>${esc(row.name)}</b>${row.dssa ? ` <em class="xr-dssa" title="Deep Space Support Array carrier">DSSA</em>` : ""}<div class="xn-dim">${esc([row.type, row.broker ? `${row.broker} broker${row.broker_learned ? " (from your visit)" : ""}` : (row.services || []).includes("Technology Broker") ? "broker (kind not reported)" : "", row.trader ? `${row.trader} trader` : ""].filter(Boolean).join(" · "))}</div></td><td>${esc(row.system)}</td>
       <td class="xt-num">${fixed(row.distance, 1)}</td><td class="xt-num">${row.ls ? Math.round(row.ls).toLocaleString() : ""}</td><td>${row.large ? "L" : "M"}</td><td>${esc(row.updated)}</td>
       <td><span class="xn-acts"><button type="button" data-xr-dock-copy="${esc(row.system)}" title="Copy the system">⧉</button></span></td></tr>`).join("");
   return `<section class="xr-dock"><h4>NEAREST PLACE TO DOCK</h4>
@@ -109,6 +109,7 @@ function dockMarkup(data) {
         .map(([id, label]) => `<option value="${id}" ${f.centre === id ? "selected" : ""}>${label}</option>`).join("")}</select>
       <select data-xr-dock="pad"><option value="L" ${f.pad === "L" ? "selected" : ""}>Large pad</option><option value="M" ${f.pad === "M" ? "selected" : ""}>Medium pad</option><option value="S" ${f.pad === "S" ? "selected" : ""}>Any pad</option></select>
       <select data-xr-dock="trader"><option value="">Any trader</option>${["raw", "manufactured", "encoded"].map((kind) => `<option value="${kind}" ${f.trader === kind ? "selected" : ""}>${kind} trader</option>`).join("")}</select>
+      <select data-xr-dock="broker" title="Guardian and Human technology brokers unlock different things"><option value="">Any broker</option>${["guardian", "human"].map((kind) => `<option value="${kind}" ${f.broker === kind ? "selected" : ""}>${kind} broker</option>`).join("")}</select>
       <label>REPORTS UNDER<input type="number" data-xr-dock="max_age_days" min="1" max="3650" value="${esc(f.max_age_days)}"> DAYS</label>
       <label><input type="checkbox" data-xr-dock-flag="carriers" ${f.carriers ? "checked" : ""}> fleet carriers</label>
       <label title="Carriers the Deep Space Support Array keeps out in the black (EDAstro's list)"><input type="checkbox" data-xr-dock-flag="dssa" ${f.dssa ? "checked" : ""}> DSSA carriers</label>
