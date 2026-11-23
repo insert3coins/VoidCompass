@@ -12,6 +12,10 @@
   * **Crew Orders**: two kinds of her own, three new Codex entries out past the bubble and a picture of a remarkable world in the system you're in, her Order File (*Page Eleven*), standing and a Right Hand ribbon, and a line in each campaign's look-back.
   * **Achievements**: Activation, Page Eleven, Every View Kept and The View from the Middle. Full Crew now needs all six companions, and The Watch Rota all 48 crew passages.
 
+* **The crew notices when you deploy.** Launching the SRV, Scarab, Scorpion, Rhino or Nomad is now a moment every companion speaks about (it was so minor it was rarely said, and never on Occasional), and a fighter launch counts too. Moving or showing a companion's display no longer holds back the next thing it would say, such as undocking a few seconds later.
+
+* **Rhino site targets that stay put.** TARGET on a saved site while you were already near its centre counted as arriving and cleared at once, so it looked as if nothing happened. It now waits until you've left and come back, only counts arriving on the target's own planet, and every TARGET says what it set and where.
+
 ## Earlier releases
 
 * **v5.8.5** (22 NOV 3312) — The Shipyard: the Ship Builder as a page of its own (a hero banner, OUTFITTING with the hull's anatomy top or bottom, fitting beside the hull and engineering under it, SHIPYARD with every hull and its card, HANGAR with your ships and saved builds); Guardian or Human technology brokers on Materials and the dock finder, learned from your own visits.

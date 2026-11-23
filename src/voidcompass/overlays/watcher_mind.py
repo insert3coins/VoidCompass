@@ -263,6 +263,9 @@ def personality(config):
 
 # How much each topic matters: 3 it must say (a death), 2 notable, 1 worth
 # a remark, 0 idle. The words are in watcher_lines.py.
+# Remarks about its own display, not the game: they never make the next real moment wait.
+DISPLAY_REMARKS = frozenset({"moved", "unhidden"})
+
 IMPORTANCE = {
     # 5.6.1: an expedition's milestones, each said once.
     "expedition_set_out": 3, "expedition_region": 2, "expedition_halfway": 3, "expedition_furthest": 2,
@@ -320,7 +323,8 @@ IMPORTANCE = {
     "jet_boost": 1,
     "heat_warning": 2,
     "interdiction_escaped": 1,
-    "srv_launch": 0,
+    # 5.8.6: deploying a vehicle is your own deliberate act, worth a word (was 0: rarely said).
+    "srv_launch": 2,
     "settlement_seen": 0,
     "taxi_ride": 0,
     "carrier_jump": 1,
@@ -373,7 +377,7 @@ IMPORTANCE = {
     # 5.5.11: refined in the Rhino, from rigs on a planet (no asteroids, no limpets).
     "mined_surface": 0,
     # 5.5.12: each vehicle by name, and the moments of a mining run.
-    "launch_scarab": 0, "launch_scorpion": 0, "launch_rhino": 0, "launch_nomad": 0, "launch_fighter": 0,
+    "launch_scarab": 2, "launch_scorpion": 2, "launch_rhino": 2, "launch_nomad": 2, "launch_fighter": 1,
     "prospected_rich": 0, "motherlode": 2, "cracked": 1, "rhino_full": 1, "hold_full_mining": 1,
     "hold_full": 1, "srv_full": 1, "srv_fuel_low": 2,
     # 5.5.4: how you play, as it has come to know it; a milestone as it happens.
@@ -958,7 +962,9 @@ class WatcherMind:
             # A line you muted (5.7.8) is never said again: the last thought stays.
             return self.thought
         self._serial += 1
-        self._last_spoke = now
+        # 5.8.6: a word about its own display (moved, shown again) doesn't hold back the next real moment.
+        if topic not in DISPLAY_REMARKS:
+            self._last_spoke = now
         kind, heading = thought_heading(topic, text)
         self.thought = {"id": self._serial, "text": text, "script": script, "topic": topic,
                         "mood": MOODS.get(topic, ""), "at": now,

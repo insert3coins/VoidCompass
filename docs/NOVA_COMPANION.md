@@ -55,4 +55,4 @@ Nova has the same capabilities as the other officers: `thought`, `poke`, `answer
 
 ## Resources and packaging
 
-Her sheets total about 9.4 MB and are served from the deck's own assets (with CORS for sandboxed pages, like the renderer modules). Her model files must be pushed to the project's GitHub under `models/nova/` for other installs to download them.
+Her sheets total about 17.6 MB, served from the deck's own assets (with CORS for sandboxed pages, like the renderer modules). A clip she hasn't shown for a minute and a half is unloaded until it's wanted again; idle, her mouth and her eyes stay loaded. Her model files must be pushed to the project's GitHub under `models/nova/` for other installs to download them.

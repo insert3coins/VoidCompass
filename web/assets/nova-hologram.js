@@ -21,6 +21,8 @@ const BASE = {idle: "idle", listening: "listening", working: "working", charging
 const MOOD_CLIPS = {joy: ["warm-smile", "delighted"], curious: ["curious"], worry: ["wary"], sad: ["downcast"]};
 const SETTLE_S = 45;
 const EAGER = ["idle", "mouth-levels"];
+// A sheet not shown for this long is let go (a full set is ~250 MB of textures); it loads again when wanted.
+const KEEP_S = 90;
 const SIZE = 1.96;
 
 export function addNovaHologram(parent, uniforms, onChange = () => {}) {
@@ -32,7 +34,7 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
 
   function texture(name, file = `${name}.webp`) {
     if (sheets.has(name)) return sheets.get(name);
-    const row = {texture: null, ready: false};
+    const row = {texture: null, ready: false, used: elapsed};
     sheets.set(name, row);
     loader.load(new URL(file, base).href, (loaded) => {
       loaded.colorSpace = THREE.SRGBColorSpace;
@@ -95,7 +97,7 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
 
   let clip = "idle", frame = 0, clock = 0, once = null, lastMood = "", lastState = "idle", lastThought = null;
   let joyTurn = 0, blinkAt = 3.2, blinkClock = -1, glitchAt = 18, glitch = 0, shown = "", show = 0, busy = false;
-  let quiet = 0, night = "", live = {pose: {}};   // night: "" awake, "due" after a sign-off, "asleep" eyes closed
+  let quiet = 0, night = "", live = {pose: {}}, elapsed = 0, swept = 0;   // night: "" awake, "due" after a sign-off, "asleep" eyes closed
 
   function setFrame(uniform, row, index, cols) {
     const rows = Math.ceil(row.frames / cols);
@@ -189,6 +191,17 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
       material.uniforms.uSheet.value = sheet.texture;
       setFrame(material.uniforms.uFrame.value, info.clips[name], index, info.clips[name].cols);
       frame = index; shown = name;
+      // Let go of sheets she hasn't shown for a while; idle, the mouth and the eyes stay.
+      elapsed += dt; sheet.used = elapsed;
+      if (once) { const wanted = sheets.get(once.name); if (wanted) wanted.used = elapsed; }
+      if (elapsed - swept > 10) {
+        swept = elapsed;
+        for (const [key, row] of sheets) {
+          if (row.ready && !EAGER.includes(key) && key !== "blink-layer" && key !== shown && elapsed - row.used > KEEP_S) {
+            row.texture.dispose(); sheets.delete(key);
+          }
+        }
+      }
       // The blink layer over speech, every few seconds.
       const layer = info.layer, eyes = sheets.get("blink-layer");
       material.uniforms.uLayerOn.value = 0;

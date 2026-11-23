@@ -148,8 +148,26 @@ class HtmlRhinoMixin:
 
     def _rhino_set_target(self, lat, lon, reach, **target):
         self.set_ground_target(lat, lon, **target)
-        self._rhino_target = {"at": (getattr(self, "target_lat", None), getattr(self, "target_lon", None)), "reach": reach, "label": target.get("label") or "Target"}
+        body = str(target.get("body") or "")
+        label = target.get("label") or "Target"
+        # 5.8.6: set while you're already inside its radius (standing at the site), it
+        # waits until you've been away before it counts as reached, rather than
+        # clearing the moment it's set.
+        place = self._rig_place()
+        inside = self._rhino_target_distance(place, body, getattr(self, "target_lat", None), getattr(self, "target_lon", None))
+        self._rhino_target = {"at": (getattr(self, "target_lat", None), getattr(self, "target_lon", None)), "reach": reach,
+                              "label": label, "body": body, "armed": inside is None or inside > reach}
+        where = (f"{round(inside):,} m away" if inside is not None and inside > reach else "you're there"
+                 if inside is not None else f"on {body}" if body else "")
+        self._rig_say("TARGET", f"{label}{f' · {where}' if where else ''}")
         return True
+
+    def _rhino_target_distance(self, place, body, lat, lon):
+        """How far you are from a target, in metres, when you're on its planet; else None."""
+        if place is None or lat is None or lon is None or (body and body.casefold() != place[1].casefold()):
+            return None
+        from voidcompass.overlays.rig_tracker import surface_distance_m
+        return surface_distance_m(place[2], place[3], lat, lon, place[4])
 
     def _rhino_target_watch(self):
         """A target the Rhino page set goes once you get there. One set
@@ -161,11 +179,13 @@ class HtmlRhinoMixin:
         if not getattr(self, "target_latlon_active", False) or here != mine["at"]:
             self._rhino_target = None
             return False
-        place = self._rig_place()
-        if place is None:
+        away = self._rhino_target_distance(self._rig_place(), mine.get("body") or "", self.target_lat, self.target_lon)
+        if away is None:
             return False
-        from voidcompass.overlays.rig_tracker import surface_distance_m
-        if surface_distance_m(place[2], place[3], self.target_lat, self.target_lon, place[4]) > mine["reach"]:
+        if away > mine["reach"]:
+            mine["armed"] = True
+            return False
+        if not mine.get("armed", True):
             return False
         self._rhino_target = None
         self.clear_ground_target()
