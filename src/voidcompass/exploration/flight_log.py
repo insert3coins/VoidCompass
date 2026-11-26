@@ -21,8 +21,9 @@ ELITE_YEARS = 1286
 # The night's best moments, best first.
 # 5.7.7: a finished crew order ("ORDER") counts among the night's best moments.
 HIGHLIGHT_ORDER = ("RARE", "ORDER", "CODEX", "BIO", "SALE", "PHOTO", "LOSS", "DEBRIEF")
-_PERSONAS = ("aster", "axiom", "meridian", "lyra", "nova")
-_COMPANION_NAMES = {"watcher": "the Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova"}
+_PERSONAS = ("aster", "axiom", "meridian", "lyra", "nova", "parallax", "rivet")
+_COMPANION_NAMES = {"watcher": "the Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova",
+                    "parallax": "Parallax", "rivet": "Rivet"}
 
 def part_of_day(moment):
     """The part of the day a session began in, for "this morning's star"

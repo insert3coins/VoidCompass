@@ -663,7 +663,7 @@ def year_story(year, sources, nature="weary", commander="", now=None, trip=None)
             "cards": cards, "summary": summary, "trip": dict(trip) if trip else None}
 
 
-CREW = ("watcher", "aster", "axiom", "meridian", "lyra", "nova")
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra", "nova", "parallax", "rivet")
 # Their own flight talk only: never a story passage, a crewmate's line, or an answer.
 _UNQUOTED = ("lore", "crew_", "relay", "answer", "talk", "question", "callback", "name_", "dream", "echo", "book", "voice_found")
 
@@ -702,7 +702,8 @@ def crew_card(sessions, memories, start, end, seed):
     return {"kind": "crew", "members": members, "top": members[0]["name"], "night_watch": len(night)}
 
 
-_ORDER_NAMES = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova"}
+_ORDER_NAMES = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova",
+                "parallax": "Parallax", "rivet": "Rivet"}
 
 
 def orders_card(ledger, start, end):

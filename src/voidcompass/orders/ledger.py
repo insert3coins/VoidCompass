@@ -32,7 +32,7 @@ MAX_ACTIVE_FIELD = 3
 EVENT_MEMORY = 3000
 HISTORY_LIMIT = 400
 OPEN = ("offered", "active")
-SPEAKERS = ("watcher", "aster", "axiom", "meridian", "lyra", "nova")
+SPEAKERS = ("watcher", "aster", "axiom", "meridian", "lyra", "nova", "parallax", "rivet")
 
 # How far each officer trusts you, by orders done for them.
 STANDINGS = ((0, "New to the watch"), (3, "Trusted"), (8, "Proven"), (15, "Right hand"), (30, "Indispensable"))

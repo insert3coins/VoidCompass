@@ -7634,6 +7634,126 @@
     }
   },
   {
+    "id": "parallax_story_begins",
+    "title": "Stowaway",
+    "desc": "Hear Parallax tell how she came aboard",
+    "icon": "❂",
+    "category": "Parallax",
+    "points": 25,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "ParallaxTold",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "parallax_story_complete",
+    "title": "Two Points",
+    "desc": "Hear Parallax's whole story, The Second Sighting",
+    "icon": "❂",
+    "category": "Parallax",
+    "points": 250,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "ParallaxComplete",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "parallax_every_echo",
+    "title": "Every Shift Noted",
+    "desc": "Hear all six of Parallax's echoes",
+    "icon": "❂",
+    "category": "Parallax",
+    "points": 150,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "ParallaxEchoes",
+      "value": 6,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "parallax_request",
+    "title": "The Still Point",
+    "desc": "Take Parallax to the heart of the galaxy",
+    "icon": "❂",
+    "category": "Parallax",
+    "points": 100,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "ParallaxRequest",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "rivet_story_begins",
+    "title": "Good Lad",
+    "desc": "Hear Rivet tell how he came aboard",
+    "icon": "⚙",
+    "category": "Rivet",
+    "points": 25,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "RivetTold",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "rivet_story_complete",
+    "title": "Stand Down",
+    "desc": "Hear Rivet's whole story, The Long Recall",
+    "icon": "⚙",
+    "category": "Rivet",
+    "points": 250,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "RivetComplete",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "rivet_every_echo",
+    "title": "Every Homecoming",
+    "desc": "Hear all six of Rivet's echoes",
+    "icon": "⚙",
+    "category": "Rivet",
+    "points": 150,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "RivetEchoes",
+      "value": 6,
+      "compare": "gte"
+    }
+  },
+  {
+    "id": "rivet_request",
+    "title": "First Through the Door",
+    "desc": "Take Rivet somewhere nobody has ever been",
+    "icon": "⚙",
+    "category": "Rivet",
+    "points": 100,
+    "trigger": {
+      "type": "flag",
+      "event": "VoidCompassWatcherStory",
+      "field": "RivetRequest",
+      "value": 1,
+      "compare": "gte"
+    }
+  },
+  {
     "id": "crew_introductions",
     "title": "Introductions",
     "desc": "Hear one of your companions tell how it came aboard",
@@ -7651,7 +7771,7 @@
   {
     "id": "crew_full",
     "title": "Full Crew",
-    "desc": "Fly with all six companions: the Watcher, Aster, Axiom, Meridian, Lyra and Nova",
+    "desc": "Fly with all eight companions: the Watcher, Aster, Axiom, Meridian, Lyra, Nova, Parallax and Rivet",
     "icon": "⚓",
     "category": "The Crew",
     "points": 100,
@@ -7659,14 +7779,14 @@
       "type": "flag",
       "event": "VoidCompassWatcherStory",
       "field": "CrewFlown",
-      "value": 6,
+      "value": 8,
       "compare": "gte"
     }
   },
   {
     "id": "crew_watch_rota",
     "title": "The Watch Rota",
-    "desc": "Hear all six companions' accounts of coming aboard, every passage",
+    "desc": "Hear all eight companions' accounts of coming aboard, every passage",
     "icon": "⚓",
     "category": "The Crew",
     "points": 200,
@@ -7674,7 +7794,7 @@
       "type": "flag",
       "event": "VoidCompassWatcherStory",
       "field": "CrewTold",
-      "value": 48,
+      "value": 80,
       "compare": "gte"
     }
   },

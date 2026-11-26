@@ -259,4 +259,4 @@ WATCHER_NORMAL = {topic: lines for group in GROUPS for topic, lines in group.WAT
 WATCHER_WEARY = {topic: lines for group in GROUPS for topic, lines in group.WATCHER_WEARY.items()}
 PERSONAS = {identity: {"plain": {topic: lines for group in GROUPS for topic, lines in group.PERSONAS[identity]["plain"].items()},
                        "voiced": {topic: lines for group in GROUPS for topic, lines in group.PERSONAS[identity]["voiced"].items()}}
-            for identity in ("aster", "axiom", "meridian", "lyra", "nova")}
+            for identity in ("aster", "axiom", "meridian", "lyra", "nova", "parallax", "rivet")}

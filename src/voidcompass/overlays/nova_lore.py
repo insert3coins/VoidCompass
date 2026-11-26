@@ -449,6 +449,11 @@ PERSONALITY = {
 # Before this chapter she keeps to her short, reserved lines, whatever her style setting.
 OPENS_UP = "III"
 
+# Her word that her Scientific Knowledge Library is open, once, after her last words.
+LIBRARY_NEWS = ("Commander, I've finished organising the research we recovered. "
+                "If you're ever curious about something out there, a star, a world, something living, just ask me. "
+                "I'd be glad to tell you what I know.")
+
 # Nyx Evera's Progressive Dialogue Library (Draft v0.1): her everyday lines,
 # each chapter's set opened for good when the chapter is completed (its last
 # entry unlocked, told or not). "context" lines are said only when that

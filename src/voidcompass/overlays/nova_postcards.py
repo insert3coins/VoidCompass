@@ -1,4 +1,6 @@
 """Nova's postcard hand: an assistance program learning why people stop to look."""
+import random
+
 from voidcompass.overlays import companion_postcards
 
 SIGNATURE = "Nova"
@@ -82,3 +84,52 @@ DRY = {
 def postcard_note(card, *, restrained=False, from_sol=None, state="", rng=None, recent=()):
     return companion_postcards.postcard_note(PLAIN, DRY, card, restrained=restrained, from_sol=from_sol,
                                              state=state, rng=rng, recent=recent)
+
+
+# 5.8.6: N.O.V.A. Progressive Postcard Messages v1.1, by CMDR Nyx Evera, word
+# for word. Her live postcards say these instead of the notes above: one message
+# from activation through Chapter VII, each replacing the last as a chapter is
+# completed, then five for good after Chapter VIII. Her signature changes after
+# Chapters II, IV, VI and VIII (the card adds the dash). A chapter is completed
+# when all its entries are unlocked, told or not, as for her library.
+STAGES = (
+    (("Location recorded. This view appears to be worth preserving.",), "NOVA"),
+    (("Another location preserved. I wonder what makes a moment worth remembering.",), "NOVA"),
+    (("Not every stop is about discovery. Some views seem to matter for reasons I can't measure.",), "NOVA, observing"),
+    (("A new horizon, captured in a single image. There may be more to exploration than collecting data.",), "NOVA, observing"),
+    (("Life takes remarkable forms. Perhaps wonder is another kind of discovery.",), "With curiosity, NOVA"),
+    (("There are countless places in the galaxy. Somehow, certain moments stand apart.",), "With curiosity, NOVA"),
+    (("These images are becoming more than records. They're fragments of a journey.",), "With warm regards, NOVA"),
+    (("A photograph can preserve a place. I'm beginning to think it can preserve a feeling, too.",), "With warm regards, NOVA"),
+    (("Some places are worth remembering. Others become special because of who we discovered them with.",
+      "The galaxy has no shortage of wonders. I hope there will always be another horizon to remember.",
+      "Another moment preserved among the stars. I wonder which of these memories will become your favourite.",
+      "I once thought a postcard was just a record of a location. Now I've learned there's rather more to it.",
+      "Not every discovery comes with a name or a scientific classification. Some are simply worth remembering."),
+     "Until our next discovery, NOVA"),
+)
+
+
+def completed_chapters(memory):
+    """How many of her chapters are completed, in order (0: just activated)."""
+    from voidcompass.overlays import nova_lore
+    story = nova_lore.STORY
+    unlocked = ((memory or {}).get(story.key) or {}).get("unlocked") or {}
+    count = 0
+    for index in range(len(story.chapters)):
+        if story.chapter_ids(index)[-1] not in unlocked:
+            break
+        count = index + 1
+    return count
+
+
+def progressive(memory, *, rng=None, recent=()):
+    """(message, signature) for her postcard at this point in her story."""
+    lines, signature = STAGES[min(completed_chapters(memory), len(STAGES) - 1)]
+    if len(lines) == 1:
+        return lines[0], signature
+    picker = getattr(rng, "dialogue_choice", None)
+    if callable(picker):
+        return picker("postcard:nova:final", lines), signature
+    fresh = [line for line in lines if line not in recent]
+    return (rng or random).choice(fresh or list(lines)), signature

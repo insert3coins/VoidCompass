@@ -556,3 +556,7 @@ PERSONAS = {
         },
     },
 }
+
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_crew as _parallax_crew, rivet_crew as _rivet_crew  # noqa: E402
+PERSONAS["parallax"], PERSONAS["rivet"] = _parallax_crew.ENGINEERING, _rivet_crew.ENGINEERING

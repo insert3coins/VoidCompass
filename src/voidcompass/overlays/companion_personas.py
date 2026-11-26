@@ -32,6 +32,19 @@ _SPEC = {
              "watch": "NOVA · OBSERVING", "advisory": "NOVA · ASSISTANCE", "reply": "NOVA'S REPLY",
              "asks": "NOVA ASKS", "pace": 1.0, "signature": "Nova",
              "test": "Hello, Commander. This is Nova. Voice check complete. I think I rather like travelling."},
+    # 5.8.6: the ship's pets, speaking through their gear.
+    "parallax": {"lines": "parallax_lines", "lore": "parallax_lore", "name": "parallax_name", "postcards": "parallax_postcards",
+                 "keepsakes": "parallax_keepsakes",
+                 "humour": ("Parallax’s commentary", (("dry", "Aloof"), ("off", "Plain"))),
+                 "watch": "PARALLAX · WATCHING", "advisory": "PARALLAX · NOTICED", "reply": "PARALLAX'S REPLY",
+                 "asks": "PARALLAX ASKS", "pace": 1.0, "signature": "Parallax",
+                 "test": "Parallax here. The collar is translating. This is my voice. You may admire it, Commander."},
+    "rivet": {"lines": "rivet_lines", "lore": "rivet_lore", "name": "rivet_name", "postcards": "rivet_postcards",
+              "keepsakes": "rivet_keepsakes",
+              "humour": ("Rivet’s commentary", (("dry", "Eager"), ("off", "Steady"))),
+              "watch": "RIVET · ON WATCH", "advisory": "RIVET · SNIFFED OUT", "reply": "RIVET'S REPLY",
+              "asks": "RIVET ASKS", "pace": 1.0, "signature": "Rivet",
+              "test": "Rivet here, Commander! Receiver's on, and this is my voice. Tail's going. Ready when you are."},
 }
 IDENTITIES = tuple(_SPEC)
 _CACHE = {}
@@ -50,13 +63,17 @@ def _modules():
         meridian_keepsakes, meridian_lines, meridian_lore, meridian_name, meridian_postcards,
         lyra_keepsakes, lyra_lines, lyra_lore, lyra_name, lyra_postcards,
         nova_keepsakes, nova_lines, nova_lore, nova_name, nova_postcards,
+        parallax_keepsakes, parallax_lines, parallax_lore, parallax_name, parallax_postcards,
+        rivet_keepsakes, rivet_lines, rivet_lore, rivet_name, rivet_postcards,
     )
     return {module.__name__.rsplit(".", 1)[-1]: module for module in (
         aster_keepsakes, aster_lines, aster_lore, aster_name, aster_postcards,
         axiom_keepsakes, axiom_lines, axiom_lore, axiom_name, axiom_postcards,
         meridian_keepsakes, meridian_lines, meridian_lore, meridian_name, meridian_postcards,
         lyra_keepsakes, lyra_lines, lyra_lore, lyra_name, lyra_postcards,
-        nova_keepsakes, nova_lines, nova_lore, nova_name, nova_postcards)}
+        nova_keepsakes, nova_lines, nova_lore, nova_name, nova_postcards,
+        parallax_keepsakes, parallax_lines, parallax_lore, parallax_name, parallax_postcards,
+        rivet_keepsakes, rivet_lines, rivet_lore, rivet_name, rivet_postcards)}
 
 
 def get(identity):

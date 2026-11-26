@@ -51,6 +51,10 @@ KINDS = {
     "closer_look": ("nova", "exploration", "closer looks"),
     "phenomenon": ("nova", "exploration", "phenomena"),
     "uncharted": ("nova", "exploration", "uncharted systems"),
+    "perch": ("parallax", "exploration", "perches"),
+    "warm_star": ("parallax", "travel", "warm stars"),
+    "ports": ("rivet", "travel", "ports of call"),
+    "new_ground": ("rivet", "exploration", "new ground"),
 }
 
 WORTHY = ("earthlike", "earth-like", "water world", "ammonia world")
@@ -465,10 +469,61 @@ def watcher_errand(facts):
     return [choices[day % len(choices)]] if choices else []
 
 
+# -- Parallax and Rivet: the ship's pets ask for small things (5.8.6) ----------
+def _day(facts):
+    return int(float(facts.get("now") or time.time()) // 86400)
+
+
+def parallax_perch(facts):
+    """Somewhere to sit with a horizon: touch down on any world."""
+    if facts.get("docked"):
+        return []
+    return [draft(
+        "perch", "A perch with a view", "Touch down on any world, anywhere with a horizon. Parallax will judge the view.",
+        [obj.make("land", label="Land on a world")], key=f"perch:{_day(facts)}", score=30,
+        fields={"system": facts.get("system")},
+        why=[_why("Parallax would like to sit on something solid for a change", "Parallax")],
+    )]
+
+
+def parallax_warm_star(facts):
+    """Ten minutes in the light of a yellow star."""
+    if facts.get("docked"):
+        return []
+    return [draft(
+        "warm_star", "A warm star", "Spend ten minutes in a system whose main star is a yellow, class G star. Parallax will sit in the light.",
+        [obj.make("stay", label="Ten minutes by a yellow star", minutes=10, star_class="G")], key=f"warm:{_day(facts)}", score=28,
+        fields={"system": facts.get("system")},
+        why=[_why("Yellow light is the warmest kind, says Parallax", "Parallax")],
+    )]
+
+
+def rivet_ports(facts):
+    """Three different ports of call: three homecomings."""
+    return [draft(
+        "ports", "Three ports of call", "Dock at three different stations, outposts or carriers. Rivet will be at the hatch every time.",
+        [obj.make("dock", 3, label="Different stations")], key=f"ports:{_day(facts)}", score=29,
+        fields={"count": 3, "system": facts.get("system")},
+        why=[_why("Rivet loves a homecoming", "Rivet")],
+    )]
+
+
+def rivet_new_ground(facts):
+    """A first footfall: ground nobody has walked."""
+    if facts.get("docked") or float(facts.get("home_ly") or 0) < 200:
+        return []
+    return [draft(
+        "new_ground", "New ground", "Step out onto a world nobody has walked on before: a first footfall.",
+        [obj.make("footfall", label="First footfall")], key=f"ground:{_day(facts)}", score=33,
+        fields={"system": facts.get("system")},
+        why=[_why(f"{facts.get('system')} is {_ly(facts.get('home_ly'))} from home", "Your journal")],
+    )]
+
+
 GENERATORS = (lyra_bio_hunt, lyra_cash_bio, axiom_map_worlds, axiom_first_discoveries, axiom_finish_system,
               meridian_neutron, meridian_new_region, meridian_record, aster_sell_price, aster_cash_carto,
               aster_colony, aster_merits, watcher_place, watcher_errand, nova_new_codex, nova_closer_look,
-              nova_phenomenon, nova_uncharted)
+              nova_phenomenon, nova_uncharted, parallax_perch, parallax_warm_star, rivet_ports, rivet_new_ground)
 
 
 def candidates(facts, *, categories=DEFAULT_CATEGORIES, watcher=True, muted=lambda officer, kind: False,
@@ -499,10 +554,10 @@ def candidates(facts, *, categories=DEFAULT_CATEGORIES, watcher=True, muted=lamb
 
 # What fits each watch duty (core.crew_rota duties).
 DUTY_KINDS = {
-    "docked": {"sell_price", "colony", "merits", "neutron", "new_region"},
+    "docked": {"sell_price", "colony", "merits", "neutron", "new_region", "ports"},
     "scanning": {"map_worlds", "finish_system", "first_discoveries", "phenomenon", "closer_look"},
-    "surface": {"bio_hunt", "cash_bio"},
+    "surface": {"bio_hunt", "cash_bio", "perch", "new_ground"},
     "route": {"neutron", "record_far", "new_region"},
     "deep": {"place", "errand", "first_discoveries", "bio_hunt", "uncharted", "new_codex"},
-    "flight": {"cash_bio", "cash_carto", "bio_hunt", "record_far"},
+    "flight": {"cash_bio", "cash_carto", "bio_hunt", "record_far", "warm_star"},
 }

@@ -191,3 +191,10 @@ AFTER = {
                  ("lyra", "I'm framing that one. They agreed. On the record."),
                  ("nova", "I asked why they argued at all. Meridian said that's how a crew finds the right course. I've written that down.")),
 }
+
+
+# 5.8.6: the ship's pets look back on each campaign too.
+from voidcompass.overlays import parallax_crew as _parallax_crew, rivet_crew as _rivet_crew  # noqa: E402
+for _speaker, _module in (("parallax", _parallax_crew), ("rivet", _rivet_crew)):
+    for _campaign, _line in _module.CAMPAIGN_AFTER.items():
+        AFTER[_campaign] = tuple(AFTER[_campaign]) + ((_speaker, _line),)

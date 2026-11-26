@@ -311,9 +311,15 @@ class DashboardKeepsakesMixin(DashboardPostcardStudioMixin):
         if persona is not None:
             if not preview and getattr(mind, "identity", None) == selected:
                 rng = mind.random
-            note = persona.postcards.postcard_note(card, restrained=config.get(persona.humour_key, "dry") == "off",
-                                                    from_sol=from_sol, state=state, rng=rng, recent=recent)
-            signature = persona.postcards.SIGNATURE
+            progressive = getattr(persona.postcards, "progressive", None)
+            if callable(progressive):
+                # Nova's (5.8.6): one message per stage of her story, and its own signature.
+                memory = mind.memory if getattr(mind, "identity", None) == selected else {}
+                note, signature = progressive(memory, rng=rng, recent=recent)
+            else:
+                note = persona.postcards.postcard_note(card, restrained=config.get(persona.humour_key, "dry") == "off",
+                                                        from_sol=from_sol, state=state, rng=rng, recent=recent)
+                signature = persona.postcards.SIGNATURE
         else:
             note = postcard_note(card, watcher_mind.personality(config), from_sol, state, rng=rng, recent=recent)
             signature = "the Watcher"

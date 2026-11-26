@@ -328,3 +328,8 @@ from voidcompass.overlays import nova_shared as _nova  # noqa: E402
 
 PERSONAS["nova"] = _nova.SQUADRON
 RANK_LINES["nova"] = _nova.SQUADRON_RANK
+
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_shared as _parallax, rivet_shared as _rivet  # noqa: E402
+PERSONAS["parallax"], RANK_LINES["parallax"] = _parallax.SQUADRON, _parallax.SQUADRON_RANK
+PERSONAS["rivet"], RANK_LINES["rivet"] = _rivet.SQUADRON, _rivet.SQUADRON_RANK

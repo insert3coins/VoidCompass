@@ -55,7 +55,7 @@ SCENES = (
         ("nova", "I'll vote for it too. Unfinished things deserve a place on the rota. I should know."),
     )),
     ("night_6", "The Fifth Watch", (
-        ("meridian", "Commander, a word from the whole crew. There are seven of us standing watch now. One of us doesn't talk."),
+        ("meridian", "Commander, a word from the whole crew. There are nine of us standing watch now. One of us doesn't talk."),
         ("axiom", "It keeps the time. We keep everything else. You keep us."),
         ("aster", "Entered in the log: the ship's chronometer, on watch since the beginning. Unrelieved."),
         ("watcher", "It ticks while you're gone. I listen to it. It's good company, actually. Don't tell the others."),
@@ -63,6 +63,10 @@ SCENES = (
         ("nova", "And I'll keep asking it questions, Commander. It never answers those either. I've decided that's its own kind of answer."),
     )),
 )
+# 5.8.6: the ship's pets have their say in every scene, last.
+from voidcompass.overlays import crew_pets as _pets  # noqa: E402
+
+SCENES = tuple((scene_id, title, tuple(lines) + _pets.NIGHT_WATCH.get(scene_id, ())) for scene_id, title, lines in SCENES)
 IDS = tuple(scene[0] for scene in SCENES)
 
 
@@ -90,7 +94,8 @@ def heading(scene_id):
 def page(shared, unlocked):
     """The STORY tab's view: each scene, its lines once told."""
     heard = set(shared or ())
-    names = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova"}
+    names = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova",
+             "parallax": "Parallax", "rivet": "Rivet"}
     return {"title": "The Night Watch", "unlocked": bool(unlocked), "told": len(heard & set(IDS)), "total": len(SCENES),
             "scenes": [{"id": scene_id, "title": title, "heard": scene_id in heard,
                         "lines": [{"speaker": names[speaker], "text": text} for speaker, text in lines] if scene_id in heard else []}

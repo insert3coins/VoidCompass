@@ -6,7 +6,7 @@ from voidcompass.orders.ledger import SPEAKERS
 # Each ribbon: its name, and what it's for.
 RIBBONS = {
     "first_order": ("First Orders", "Finished your first order"),
-    "whole_crew": ("Whole Crew", "Finished an order for each of the five"),
+    "whole_crew": ("Whole Crew", "Finished an order for each of the crew"),
     "ten_orders": ("Ten Orders", "Finished ten orders"),
     "fifty_orders": ("Fifty Orders", "Finished fifty orders"),
     "errand_runner": ("Errand Runner", "Did five errands for the Watcher"),
@@ -23,6 +23,8 @@ RIBBONS = {
     "right_hand_meridian": ("Meridian's Right Hand", "Right hand standing with Meridian"),
     "right_hand_lyra": ("Lyra's Right Hand", "Right hand standing with Lyra"),
     "right_hand_nova": ("Nova's Right Hand", "Right hand standing with Nova"),
+    "right_hand_parallax": ("Parallax's Right Hand", "Right hand standing with Parallax"),
+    "right_hand_rivet": ("Rivet's Right Hand", "Right hand standing with Rivet"),
 }
 
 
@@ -81,4 +83,8 @@ POSTCARD_THEMES = {
                                         "font": "hud", "filter": "vivid"}),
     "right_hand_nova": ("Nova's Hand", {"base": "airmail", "paper": "#eef3ff", "ink": "#1b2440", "greet": "#5fb8ff",
                                         "font": "hud", "filter": "cool"}),
+    "right_hand_parallax": ("Parallax's Paw", {"base": "holo", "paper": "#0e1418", "ink": "#e6fbf8", "greet": "#6fe8df",
+                                               "font": "serif", "filter": "cool"}),
+    "right_hand_rivet": ("Rivet's Paw", {"base": "vintage", "paper": "#f2e6d4", "ink": "#2e2218", "greet": "#e0915a",
+                                         "font": "hand"}),
 }

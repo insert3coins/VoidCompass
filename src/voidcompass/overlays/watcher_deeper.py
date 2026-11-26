@@ -145,12 +145,13 @@ def read_code(text):
             "book": int(card.get("book") or 0), "chapter": str(card.get("chapter") or "")[:10],
             "road": card.get("road") if card.get("road") in ("shut", "open") else None,
             "bond": int(card.get("bond") or 0), "hours": int(card.get("hours") or 0),
-            "companion": card.get("companion") if card.get("companion") in ("aster", "axiom", "meridian", "lyra", "nova") else "watcher"}
+            "companion": card.get("companion") if card.get("companion") in ("aster", "axiom", "meridian", "lyra", "nova", "parallax", "rivet") else "watcher"}
 
 
 NATURE_WORDS = {"weary": "a weary one", "stoic": "a quiet one", "curious": "a curious one", "nervous": "a nervous one",
                 "aster": "an officer called Aster", "axiom": "a survey mind called Axiom", "meridian": "a navigator called Meridian",
-                "lyra": "a ship's computer called Lyra", "nova": "an assistance program called Nova"}
+                "lyra": "a ship's computer called Lyra", "nova": "an assistance program called Nova",
+                "parallax": "a ship's cat called Parallax", "rivet": "a ship's dog called Rivet"}
 ROAD_WORDS = {"shut": "its eye closed", "open": "looking back", None: "still deciding"}
 
 # -- the lines -------------------------------------------------------------------------------------

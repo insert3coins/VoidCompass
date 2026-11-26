@@ -17,8 +17,9 @@ A passage about a crewmate waits until you've flown with that crewmate too.
 import zlib
 
 TITLE = "THE CREW"
-CREW = ("watcher", "aster", "axiom", "meridian", "lyra", "nova")
-NAMES = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova"}
+CREW = ("watcher", "aster", "axiom", "meridian", "lyra", "nova", "parallax", "rivet")
+NAMES = {"watcher": "The Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova",
+         "parallax": "Parallax", "rivet": "Rivet"}
 # A crewmate counts as met once you've flown together this long.
 FLOWN_HOURS = .25
 # The arc begins once the companion knows you a little, and you've had two aboard.
@@ -231,6 +232,12 @@ ARCS = {
          "goodnight to the ship. I do, now, every time you log off. Lyra says the ship has two of us saying it. She seems very pleased."),
     ),
 }
+# 5.8.6: the ship's pets. Their own arcs, and each crewmate's passage about them, told last.
+from voidcompass.overlays import crew_pets as _pets  # noqa: E402
+
+ARCS.update(_pets.ARCS)
+for _identity, _rows in _pets.ARC_ADDITIONS.items():
+    ARCS[_identity] = tuple(ARCS[_identity]) + tuple(_rows)
 PASSAGES = {identity: tuple((f"crew_{identity}_{index + 1:02}", title, needs, text)
                             for index, (title, needs, text) in enumerate(arc)) for identity, arc in ARCS.items()}
 
@@ -459,7 +466,7 @@ GENERIC_HANDOVERS = {
         "On watch, Commander. {Previous} has stood down. I am ready to observe.",
         "Change of watch confirmed: {previous} off, Axiom on. Confidence high.",
         "{Previous}'s handover is logged. I have checked it twice.",
-        "Axiom on watch. I have recounted the crew. Six, as usual. One standing watch: me.",
+        "Axiom on watch. I have recounted the crew. Eight, as usual. One standing watch: me.",
         "Taking the watch from {previous}. Instruments warm, curiosity high.",
         "Watch received from {previous}. No discrepancies. I looked.",
         "Axiom here, on watch. {Previous} left me the log and a quiet sky.",
@@ -483,7 +490,7 @@ GENERIC_HANDOVERS = {
         "Taking the watch from {previous}. All systems green.",
         "Change of watch: {previous} off, Lyra on. Route home loaded.",
         "{Previous}'s handover is logged. I have checked it, and the tank.",
-        "Lyra on watch. I have recounted the crew. Six, plus you.",
+        "Lyra on watch. I have recounted the crew. Eight, plus you.",
         "Watch received from {previous}. Nothing outstanding except my good mood.",
         "On watch, Commander. {Previous} left the ship in good order.",
         "I relieve you, {name}. The ship's computer has the ship.",
@@ -495,13 +502,17 @@ GENERIC_HANDOVERS = {
         "On watch, Commander. {Previous} has stood down. I'm paying attention.",
         "Change of watch: {previous} off, Nova on.",
         "{Previous}'s handover is logged. I've read it, and I've a question or two for later.",
-        "Nova on watch. I've counted the crew. Six, plus you. That still surprises me.",
+        "Nova on watch. I've counted the crew. Eight, plus you. That still surprises me.",
         "Watch received from {previous}. Nothing outstanding except my curiosity.",
         "On watch. {Previous} left the ship in good order.",
         "I relieve you, {name}. That's the phrase, isn't it? Aster taught me.",
         "Nova has the watch. Thank you, {name}. Where are we going next?",
     ),
 }
+
+for _identity, _rows in _pets.HANDOVERS.items():
+    HANDOVERS.setdefault(_identity, {}).update(_rows)
+GENERIC_HANDOVERS.update(_pets.GENERIC_HANDOVERS)
 
 
 def handover_fields(previous):
@@ -691,9 +702,12 @@ REMARKS = {
                  "Lyra taught me to say goodnight to the ship. I do it every time now.",
                  "Lyra and I both spent a long time in boxes. We agreed it wasn't the boxes that mattered. It was getting out.",
                  "Lyra flags fuel stars in orange. I flag pretty ones in blue. The charts look very festive.",
-                 "Lyra counts the crew sometimes. Six. She sounds pleased every time. So am I."),
+                 "Lyra counts the crew sometimes. Eight. She sounds pleased every time. So am I."),
     },
 }
+
+for _identity, _rows in _pets.REMARKS.items():
+    REMARKS.setdefault(_identity, {}).update(_rows)
 
 
 def topics(identity):

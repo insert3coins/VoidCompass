@@ -81,3 +81,8 @@ def officer(identity):
     """(restrained, full) docking lines for an officer."""
     lines = LINES[identity]
     return lines[:4], lines
+
+
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_crew as _parallax_crew, rivet_crew as _rivet_crew  # noqa: E402
+LINES["parallax"], LINES["rivet"] = _parallax_crew.DOCKED, _rivet_crew.DOCKED

@@ -10,7 +10,7 @@ did adds a short postscript to the Captain's Log, signed.
 """
 
 # The order crewmates speak in: the navigator first, the Watcher last.
-ORDER = ("meridian", "axiom", "nova", "aster", "lyra", "watcher")
+ORDER = ("meridian", "axiom", "nova", "aster", "lyra", "rivet", "parallax", "watcher")
 SPACING_S = 9.0      # between one crewmate's line and the next
 EXPIRES_S = 180.0    # a debrief line not said by then is let go
 
@@ -104,3 +104,9 @@ def postscripts(first, companions, seed):
         lines = POSTSCRIPTS[identity]
         rows.append({"companion": identity, "text": lines[(seed + offset * 3) % len(lines)]})
     return rows
+
+
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_crew as _parallax_crew, rivet_crew as _rivet_crew  # noqa: E402
+DEBRIEF["parallax"], DEBRIEF["rivet"] = _parallax_crew.DEBRIEF, _rivet_crew.DEBRIEF
+POSTSCRIPTS["parallax"], POSTSCRIPTS["rivet"] = _parallax_crew.POSTSCRIPTS, _rivet_crew.POSTSCRIPTS

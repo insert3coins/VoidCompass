@@ -84,30 +84,39 @@ export function createCompanionFrame({colour, energy, opening = .30, style = "",
         // The pets' rings: their own colour and coverage, drawn instead of the steel housing.
         vec3 ringColour=vec3(0.0);float ringAlpha=0.0;
         if(uStyle>4.5&&uStyle<5.5){
-          // Parallax's gyroscope: two gimbals pivoting at 3 and 9 o'clock, each
-          // turning on that axis at its own pace; the far half of each is dimmer.
+          // Parallax's gyroscope collar, all of it on the bezel band (r 1.04 to 1.125),
+          // bold enough to read at small sizes: a dark band; the teal gimbal on its
+          // inner half and the violet on its outer half, pinching in to meet at the
+          // pivot bearings at 3 and 9 o'clock. Each gimbal is broken into segments
+          // that turn its own way, breathes as it tips, and carries a rotor bead.
+          // Colours are mixed, never added, so they stay teal and violet.
+          float band=smoothstep(1.036,1.046,r)*(1.0-smoothstep(1.118,1.128,r));
+          vec3 col=mix(vec3(.028,.040,.075),vec3(.060,.075,.125),sheen*.6);
+          col=mix(col,vec3(.22,.25,.40),clamp(stroke(r-1.042,.003)+stroke(r-1.121,.003),0.0,1.0)*.8);
+          float s=abs(sin(a)),glow=0.0;
           for(int i=0;i<2;i++){
-            float k=float(i);
-            float th=k<.5?uTime*.55:-uTime*.42+1.9;
-            float tilt=(k<.5?.06:-.05)*sin(uTime*.3+k*2.0);
-            vec2 q=mat2(cos(tilt),-sin(tilt),sin(tilt),cos(tilt))*p;
-            // Tipped, never flat: each ring stays near round, its far half dimming as it tips back.
-            float ry=1.085*(.88+.12*cos(th));
-            vec2 e=q/vec2(1.085,ry);
-            float line=stroke((length(e)-1.0)*min(1.085,ry),.0075);
-            float behind=step(0.0,q.y*sin(th));
-            // Breaks in each ring, turning with it.
-            float gap=step(.15,fract(atan(e.y,e.x)/6.2831853*3.0+k*.37+uTime*.025));
-            float v=line*gap*mix(1.0,.42,behind);
-            ringColour+=(k<.5?vec3(.40,.93,.90):vec3(.66,.48,1.0))*v;
-            ringAlpha=max(ringAlpha,v);
+            float k=float(i),side=k<.5?-1.0:1.0;
+            float th=k<.5?uTime*.6:-uTime*.45+1.7;
+            float d=r-(1.082+side*.025*s*(.78+.22*cos(th)));
+            float core=stroke(d,.0062);
+            float spin=uTime*side*.045+k*.5;
+            float gap=step(.14,fract((a+3.14159265)/6.2831853*3.0+spin));
+            float near=.55+.45*(.5+.5*sin(a+th));
+            float bead=exp(-pow(arcTo(a,-uTime*side*1.1+k*3.14159265)/.07,2.0));
+            vec3 hue=k<.5?vec3(.22,.88,.84):vec3(.60,.38,1.0);
+            float v=clamp(core*gap*near+core*bead,0.0,1.0);
+            col=mix(col,hue*(1.0+bead*.6),v);
+            col+=hue*exp(-pow(d/.010,2.0))*gap*near*.18;
+            glow=max(glow,v);
           }
-          float arcs=exp(-pow((r-1.118)/.013,2.0))*smoothstep(.55,.97,abs(sin(a)))*(.5+.5*sin(uTime*.8))*clamp(.65+uEnergy*.5,0.0,1.0);
-          ringColour+=vec3(.62,.50,1.0)*arcs*.9;ringAlpha=max(ringAlpha,arcs*.7);
+          float arcs=exp(-pow((r-1.115)/.006,2.0))*smoothstep(.75,.99,s)*(.55+.45*sin(uTime*.8))*clamp(.65+uEnergy*.5,0.0,1.0);
+          col=mix(col,vec3(.72,.58,1.0),arcs*.8);
           vec2 dq=vec2(abs(p.x)-1.082,p.y);
-          float diamond=1.0-smoothstep(.0,.006,abs(dq.x)*1.5+abs(dq.y)-.03);
-          ringColour+=vec3(.74,.97,1.0)*diamond;ringAlpha=max(ringAlpha,diamond);
-          ringColour/=max(ringAlpha,.001);
+          float bearing=stroke(length(dq)-.030,.0055);
+          float diamond=1.0-smoothstep(.0,.006,abs(dq.x)*1.4+abs(dq.y)-.022);
+          col=mix(col,vec3(.62,.70,.90),bearing);
+          col=mix(col,vec3(.82,.99,1.0),diamond);
+          ringColour=col;ringAlpha=max(band,max(diamond,bearing))*edge;
         }else if(uStyle>5.5){
           // Rivet's collar: a dark segmented strap with gaps and tan edges, three copper
           // plates, all turning slowly; teal markers that stay put; a receiver's dashed

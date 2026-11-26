@@ -183,4 +183,8 @@ def names_text(names, limit=3):
     return ", ".join(names[:limit]) + f" and {len(names) - limit} more"
 
 
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_crew as _parallax_crew, rivet_crew as _rivet_crew  # noqa: E402
+LINES["parallax"], LINES["rivet"] = _parallax_crew.STREAM, _rivet_crew.STREAM
+
 __all__ = ["LINES", "line", "names_text"]

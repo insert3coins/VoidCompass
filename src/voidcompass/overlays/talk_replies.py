@@ -96,3 +96,8 @@ OFFICERS = {
                              "I need our coordinates first, Commander. The next jump will give them to me."),
     },
 }
+
+
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_crew as _parallax_crew, rivet_crew as _rivet_crew  # noqa: E402
+OFFICERS["parallax"], OFFICERS["rivet"] = _parallax_crew.TALK, _rivet_crew.TALK

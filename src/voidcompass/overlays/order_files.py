@@ -82,6 +82,10 @@ FILES = {
     )),
 }
 
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_crew as _parallax_crew, rivet_crew as _rivet_crew  # noqa: E402
+FILES["parallax"], FILES["rivet"] = _parallax_crew.ORDER_FILE, _rivet_crew.ORDER_FILE
+
 
 def due(officer, done, told):
     """The next passage this officer's record has unlocked, or None.

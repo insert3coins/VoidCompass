@@ -22,7 +22,7 @@ MOMENTS = {"world_earthlike": "earthlike", "footfall_first": "footfall", "record
            "record_far": "record_far"}
 DEATHS = {"died", "died_foot", "after_death"}
 
-_NAMES = r"the watcher|watcher|aster|axiom|meridian|lyra|nova"
+_NAMES = r"the watcher|watcher|aster|axiom|meridian|lyra|nova|parallax|rivet"
 _ASKING = (r"what|what's|whats|how|how's|where|where's|when|which|who|why|is|are|do|does|did|can|could|would|will|"
            r"should|tell|give|show|open|close|have|has|any|say|please|play|stop|hide|find|check|read|request")
 _DIRECT = re.compile(rf"^\s*(?:(?:hey|hi|hello|ok|okay)\s+)?(?P<name>{_NAMES})\s*[,;:]\s*(?P<rest>.+)$", re.I)
@@ -281,3 +281,8 @@ CHIMES = {
                        "Close call. Gently from here, please. I'd like to keep flying with you."),
     },
 }
+
+
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_crew as _parallax_crew, rivet_crew as _rivet_crew  # noqa: E402
+CHIMES["parallax"], CHIMES["rivet"] = _parallax_crew.CHIMES, _rivet_crew.CHIMES

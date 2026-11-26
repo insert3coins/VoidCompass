@@ -8,7 +8,7 @@ import logging
 import re
 
 from voidcompass.core import companions
-from voidcompass.overlays import companion_personas, crew_voices, nova_library, watcher_copilot, watcher_mind, watcher_name
+from voidcompass.overlays import companion_personas, crew_voices, nova_library, nova_lore, watcher_copilot, watcher_mind, watcher_name
 from voidcompass.overlays.aster_mind import AsterMind
 from voidcompass.overlays.progress_story import ProgressStory, introduced_name
 
@@ -154,10 +154,8 @@ class CrewMind(AsterMind):
     def _library_open(self):
         return self._library_unlock()
 
-    # Her word that the library is open (ours until Nyx Evera sends one of his).
-    LIBRARY_NEWS = ("Commander, I've finished organising the research we recovered. "
-                    "If you're ever curious about something out there, a star, a world, something living, just ask me. "
-                    "I'd be glad to tell you what I know.")
+    # Her word that the library is open (nova_lore keeps it with the rest of hers).
+    LIBRARY_NEWS = nova_lore.LIBRARY_NEWS
 
     def _library_announce(self, now):
         """Once, after her last story words (Entry 48C told) and a quiet

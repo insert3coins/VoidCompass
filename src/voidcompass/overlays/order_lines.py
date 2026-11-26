@@ -14,7 +14,8 @@ import string
 import zlib
 
 from voidcompass.overlays import (order_overtaken_words, order_relay_words, order_words_aster, order_words_axiom,
-                                  order_words_lyra, order_words_meridian, order_words_nova, order_words_watcher)
+                                  order_words_lyra, order_words_meridian, order_words_nova, order_words_parallax,
+                                  order_words_rivet, order_words_watcher)
 
 WORDS = {
     "watcher": order_words_watcher.WORDS,
@@ -23,6 +24,8 @@ WORDS = {
     "meridian": order_words_meridian.WORDS,
     "lyra": order_words_lyra.WORDS,
     "nova": order_words_nova.WORDS,
+    "parallax": order_words_parallax.WORDS,
+    "rivet": order_words_rivet.WORDS,
 }
 SPEAKERS = tuple(WORDS)
 # Passing an order on when its officer's voice is off (order_relay_words).
@@ -30,7 +33,8 @@ for _speaker, _styles in [*order_relay_words.RELAY.items(), *order_overtaken_wor
     for _style, _topics in _styles.items():
         WORDS[_speaker].setdefault(_style, {}).update(_topics)
 RELAY_TOPICS = ("relay_offer", "relay_done", "relay_news")
-NAMES = {"watcher": "the Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova"}
+NAMES = {"watcher": "the Watcher", "aster": "Aster", "axiom": "Axiom", "meridian": "Meridian", "lyra": "Lyra", "nova": "Nova",
+         "parallax": "Parallax", "rivet": "Rivet"}
 
 # Said about any order, by every speaker.
 TOPICS = ("floor", "accepted", "declined", "muted", "later", "step", "halfway", "done", "abandoned", "paused",
@@ -39,6 +43,8 @@ TOPICS = ("floor", "accepted", "declined", "muted", "later", "step", "halfway", 
 OFFERS = {
     "lyra": ("bio_hunt", "cash_bio"),
     "nova": ("new_codex", "closer_look", "phenomenon", "uncharted"),
+    "parallax": ("perch", "warm_star"),
+    "rivet": ("ports", "new_ground"),
     "axiom": ("map_worlds", "first_discoveries", "finish_system"),
     "meridian": ("neutron", "new_region", "record_far"),
     "aster": ("sell_price", "cash_carto", "colony", "merits"),

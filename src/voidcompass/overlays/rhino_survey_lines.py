@@ -165,3 +165,8 @@ PERSONAS["lyra"] = _lyra.RHINO_SURVEY
 from voidcompass.overlays import nova_shared as _nova  # noqa: E402
 
 PERSONAS["nova"] = _nova.RHINO_SURVEY
+
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_shared as _parallax, rivet_shared as _rivet  # noqa: E402
+PERSONAS["parallax"] = _parallax.RHINO_SURVEY
+PERSONAS["rivet"] = _rivet.RHINO_SURVEY

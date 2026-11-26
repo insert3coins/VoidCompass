@@ -268,3 +268,8 @@ PERSONAS["lyra"] = _lyra.ROUTE
 from voidcompass.overlays import nova_shared as _nova  # noqa: E402
 
 PERSONAS["nova"] = _nova.ROUTE
+
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_shared as _parallax, rivet_shared as _rivet  # noqa: E402
+PERSONAS["parallax"] = _parallax.ROUTE
+PERSONAS["rivet"] = _rivet.ROUTE

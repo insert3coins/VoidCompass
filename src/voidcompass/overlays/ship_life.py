@@ -402,6 +402,11 @@ from voidcompass.overlays import nova_shared as _nova  # noqa: E402
 
 PERSONAS["nova"] = {"plain": dict(_nova.SHIP_LIFE["plain"]), "voiced": dict(_nova.SHIP_LIFE["voiced"])}
 
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_shared as _parallax, rivet_shared as _rivet  # noqa: E402
+PERSONAS["parallax"] = {"plain": dict(_parallax.SHIP_LIFE["plain"]), "voiced": dict(_parallax.SHIP_LIFE["voiced"])}
+PERSONAS["rivet"] = {"plain": dict(_rivet.SHIP_LIFE["plain"]), "voiced": dict(_rivet.SHIP_LIFE["voiced"])}
+
 # 5.7.6: the docking request, and the station cancelling or timing it out.
 from voidcompass.overlays import docking_talk as _docking  # noqa: E402
 

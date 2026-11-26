@@ -811,6 +811,7 @@ class HtmlOverlayStudioMixin:
             "survey_status_show_all_bodies", "survey_codex_flags", "survey_spansh_bodies", "survey_species_lists",
             "hud_crt_enabled", "hud_crt_motion_enabled", "hud_bright_labels",
             "heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion", "lyra_hud_motion", "nova_hud_motion",
+            "parallax_hud_motion", "rivet_hud_motion",
             "galaxy_minimap_route", "galaxy_minimap_labels", "galaxy_minimap_spansh", "galaxy_minimap_capsules", "galaxy_minimap_orders", "postcard_photo",
             "galnet_ticker_show_date", "galnet_ticker_crt_motion", "galnet_ticker_glitch_on_news",
             "rig_tracker_show_holds", "rig_tracker_guide", "rig_tracker_deposit", "stream_chat_hint", "stream_chat_show_chat",
@@ -844,7 +845,8 @@ class HtmlOverlayStudioMixin:
             self.update_hud()
         elif key in {"hud_pages_takeover", "hud_hold_lists"} or key.startswith("hud_page_"):
             self._hud_pages_apply_settings()
-        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion", "lyra_hud_motion", "nova_hud_motion"}:
+        elif key in {"heartbeat_idle_motion", "heartbeat_thought_backdrop", "heartbeat_thought_heading", "aster_hud_motion", "axiom_hud_motion", "meridian_hud_motion", "lyra_hud_motion", "nova_hud_motion",
+                     "parallax_hud_motion", "rivet_hud_motion"}:
             heartbeat = getattr(self, "heartbeat_hud", None)
             if heartbeat is not None and hasattr(heartbeat, "apply_settings"):
                 heartbeat.apply_settings()

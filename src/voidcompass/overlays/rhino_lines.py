@@ -282,6 +282,11 @@ from voidcompass.overlays import nova_shared as _nova  # noqa: E402
 
 PERSONAS["nova"] = {"plain": dict(_nova.RHINO["plain"]), "voiced": dict(_nova.RHINO["voiced"])}
 
+# 5.8.6: the ship's pets.
+from voidcompass.overlays import parallax_shared as _parallax, rivet_shared as _rivet  # noqa: E402
+PERSONAS["parallax"] = {"plain": dict(_parallax.RHINO["plain"]), "voiced": dict(_parallax.RHINO["voiced"])}
+PERSONAS["rivet"] = {"plain": dict(_rivet.RHINO["plain"]), "voiced": dict(_rivet.RHINO["voiced"])}
+
 # 5.7.6: the Rhino survey (centre and edge, half, done) and the best patch.
 from voidcompass.overlays import rhino_survey_lines as _survey  # noqa: E402
 
