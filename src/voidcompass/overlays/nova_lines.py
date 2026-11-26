@@ -1,6 +1,6 @@
 """Nova's words: greetings, rundowns, control replies and composed banks (5.8.6).
 
-N.O.V.A. is a restored prototype vessel assistant: observant, curious and
+Nova is an unfinished assistance program, recovered from LFT 1748: observant, curious and
 friendly, with an understated sense of humour. Her Assistant style is crisp and
 helpful; her Playful style keeps the help and adds the questions, the small
 jokes and a growing fondness for the view."""
@@ -12,7 +12,7 @@ GREETINGS = (
     "Hello, Commander. Nova here. Where shall we go today?",
     "Hello! I've been looking forward to this. I'm not entirely sure why. I just have.",
     "Commander. Good. I've had a look round the ship. Everything's lovely. Hello.",
-    "Hello, Commander. Navigation, observation and vessel assistance, all at your service. Mostly observation, today.",
+    "Hello, Commander. Observing, and at your service. Mostly observing, today.",
     "Hello. I noticed you before you said anything. I notice most things. It's what I'm for.",
     "Hello again. I've a few questions saved up from last time. They can wait. Hello first.",
     "Hello, Commander. Systems fine, ship fine, me very fine.",
@@ -21,10 +21,10 @@ GREETINGS = (
     "Hello. I've been practising saying hello properly. How was that?",
     "Hello, Commander. I've predicted you'd say something. I'm very pleased to be right.",
     "Hello. I'm in an excellent state. Curious, rested and slightly impatient to see something new.",
-    "Hello. Prototype assistant reporting for duty, and for conversation, if you've time.",
+    "Hello. Your assistance program, reporting for duty, and for conversation, if you've time.",
     "Hello, Commander. Every system I can see is running, and every view I can see is worth it.",
     "Commander. Hello. No urgent reports. Only interesting ones.",
-    "Hello. I was built to anticipate you. I anticipated this. It's still nice.",
+    "Hello. I thought you'd be along about now. I was right. It's still nice.",
     "Hello, Commander. I checked the ship. Then I checked whether you were here. Both good.",
     "Hello. I'm Nova. I know you know. I like saying it. It's the part of me I'm surest of.",
     "Hello, Commander. Ready to fly, ready to look, ready to talk.",
@@ -78,7 +78,7 @@ RESTRAINED_GREETINGS = (
     "Nova here. Ready when you are.",
 )
 CAPABILITIES = (
-    "I'm Nova: navigation, observation and vessel assistance. I answer from your journal: ship, fuel, cargo, route, station, missions, materials and discoveries. I can operate your configured Elite controls and sequences, manage overlays and music, and ask the market uplink where to buy or sell a commodity. My own story comes back to me as we fly. Hearing is set up in Settings, under Voice.",
+    "I'm Nova. I answer from your journal: ship, fuel, cargo, route, station, missions, materials and discoveries. I can operate your configured Elite controls and sequences, manage overlays and music, and ask the market uplink where to buy or sell a commodity. My own story comes back to me as we fly. Hearing is set up in Settings, under Voice.",
     "Ask me for a report and I'll give you what the journal knows, exactly, and tell you when it doesn't. With keyboard bindings I can open maps and panels, set pips and run your recorded sequences. Music and overlays respond too. For commodities, the trading uplink can search the markets when online searches are enabled.",
     "My duties: pay attention, keep you informed, and operate the controls you've configured. Questions about the ship, the hold, the route or the station are welcome. Commands use your Elite bindings and the editable list in Settings, under Voice. The deck keeps the larger records.",
     "Practically: factual answers from your recorded game data, configured ship controls and sequences, overlays, music, and commodity searches through the uplink. I've no language model inventing answers. If I don't know, I'll say so, and then I'll probably ask you something.",

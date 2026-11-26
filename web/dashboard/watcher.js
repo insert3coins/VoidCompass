@@ -10,7 +10,7 @@ import {renderOrders} from "./orders.js";
 // (and its life) survives every refresh. While the page is hidden the canvas
 // has no size and the orb stops drawing.
 
-const COMPANION_ICONS = {watcher: "◉", aster: "⬡", axiom: "◌", meridian: "◇", lyra: "✧", nova: "✦"};
+const COMPANION_ICONS = {watcher: "◉", aster: "⬡", axiom: "◌", meridian: "◇", lyra: "✧", nova: "✦", parallax: "❂", rivet: "⚙"};
 const NATURES = {weary: "Depressed", curious: "Curious", stoic: "Stoic", nervous: "Nervous", officer: "Officer on watch"};
 const FREQUENCIES = {off: "Off", rare: "Rare", occasional: "Occasional", chatty: "Chatty"};
 const MOOD_LABELS = {pleased: "PLEASED", wary: "WARY", curious: "CURIOUS", downcast: "DOWNCAST"};
@@ -218,6 +218,7 @@ function shell(root, ui) {
       </div>
       <p class="watcher-lore-next" id="watcher-lore-next"></p>
       <div class="watcher-books" id="watcher-books"></div>
+      <section class="watcher-library" id="watcher-library" aria-label="Scientific Knowledge Library" hidden></section>
     </section>
     <aside class="watcher-side">
       <section class="watcher-card watcher-road" id="watcher-road" aria-label="Its road"></section>
@@ -307,6 +308,19 @@ function shell(root, ui) {
       await ui.command("workspace", {page: "watcher", operation: "answer", answer: answer.dataset.watcherAnswer});
       return;
     }
+    // 5.8.6: a question picked from Nova's library: she answers it.
+    const libraryId = event.target.closest("[data-library-id]")?.dataset.libraryId;
+    if (libraryId) {
+      if (!await ui.command("workspace", {page: "watcher", operation: "library_play", id: libraryId})) ui.showToast("She couldn't answer that just now");
+      return;
+    }
+    // 5.8.6: a system her story names, to paste into the galaxy map.
+    const copySystem = event.target.closest("[data-copy-system]")?.dataset.copySystem;
+    if (copySystem) {
+      ui.showToast(await ui.command("workspace", {page: "watcher", operation: "copy_system", system: copySystem})
+        ? `${copySystem} is on the clipboard` : "It couldn't be copied");
+      return;
+    }
     const action = event.target.closest("[data-watcher-code]")?.dataset.watcherCode;
     const box = ui.byId("watcher-code");
     if (action === "copy") {
@@ -393,8 +407,34 @@ let chosenChapter = null;
 
 function chapterStatus(chapter, ui) {
   if (chapter.complete) return "COMPLETE";
-  if (chapter.begun) return `${ui.numeric(chapter.told.length)} OF ${ui.numeric(chapter.total)}`;
+  if (chapter.begun) return `${ui.numeric(chapter.told_count ?? chapter.told.length)} OF ${ui.numeric(chapter.total)}`;
   return "";
+}
+
+// 5.8.6: COPY beside a place a story names (none when its location is yours to find).
+function copyButton(place, ui) {
+  if (!place?.system) return "";
+  const system = ui.escapeHtml(place.system);
+  return `<button type="button" class="watcher-copy" data-copy-system="${system}" title="Copy ${system} to paste into the galaxy map">COPY ${system}</button>`;
+}
+
+// 5.8.6: Nova's Scientific Knowledge Library, once her story has opened it:
+// its questions by category; picking one asks her (she says the answer).
+let libraryKey = "";
+function renderLibrary(library, ui) {
+  const box = ui.byId("watcher-library");
+  if (!box) return;
+  const key = JSON.stringify(library || null);
+  if (key === libraryKey) return;
+  libraryKey = key;
+  box.hidden = !library;
+  if (!library) { box.innerHTML = ""; return; }
+  const groups = (library.categories || []).map((group) => `<details class="watcher-library-group">
+      <summary>${ui.escapeHtml(group.name)} <b>${ui.numeric((group.entries || []).length)}</b></summary>
+      <ul>${(group.entries || []).map((row) => `<li><button type="button" data-library-id="${ui.escapeHtml(row.id)}">${ui.escapeHtml(row.question)}</button></li>`).join("")}</ul>
+    </details>`).join("");
+  box.innerHTML = `<header><span>${ui.escapeHtml(String(library.title || "Scientific Knowledge Library").toUpperCase())}</span><b>${ui.numeric(library.total || 0)} ENTRIES</b></header>
+    <p class="watcher-note">Her reward for finishing her story. Pick a question, or ask her through TALK: "Nova, what is a neutron star?"</p>${groups}`;
 }
 
 function renderReader(ui) {
@@ -414,7 +454,7 @@ function renderReader(ui) {
   const account = chapter.complete && chapter.account
     ? `<div class="watcher-account"><small>AS IT WOULD SET IT DOWN</small>${String(chapter.account).split("\n\n").map((para) => `<p>${ui.escapeHtml(para)}</p>`).join("")}</div>`
     : "";
-  const passages = chapter.told.map((row) => `<li><p>${ui.escapeHtml(row.text)}</p><time>${ui.escapeHtml(ago(row.at))}</time></li>`).join("");
+  const passages = chapter.told.map((row) => `<li><p>${ui.escapeHtml(row.text)}</p>${copyButton(row.place, ui)}<time>${ui.escapeHtml(ago(row.at))}</time></li>`).join("");
   reader.innerHTML = `<header><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><h3>${ui.escapeHtml(chapter.title)}</h3><em>${chapterStatus(chapter, ui)}</em></header>
     ${account}${passages ? `<small class="watcher-reader-label">${chapter.complete ? "AS IT TOLD YOU" : "SO FAR"}</small><ol class="watcher-lore">${passages}</ol>` : ""}`;
   reader.scrollTop = 0;
@@ -429,7 +469,7 @@ function renderLore(lore, ui) {
     ui.byId("watcher-books").replaceChildren();
     return;
   }
-  if (["aster", "axiom", "meridian", "lyra", "nova"].includes(lore.identity)) { renderCrewLore(lore, ui); return; }
+  if (["aster", "axiom", "meridian", "lyra", "nova", "parallax", "rivet"].includes(lore.identity)) { renderCrewLore(lore, ui); return; }
   const chapters = Array.isArray(lore.chapters) ? lore.chapters : [];
   const echoes = Array.isArray(lore.echoes) ? lore.echoes : [];
   const books = Array.isArray(lore.books) ? lore.books : [];
@@ -552,11 +592,21 @@ function renderCrewLore(lore, ui) {
   let note = lore.complete_note || "";
   if (!lore.complete && next) {
     if (next.ready) note = "The next passage is ready for a quiet moment together.";
+    else if (next.strict && next.waits_for) {
+      // 5.8.6: Nova's entries each need something done, counted from the last; there's no time alternative.
+      const count = (row) => `${ui.numeric(Math.floor(Number(row.done) || 0))} of ${row.text}`;
+      note = `Entry ${next.label || String(next.entry || "").padStart(2, "0")} needs ${(next.progress || []).map(count).join(", or ") || next.waits_for}. ${next.how || ""}`.trim();
+    }
     else if (next.waits_for) note = `The next chapter waits for ${next.waits_for}. ${next.how || ""} Or keep flying together: it opens anyway after about ${span(next.grace)} more.`;
     else if (Number(next.days) > 0) note = `The next chapter opens in about ${Math.ceil(next.days)} day${Math.ceil(next.days) === 1 ? "" : "s"}${Number(next.hours) > 0 ? `, after ${span(next.hours)} more together` : ""}.`;
     else note = `More opens after about ${span(next.hours)} of active service together.`;
   }
-  ui.byId("watcher-lore-next").textContent = note;
+  // 5.8.6: a place her story asked to be taken (Nova's Hernandez Depot), until a later entry needs it.
+  if (lore.objective?.place) {
+    const where = lore.objective.system ? `, ${lore.objective.system}` : " (its location is yours to find)";
+    note = `${note} Objective: ${lore.objective.place}${where}.`.trim();
+  }
+  ui.byId("watcher-lore-next").innerHTML = `${ui.escapeHtml(note)}${lore.objective?.system ? ` ${copyButton(lore.objective, ui)}` : ""}`;
   const current = loreChapters.filter((chapter) => chapter.begun).at(-1);
   ui.byId("watcher-now-story").innerHTML = `${current ? `<p class="watcher-now-chapter"><span>${ui.escapeHtml(current.numeral)}</span><b>${ui.escapeHtml(current.title)}</b><em>${chapterStatus(current, ui)}</em></p><p class="watcher-now-passage">${ui.escapeHtml(current.told.at(-1)?.text || "")}</p>` : ""}<p class="watcher-note">${ui.escapeHtml(note)}</p>`;
   const books = Array.isArray(lore.books) ? lore.books : [];
@@ -699,7 +749,7 @@ export function renderWatcher(data = {}, ui) {
   ui.byId("watcher-character").innerHTML = [
     identity !== "watcher" ? ["ROLE", COMPANIONS[identity]?.role || "Companion"] : ["NATURE", NATURES[data.nature] || data.nature || "—"],
     ["THOUGHTS", FREQUENCIES[data.frequency] || data.frequency || "—"],
-    [identity !== "watcher" ? "DISPLAY" : "EYE", identity === "axiom" ? "Precision android" : identity === "lyra" ? "3D robot" : identity === "nova" ? "Projected android" : identity === "meridian" ? "Navigator android" : identity === "aster" ? "Command android" : data.eye === "hal" ? "HAL red" : "Theme"],
+    [identity !== "watcher" ? "DISPLAY" : "EYE", identity === "axiom" ? "Precision android" : identity === "lyra" ? "3D robot" : identity === "nova" ? "Projected android" : identity === "parallax" ? "Ship's cat" : identity === "rivet" ? "Ship's dog" : identity === "meridian" ? "Navigator android" : identity === "aster" ? "Command android" : data.eye === "hal" ? "HAL red" : "Theme"],
     ["OVERLAY", data.enabled ? "ON" : "OFF"],
     ["VOICE", data.voice?.enabled && data.voice?.installed ? "ON" : "OFF"],
   ].map(([label, value]) => `<div><dt>${label}</dt><dd>${ui.escapeHtml(value)}</dd></div>`).join("");
@@ -735,6 +785,7 @@ export function renderWatcher(data = {}, ui) {
     : `<li class="empty">Nothing yet. It's been quiet.</li>`;
 
   renderLore(data.lore || {}, ui);
+  renderLibrary(data.library || null, ui);
   renderCrew(data.crew || {}, ui);
   renderDeeper(data.deeper || {}, data.lore || {}, ui);
   renderKnows(data.habits || {}, ui);
@@ -898,7 +949,7 @@ const option = (value, label) => `<option value="${value}">${label}</option>`;
 const ROTA_DUTIES = [["docked", "Docked"], ["scanning", "Scanning (FSS or DSS)"], ["surface", "On a planet's surface"],
   ["route", "On a plotted route"], ["deep", "Deep space"], ["flight", "Ordinary flight"]];
 const ROTA_DEEP = [250, 500, 1000, 2000, 5000, 10000].map((ly) => [String(ly), `${ly.toLocaleString("en-GB")} ly`]);
-const ROTA_CREW = [["watcher", "The Watcher"], ["aster", "Aster"], ["axiom", "Axiom"], ["meridian", "Meridian"], ["lyra", "Lyra"], ["nova", "Nova"], ["keep", "Whoever's on watch"]];
+const ROTA_CREW = [["watcher", "The Watcher"], ["aster", "Aster"], ["axiom", "Axiom"], ["meridian", "Meridian"], ["lyra", "Lyra"], ["nova", "Nova"], ["parallax", "Parallax"], ["rivet", "Rivet"], ["keep", "Whoever's on watch"]];
 // 5.7.7: crew banter, the crew talking to each other: how often, how many, and when.
 const BANTER_GROUPS = [
   ["flight", "In flight", "Fuel, a full scoop, long jump runs, heat, a narrow escape, launch, distance records, black holes and neutron stars."],
@@ -1269,7 +1320,7 @@ function renderVoice(voice, ui) {
 
   const findingPanel = ui.byId("watcher-finding-stage")?.closest("section");
   if (findingPanel) findingPanel.hidden = voice.identity !== "watcher";
-  if (["aster", "axiom", "meridian", "lyra", "nova"].includes(voice.identity)) {
+  if (["aster", "axiom", "meridian", "lyra", "nova", "parallax", "rivet"].includes(voice.identity)) {
     const name = COMPANIONS[voice.identity].name;
     ui.byId("watcher-voice-orb").textContent = voice.orb_on ? `${name} speaks complete reports from the start. Its story unfolds separately over active service. Set up your microphone and recognition in Settings › Voice.` : `Enable the companion overlay in Overlay Studio to receive ${name}’s replies. TEST THE VOICE works here either way.`;
   }

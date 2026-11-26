@@ -7575,8 +7575,8 @@
   },
   {
     "id": "nova_story_begins",
-    "title": "Activation",
-    "desc": "Hear the first entry from Nova's development logs",
+    "title": "First Contact",
+    "desc": "Hear Nova introduce herself",
     "icon": "✧",
     "category": "Nova",
     "points": 25,
@@ -7590,8 +7590,8 @@
   },
   {
     "id": "nova_story_complete",
-    "title": "Page Eleven",
-    "desc": "Hear Nova's whole story, to the last of her development logs",
+    "title": "Beyond Home",
+    "desc": "Hear Nova's whole story, from First Contact to Beyond Home",
     "icon": "✧",
     "category": "Nova",
     "points": 250,
@@ -7604,24 +7604,24 @@
     }
   },
   {
-    "id": "nova_every_echo",
-    "title": "Every View Kept",
-    "desc": "Hear all six of Nova's echoes",
+    "id": "nova_library",
+    "title": "Scientific Knowledge Library",
+    "desc": "Finish Nova's story and open her Scientific Knowledge Library",
     "icon": "✧",
     "category": "Nova",
-    "points": 150,
+    "points": 100,
     "trigger": {
       "type": "flag",
       "event": "VoidCompassWatcherStory",
-      "field": "NovaEchoes",
-      "value": 6,
+      "field": "NovaLibrary",
+      "value": 1,
       "compare": "gte"
     }
   },
   {
     "id": "nova_request",
-    "title": "The View from the Middle",
-    "desc": "Take Nova to the heart of the galaxy",
+    "title": "Where It All Began",
+    "desc": "Take Nova to Gorgon Research Facility, where her development began",
     "icon": "✧",
     "category": "Nova",
     "points": 100,

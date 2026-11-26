@@ -1396,6 +1396,8 @@ class TacticalHUD:
                 # 5.6.9: the pad you were cleared to, the power distributor,
                 # your locked target and the body you're at, as the game has them.
                 "landing_pad": nav_context.get("landing_pad"),
+                # 5.8.6: the pad finder, from clearance until you're down.
+                "pad_guide": nav_context.get("pad_guide"),
                 "pips": nav_context.get("pips"),
                 "target": nav_context.get("combat_target"),
                 "body": nav_context.get("body_form"),

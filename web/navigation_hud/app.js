@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 
 const dom = Object.fromEntries([
   'hud', 'notice', 'state-tag', 'state-label', 'event-notice',
-  'instrument', 'instrument-fill', 'instrument-marker', 'instrument-readout',
+  'instrument', 'instrument-fill', 'instrument-marker', 'instrument-readout', 'pad-finder',
   'lamps', 'fuel-gauge', 'fuel-cells', 'metric-fuel',
   'vehicle-display', 'vehicle-image', 'vehicle-type', 'vehicle-name', 'vehicle-pips',
   'region-label', 'system-clock', 'current-system', 'current-star-orb', 'current-star-label',
@@ -241,6 +241,15 @@ function landingPadOf(state = {}) {
   return pad > 0 && aboard ? pad : 0;
 }
 
+// 5.8.6: the pad you've been cleared to, from clearance until you're down,
+// in the ship portrait's place: the station's plan with it lit, or at a surface
+// station a live plot of the pads known there around you (the planet compass
+// is left to your own targets).
+function padGuideOf(state = {}) {
+  const guide = (state.dynamics || {}).pad_guide;
+  return guide && Number(guide.pad) > 0 && !['docked', 'on_foot', 'srv'].includes(String(state.motion || '')) ? guide : null;
+}
+
 function instrumentFor(state = {}) {
   const category = String(state.category || 'flight');
   const motion = String(state.motion || 'flight');
@@ -457,6 +466,27 @@ function renderInstrument(state) {
   // Something measured to show (Hologram Off folds the viewport otherwise).
   host.classList.toggle('live', Boolean(readout) || ['altimeter', 'scan'].includes(instrument.kind));
   return instrument;
+}
+
+let padFinderMarkup = '';
+function renderPadFinder(guide) {
+  const markup = guide ? (window.VoidPadMap?.svg(guide.map, 'pad-finder-map') || '') : '';
+  const slot = dom['pad-finder'];
+  slot.hidden = !markup;
+  if (markup !== padFinderMarkup) {
+    padFinderMarkup = markup;
+    slot.innerHTML = markup;
+  }
+  return Boolean(markup);
+}
+
+// "PAD 04" over where it is ("320 M AHEAD-LEFT"); a station's place splits at
+// its first break: "PAD 23 · AT THE BACK" over "UP ON YOUR LEFT".
+function padCaption(guide) {
+  const words = String(guide.words || '').replace(/\s*\(.*\)\s*$/, '').toUpperCase();
+  const pad = `PAD ${String(guide.pad).padStart(2, '0')}`;
+  const split = words.match(/^(.+?)(?: · |, )(.+)$/);
+  return split ? {type: `${pad} · ${split[1]}`, name: split[2]} : {type: pad, name: words};
 }
 
 // The ship's systems as an annunciator strip: one icon per system, always in
@@ -914,9 +944,12 @@ function renderVehicle(state = {}, reducedMotion = false) {
   const presentation = vehiclePresentation(state);
   const host = dom['vehicle-display'];
   const image = dom['vehicle-image'];
-  const caption = vehicleCaption(state, presentation);
+  const guide = padGuideOf(state);
+  const caption = guide ? padCaption(guide) : vehicleCaption(state, presentation);
   dom['vehicle-type'].textContent = caption.type;
   dom['vehicle-name'].textContent = caption.name;
+  // While docking, the pad finder stands in the ship's place (the ship keeps rendering underneath).
+  host.classList.toggle('pad-mode', renderPadFinder(guide));
   if (reducedMotion) clearVehicleTransition(host, image);
   if (!presentation) {
     clearVehicleTransition(host, image);

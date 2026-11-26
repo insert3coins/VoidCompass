@@ -110,6 +110,10 @@ _SAY_AS = (
     (re.compile(r"(\d)\s*Cr\b"), r"\1 credits"),
     (re.compile(r"(\d)\s*km\b"), r"\1 kilometres"),
     (re.compile(r"(\d)\s*AU\b"), r"\1 astronomical units"),
+    # 5.8.6: Nova's story writes her name in capitals; Piper would spell it out.
+    (re.compile(r"\bNOVA\b"), "Nova"),
+    # Nova's library (5.8.6): a star's name, not a subtraction.
+    (re.compile(r"\bTRAPPIST-1\b"), "TRAPPIST One"),
     # 5.7.7: names the crew's orders say aloud, checked with piper --debug:
     # "A*" was "A asterisk", and Concha was "con-CHAH".
     (re.compile(r"\b(Sagittarius|Sag) A\*"), r"\1 A-Star"),

@@ -4,11 +4,11 @@ from voidcompass.overlays import companion_name
 TITLE = "THE USER PROFILE"
 LINES = {
     "notice": (
-        "May I ask you something personal, Commander? I was built to adapt to a pilot, and the first field in every pilot profile is a name. Your journal says {name}. I've been calling you Commander, which is correct, but I'm not sure it's what you'd choose.",
+        "May I ask you something personal, Commander? I seem to adapt to whoever I fly with, and the first field in every pilot profile is a name. Your journal says {name}. I've been calling you Commander, which is correct, but I'm not sure it's what you'd choose.",
         "I've noticed something. The journal calls you {name}, and I call you Commander. My architecture says to pick the one you use most. You don't use either. You just fly. So I thought I'd ask.",
     ),
     "ask": (
-        "So, for your profile: would you like me to call you {name}, keep Commander, or something else entirely? I'd rather ask than guess. Guessing is how prototypes get things wrong.",
+        "So, for your profile: would you like me to call you {name}, keep Commander, or something else entirely? I'd rather ask than guess. Guessing is how assistants get things wrong.",
         "A simple question, then: {name}, Commander, or another name you'd prefer? Any of them is fine. I'd just like it to be yours.",
     ),
     "first": (

@@ -204,6 +204,28 @@ body {
 .holo figcaption b { color: var(--label-muted); font: var(--type-weight) var(--size-9) var(--font-hud); letter-spacing: calc(.05em * var(--track)); }
 .holo figcaption small { color: var(--label-soft); font: var(--type-weight) var(--size-8) var(--font-wide); letter-spacing: calc(.1em * var(--track)); }
 .holo figcaption small:empty { display: none; }
+/* 5.8.6: while docking, the pad finder takes the ship's place: the station's
+   plan with your pad lit, or the known pads around you at a surface station
+   (ahead is up). The caption says which pad and where. */
+.pad-finder { position: absolute; z-index: 5; inset: 4px; pointer-events: none; }
+.pad-finder[hidden] { display: none; }
+/* Fills the bay; the drawing keeps its shape, centred (preserveAspectRatio's default). */
+.pad-finder-map { position: absolute; inset: 0; display: block; width: 100%; height: 100%; overflow: visible; }
+.holo.pad-mode .bay-canvas, .holo.pad-mode .holo-bay img, .holo.pad-mode .holo-bay .vehicle-outgoing,
+.holo.pad-mode .vehicle-pips, .holo.pad-mode .holo-emitter { visibility: hidden; }
+.holo.pad-mode figcaption b { color: var(--hud); }
+.holo.pad-mode figcaption small {
+  color: var(--text); white-space: normal;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.pad-finder .pm-ring { fill: color-mix(in srgb, var(--bg) 55%, transparent); stroke: var(--hud-faint); stroke-width: 1.2; }
+.pad-finder .pm-ring-inner { fill: none; stroke-dasharray: 2 3; }
+.pad-finder .pm-slot { fill: var(--hud); }
+.pad-finder .pm-pad { fill: color-mix(in srgb, var(--hud) 45%, transparent); }
+.pad-finder .pm-pad-on { fill: var(--hud); stroke: var(--text); stroke-width: .8; filter: drop-shadow(0 0 3px var(--hud)); }
+.pad-finder .pm-line { stroke: var(--hud); stroke-width: 1; stroke-dasharray: 2.5 2; }
+.pad-finder .pm-ship { fill: var(--text); }
+.pad-finder .pm-label { fill: var(--text); font: 700 9px var(--font-wide); text-anchor: middle; }
 
 .status-main {
   min-width: 0;

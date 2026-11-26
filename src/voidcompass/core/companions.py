@@ -8,13 +8,19 @@ PROFILES = {
     "axiom": {"name": "Axiom", "role": "Survey intelligence", "description": "Survey intelligence · precise and curious", "story": True},
     "meridian": {"name": "Meridian", "role": "Veteran navigator", "description": "Old navigator · measured and steady", "story": True},
     "lyra": {"name": "Lyra", "role": "Ship's computer", "description": "A ship's computer · bright, exact and fond of full tanks", "story": True},
-    "nova": {"name": "Nova", "role": "Vessel intelligence", "description": "A recovered prototype · observant, curious and a little playful", "story": True},
+    "nova": {"name": "Nova", "role": "Vessel intelligence", "description": "Recovered from LFT 1748 · observant, curious and a little playful", "story": True},
+    # 5.8.6: the ship's pets, full companions who speak through their gear (her
+    # gyroscope collar, his receiver translates).
+    "parallax": {"name": "Parallax", "role": "Ship's cat", "description": "A Devon Rex with a gyroscope collar · curious, superior, unhurried",
+                 "story": True},
+    "rivet": {"name": "Rivet", "role": "Ship's dog", "description": "A podenco with a receiver · eager, loyal, a nose for a signal",
+              "story": True},
 }
 IDENTITIES = tuple(PROFILES)
-NEW_IDENTITIES = ("axiom", "meridian", "lyra", "nova")
+NEW_IDENTITIES = ("axiom", "meridian", "lyra", "nova", "parallax", "rivet")
 NAMES = {key: row["name"] for key, row in PROFILES.items()}
-DISPLAY_SIZES = dict.fromkeys(IDENTITIES, (54, 72, 96, 144, 192, 256))
-DISPLAY_DEFAULTS = {"watcher": 54, "aster": 144, "axiom": 144, "meridian": 144, "lyra": 144, "nova": 144}
+DISPLAY_SIZES = dict.fromkeys(IDENTITIES, (54, 72, 96, 120, 144, 192, 256))
+DISPLAY_DEFAULTS = {"watcher": 54, "aster": 144, "axiom": 144, "meridian": 144, "lyra": 144, "nova": 144, "parallax": 144, "rivet": 144}
 ASTER_KEYS = {"heartbeat_thoughts": "aster_thoughts", "watcher_voice_enabled": "aster_voice_enabled",
               "watcher_voice_volume": "aster_voice_volume", "watcher_voice_speed": "aster_voice_speed",
               "watcher_voice_level": "aster_voice_level"}
@@ -33,6 +39,13 @@ def pending_story(config):
 def overlay_only(config):
     selected = config if isinstance(config, str) else identity(config)
     return bool(PROFILES.get(selected, {}).get("overlay_only"))
+
+
+def voiceless(config):
+    """No voice to speak with (5.8.6: the pets, for now; and any overlay preview).
+    They still write their thoughts and hear you through TALK."""
+    selected = config if isinstance(config, str) else identity(config)
+    return overlay_only(selected) or PROFILES.get(selected, {}).get("voice") is False
 
 
 def humour_key(config):

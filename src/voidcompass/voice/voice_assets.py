@@ -63,6 +63,21 @@ NOVA_MODEL_FILES = (
 )
 NOVA_NOTICE = ("Nova uses the Cori British-English Piper voice (rhasspy/piper-voices), trained by Bryce Beattie on Cori Samuel's "
                "public-domain LibriVox recordings. Source filenames and attribution are kept in models/nova. Nova herself is this app's own character.")
+# 5.8.6: the pets' voices, chosen by the user (piper-voices v1.0.0 builds, which our 2023 engine loads).
+PARALLAX_MODEL_FILES = (
+    {"name": "en_GB-jenny_dioco-medium.onnx", "sha256": "469c630d209e139dd392a66bf4abde4ab86390a0269c1e47b4e5d7ce81526b01", "size": 63201294},
+    {"name": "en_GB-jenny_dioco-medium.onnx.json", "sha256": "a9a7a93a317c9a3cb6563e37eb057df9ef09c06188a8a4341b0fcb58cba54dd4", "size": 4895},
+)
+PARALLAX_NOTICE = ("Parallax speaks with the voice of Jenny (Dioco), a British-English Piper voice (rhasspy/piper-voices) trained on "
+                   "the Jenny TTS dataset. Its licence permits commercial use and asks that the voice be credited as Jenny (Dioco). "
+                   "Source filenames and attribution are kept in models/parallax. Parallax herself is this app's own character.")
+RIVET_MODEL_FILES = (
+    {"name": "en_GB-northern_english_male-medium.onnx", "sha256": "57a219ae8e638873db7d18893304be5069c42868f392bb95c3ff17f0690d0689", "size": 63201294},
+    {"name": "en_GB-northern_english_male-medium.onnx.json", "sha256": "69557ed3d974463453e9b0c09dd99a7ed0e52b8b87b64b357dbeeb2540a97d47", "size": 4847},
+)
+RIVET_NOTICE = ("Rivet speaks with the Northern English Male Piper voice (rhasspy/piper-voices), trained on OpenSLR 83, Google's "
+                "UK and Ireland English dialect speech, licensed CC BY-SA 4.0. Source filenames and attribution are kept in "
+                "models/rivet. Rivet himself is this app's own character.")
 _RAW = "https://raw.githubusercontent.com/insert3coins/VoidCompass/master/models/"
 # Each companion's voice: (folder under models/, files, download URL, name, receipt folder).
 # Files and URLs are named, not copied, so they are read when used.
@@ -73,11 +88,13 @@ VOICES = {
     "meridian": ("picard", "MERIDIAN_MODEL_FILES", _RAW + "picard/", "Meridian voice", "picard"),
     "lyra": ("lyra", "LYRA_MODEL_FILES", _RAW + "lyra/", "Lyra voice", "lyra"),
     "nova": ("nova", "NOVA_MODEL_FILES", _RAW + "nova/", "Nova voice", "nova"),
+    "parallax": ("parallax", "PARALLAX_MODEL_FILES", _RAW + "parallax/", "Parallax voice", "parallax"),
+    "rivet": ("rivet", "RIVET_MODEL_FILES", _RAW + "rivet/", "Rivet voice", "rivet"),
 }
 
 
 def model_name(model):
-    if companions.overlay_only(model):
+    if companions.voiceless(model):
         return "Voice pending"
     return VOICES.get(model, VOICES["watcher"])[3]
 
@@ -88,11 +105,12 @@ def notice(model):
         return (f"{companions.NAMES[model]} uses the {source} Piper model from dividebysandwich/piper-voice-models, "
                 "trained on Star Trek Generations game dialogue. The downloaded source includes no licence or usage terms. "
                 "Source filenames and attribution are retained in models/. The voice source is separate from the companion identity.")
-    return {"aster": ASTER_NOTICE, "lyra": LYRA_NOTICE, "nova": NOVA_NOTICE}.get(model, RIGHTS_NOTICE)
+    return {"aster": ASTER_NOTICE, "lyra": LYRA_NOTICE, "nova": NOVA_NOTICE, "parallax": PARALLAX_NOTICE,
+            "rivet": RIVET_NOTICE}.get(model, RIGHTS_NOTICE)
 
 
 def manifest(model="watcher"):
-    if companions.overlay_only(model):
+    if companions.voiceless(model):
         raise ValueError("This companion has no voice model yet")
     folder, files, url, _name, _receipt = VOICES.get(model, VOICES["watcher"])
     return folder, globals()[files], globals().get(url, url)
@@ -143,7 +161,7 @@ def _receipt(base=None, model="watcher") -> Path:
 def installed(base=None, model="watcher") -> bool:
     """Engine and model both in place, and installed by us (the receipt
     records the hashes checked when they arrived)."""
-    if companions.overlay_only(model):
+    if companions.voiceless(model):
         return False
     try:
         receipt = json.loads(_receipt(base, model).read_text(encoding="utf-8"))
@@ -315,7 +333,7 @@ class VoiceDownload:
 def remove(base=None, model="watcher") -> bool:
     """Delete the engine and model (the speech cache with them). Only the
     files the download brought: the model's README stays."""
-    if companions.overlay_only(model):
+    if companions.voiceless(model):
         return False
     folder = voice_dir(base)
     selected = model

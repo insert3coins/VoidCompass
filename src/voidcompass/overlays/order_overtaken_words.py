@@ -70,7 +70,7 @@ OVERTAKEN = {
     "nova": {
         "plain": {
             "overtaken": ("Overtaken: {body} already mapped.", "{title}: target taken.", "{body} mapped by another commander.",
-                          "Order closed. Someone else got there first."),
+                          "Request closed. Someone else got there first."),
         },
         "voiced": {
             "overtaken": ("Someone mapped {body} before us. Well, they noticed it too. That's something.",

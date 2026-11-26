@@ -977,6 +977,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "hotkey": _text(self.config.get("overlay_hotkey_watcher_poke"), 40),
             # Its long story and the echoes heard (5.5.3.5).
             "lore": _companion_lore_page(self.config, memory, sessions, hours),
+            # 5.8.6: Nova's Scientific Knowledge Library, only once her story has opened it.
+            "library": mind.library_page() if callable(getattr(mind, "library_page", None)) else None,
             # 5.7.4: how each of the crew came aboard, from each one's memory.
             "crew": self._html_crew_page(),
             # 5.6.1, deeper: its question, your answers, what it keeps of you,
@@ -1074,11 +1076,12 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                         "mood": mood_words[0] if mood <= watcher_deeper.MOOD_LOW else mood_words[2] if mood >= watcher_deeper.MOOD_HIGH else mood_words[1],
                         "trust_value": round(trust), "mood_value": round(mood, 2), "labels": [trust_label, mood_label],
                         "story": {"title": chapter["title"] if chapter else "Not begun",
-                                  "note": f"chapter {chapter['numeral']} of {len(story.chapters)}" if chapter else story.title}},
+                                  # 5.8.6: a story's planned chapters count, written or not.
+                                  "note": f"chapter {chapter['numeral']} of {len(story.chapters) + len(getattr(story, 'pending', ()))}" if chapter else story.title}},
             "road": None,
             "pilgrimage": {"kind": wish.get("kind"), "words": spec["place"], "how": spec["how"] or watcher_places.how(wish.get("kind")),
                            "accepted": wish.get("accepted"), "asked": bool(wish.get("asked")),
-                           "reached": bool(wish.get("reached"))} if wish.get("kind") else None,
+                           "reached": bool(wish.get("reached"))} if wish.get("kind") and spec else None,
             "marks": {},
         }
 

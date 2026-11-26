@@ -202,7 +202,8 @@ class DashboardSmallsMixin:
             info = self._surface_pad_granted(raw)
             kind = "surface" if info else None
         self._pad_info = {"pad": pad, "station": raw.get("StationName_Localised") or raw.get("StationName"), "kind": kind,
-                          "words": (info or {}).get("words"), "map": (info or {}).get("map"), "at": time.time()}
+                          "words": (info or {}).get("words"), "map": (info or {}).get("map"), "at": time.time(),
+                          "surface": (info or {}).get("surface")}
         say = (info or {}).get("say")
         if say and self.config.get("pad_location", True):
             self._small_say(say if kind == "surface" else f"Pad {pad}: {say}.", heading=f"PAD {pad}", topic="pad")
@@ -513,12 +514,17 @@ class DashboardSmallsMixin:
             lines.append(f"{level} WITH {standing['faction'].upper()}")
         return lines
 
-    # -- the Dashboard's pad diagram -----------------------------------------------------------------
+    # -- the pad finder: the Bridge's pad card and the Nav HUD (5.8.6) ------------------------------
     def _pad_panel(self):
         info = getattr(self, "_pad_info", None)
         if not info or time.time() - float(info.get("at") or 0) > 900 or getattr(self, "current_docked", False):
             return None
-        return {k: info.get(k) for k in ("pad", "station", "kind", "words", "map")}
+        panel = {k: info.get(k) for k in ("pad", "station", "kind", "words", "map")}
+        # A learnt pad on a planet: where it is from where you are now.
+        live = self._surface_pad_live(info["surface"]) if info.get("surface") and hasattr(self, "_surface_pad_live") else None
+        if live:
+            panel.update(words=live["words"], map=live["map"], distance_m=round(live["distance"]))
+        return panel
 
     # -- one entry for the journal --------------------------------------------------------------------
     def _smalls_event(self, event, raw, startup_replay=False):

@@ -119,6 +119,18 @@
    "playback": "once",
    "fps": 24,
    "hold": 16
+  },
+  "nod": {
+   "frames": 48,
+   "cols": 8,
+   "playback": "once",
+   "fps": 24
+  },
+  "head-shake": {
+   "frames": 64,
+   "cols": 8,
+   "playback": "once",
+   "fps": 24
   }
  },
  "layer": {

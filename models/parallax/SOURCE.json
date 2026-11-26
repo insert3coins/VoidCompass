@@ -1,0 +1,30 @@
+{
+  "downloaded_at": "2026-11-26T02:54:27+00:00",
+  "repository": "rhasspy/piper-voices",
+  "revision": "375a0fe641dea077c2a47b4e9a056d6da521eed3",
+  "revision_tag": "v1.0.0",
+  "files": [
+    {
+      "name": "UPSTREAM_MODEL_CARD.md",
+      "source_path": "en/en_GB/jenny_dioco/medium/MODEL_CARD",
+      "size": 298,
+      "sha256": "bc8aec32196ab14f46260ab6e002cf004b0793ddd7886011145fe00106e20d45",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/375a0fe641dea077c2a47b4e9a056d6da521eed3/en/en_GB/jenny_dioco/medium/MODEL_CARD?download=true"
+    },
+    {
+      "name": "en_GB-jenny_dioco-medium.onnx",
+      "source_path": "en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx",
+      "size": 63201294,
+      "sha256": "469c630d209e139dd392a66bf4abde4ab86390a0269c1e47b4e5d7ce81526b01",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/375a0fe641dea077c2a47b4e9a056d6da521eed3/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx?download=true"
+    },
+    {
+      "name": "en_GB-jenny_dioco-medium.onnx.json",
+      "source_path": "en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx.json",
+      "size": 4895,
+      "sha256": "a9a7a93a317c9a3cb6563e37eb057df9ef09c06188a8a4341b0fcb58cba54dd4",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/375a0fe641dea077c2a47b4e9a056d6da521eed3/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx.json?download=true"
+    }
+  ],
+  "rights_note": "Model card: dataset https://github.com/dioco-group/jenny-tts-dataset, licence 'See URL'. The dataset licence permits commercial use and requires attribution in software that generates audio from it: the voice must be referred to as \"Jenny\" and, where practical, \"Jenny (Dioco)\". Fine-tuned from the U.S. English lessac voice (medium)."
+}

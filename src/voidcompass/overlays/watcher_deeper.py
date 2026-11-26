@@ -150,7 +150,7 @@ def read_code(text):
 
 NATURE_WORDS = {"weary": "a weary one", "stoic": "a quiet one", "curious": "a curious one", "nervous": "a nervous one",
                 "aster": "an officer called Aster", "axiom": "a survey mind called Axiom", "meridian": "a navigator called Meridian",
-                "lyra": "a ship's computer called Lyra", "nova": "a prototype assistant called Nova"}
+                "lyra": "a ship's computer called Lyra", "nova": "an assistance program called Nova"}
 ROAD_WORDS = {"shut": "its eye closed", "open": "looking back", None: "still deciding"}
 
 # -- the lines -------------------------------------------------------------------------------------

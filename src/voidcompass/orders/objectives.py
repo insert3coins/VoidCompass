@@ -31,6 +31,7 @@ TYPES = {
     "map": "Map worlds with probes",
     "fss_all": "Find every body in a system",
     "discover": "First discoveries",
+    "phenomenon": "Investigate a Notable Stellar Phenomenon",
     "land": "Touch down",
     "footfall": "First footfall",
     "jumps": "Jumps",
@@ -216,9 +217,26 @@ def _gain(kind, objective, event, raw, ctx):
             return 0
         if objective.get("stars") and not raw.get("StarType"):
             return 0
+        # 5.8.6: whole systems nobody had discovered: only the arrival star counts, once a system.
+        if objective.get("main_star") and float(raw.get("DistanceFromArrivalLS") or 0) != 0:
+            return 0
         if not _in_place(objective, raw, ctx):
             return 0
         return 1 if _seen(objective, f"{raw.get('SystemAddress')}:{raw.get('BodyName')}") else 0
+    if kind == "phenomenon":
+        # 5.8.6: dropped in at a Notable Stellar Phenomenon (known ones count), then
+        # something there scanned with the composition scanner before leaving.
+        if event == "SupercruiseDestinationDrop":
+            objective["armed"] = (str(raw.get("Type") or "").startswith("$Fixed_Event_Life_")
+                                  or "notable stellar" in str(raw.get("Type_Localised") or "").casefold())
+            return 0
+        if event in ARRIVALS or event in {"SupercruiseEntry", "StartJump"}:
+            objective["armed"] = False
+            return 0
+        if event != "CodexEntry" or not objective.get("armed"):
+            return 0
+        objective["armed"] = False
+        return 1 if _in_place(objective, raw, ctx) else 0
     if kind == "land":
         if event != "Touchdown" or raw.get("PlayerControlled") is False or not _in_place(objective, raw, ctx):
             return 0

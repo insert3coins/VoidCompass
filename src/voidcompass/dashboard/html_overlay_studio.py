@@ -666,7 +666,19 @@ class HtmlOverlayStudioMixin:
         self._game_process_running = None
         self._game_session_revision = 0
         self._game_process_pending = False
-        self._observe_game_process(game_running())
+        running = game_running()
+        if running:
+            # 5.8.6: started mid-session, the journal catch-up resumes after the
+            # session's LoadGame and never replays it, so every overlay stayed
+            # hidden as if the game were closed. The journal says whether it is.
+            from voidcompass.core.journal_files import session_open
+            from voidcompass.core.platform_support import detect_elite_journal_path
+            try:
+                folder = self.config.get("journal_path") or detect_elite_journal_path()
+                self._game_closed = session_open(folder) is not True
+            except Exception:
+                pass
+        self._observe_game_process(running)
         self._apply_map_overlay_hiding()
 
     def _observe_game_session(self, event, startup_replay=False):

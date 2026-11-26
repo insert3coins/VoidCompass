@@ -1,0 +1,30 @@
+{
+  "downloaded_at": "2026-11-26T02:54:29+00:00",
+  "repository": "rhasspy/piper-voices",
+  "revision": "375a0fe641dea077c2a47b4e9a056d6da521eed3",
+  "revision_tag": "v1.0.0",
+  "files": [
+    {
+      "name": "UPSTREAM_MODEL_CARD.md",
+      "source_path": "en/en_GB/northern_english_male/medium/MODEL_CARD",
+      "size": 305,
+      "sha256": "75661c3a50c0ba82b32b3a438e54103d8dfe5bbe8fbb864ac687a040e79948bb",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/375a0fe641dea077c2a47b4e9a056d6da521eed3/en/en_GB/northern_english_male/medium/MODEL_CARD?download=true"
+    },
+    {
+      "name": "en_GB-northern_english_male-medium.onnx",
+      "source_path": "en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx",
+      "size": 63201294,
+      "sha256": "57a219ae8e638873db7d18893304be5069c42868f392bb95c3ff17f0690d0689",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/375a0fe641dea077c2a47b4e9a056d6da521eed3/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx?download=true"
+    },
+    {
+      "name": "en_GB-northern_english_male-medium.onnx.json",
+      "source_path": "en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json",
+      "size": 4847,
+      "sha256": "69557ed3d974463453e9b0c09dd99a7ed0e52b8b87b64b357dbeeb2540a97d47",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/375a0fe641dea077c2a47b4e9a056d6da521eed3/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json?download=true"
+    }
+  ],
+  "rights_note": "Model card: dataset http://www.openslr.org/83/ (Crowdsourced high-quality UK and Ireland English Dialect speech data set, Demirsahin et al., Google), licence CC BY-SA 4.0 International. Fine-tuned from the U.S. English lessac voice (medium)."
+}

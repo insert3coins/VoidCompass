@@ -1,5 +1,5 @@
 """Nova's words for the voyage itself (5.8.6): greetings, danger, flight,
-discovery and the quiet hours. A restored prototype assistant: observant,
+discovery and the quiet hours. An unfinished assistance program recovered from LFT 1748: observant,
 curious, friendly, with an understated sense of humour, and puzzled now and
 then by human choices, which she asks about rather than judges.
 
@@ -7,7 +7,7 @@ PLAIN is her Assistant style (the restrained mode); VOICED adds her Playful one.
 
 PLAIN = {
     "greet_new": ("Nova online, Commander. Ready when you are.",
-                  "Hello, Commander. Navigation, observation and assistance, all available.",
+                  "Hello, Commander. Observing, as usual, and ready to assist.",
                   "Nova here. Systems read well. Where are we going?",
                   "Online. I've had a look round the ship. Everything's where it should be."),
     "greet_away": ("Welcome back, Commander.", "Welcome back. Nothing's changed while you were away.",
@@ -164,7 +164,7 @@ PLAIN = {
 
 VOICED = {
     "greet_new": ("Nova online. Hello, Commander. I've had a look round the ship while I was waking up. Everything's lovely. Where are we going?",
-                  "Hello! Navigation, observation and vessel assistance, all ready. The observation part is already running. It can't help it.",
+                  "Hello! Everything's ready. I've been observing already. I can't seem to help it.",
                   "Activation complete. Hello, Commander. I have a great many questions, but I'll start with the useful one: where to?",
                   "Online and paying attention. That's what I'm for, mostly. Hello, Commander."),
     "greet_away": ("Welcome back, Commander. I kept an eye on the ship. She was very well behaved. I'm a little disappointed.",
@@ -238,7 +238,7 @@ VOICED = {
     "world_earthlike": ("{body}: Earth-like. Blue and green. I've been looking at it for a while now. I'm not sure why. I'm not stopping.",
                         "An Earth-like world, {body}. Do you ever wonder who might stand there one day? I do now."),
     "world_water": ("{body}: a water world. A whole planet of ocean. I'd like to know what the waves sound like.",
-                    "Water world, {body}. I find it very calming to look at. I wasn't designed to find things calming."),
+                    "Water world, {body}. I find it very calming to look at. I'm not sure anyone meant me to find things calming."),
     "world_ammonia": ("{body}: an ammonia world. Unfriendly to us, beautiful anyway. That's allowed.",
                       "Ammonia world, {body}. Rather rare. I'd like to know what lives there, if anything does."),
     "world_terraformable": ("{body} could be terraformed. A world with a future in it. I like those.",
@@ -280,7 +280,7 @@ VOICED = {
                      "{system}. The carrier's in position. I'll never stop being impressed by that."),
     "revisit": ("{system} again. Last time was {when}. I've noticed things change. I'm looking for what.",
                 "Back in {system}, after {when}. It feels familiar. That's new for me."),
-    "record_far": ("{dist} light years from Sol. Our furthest yet. I wasn't built to come this far. I'm glad I did.",
+    "record_far": ("{dist} light years from Sol. Our furthest yet. I'm glad I came.",
                    "A new record: {dist} light years out. The view keeps improving."),
     "record_jump": ("{dist} light years in one jump. The drive and I are both rather proud.",
                     "A record jump, {dist} light years. Very efficient. I approve, for once."),
@@ -303,7 +303,7 @@ VOICED = {
     "idle_small_system": ("{system} is small. Quick to survey, easy to leave. I'll miss it a little anyway.",
                           "Not much in {system}. I'm noticing it anyway. Small systems deserve attention too."),
     "idle_far": ("{dist} light years from {home}. I keep the route back ready. I also keep wanting to go further.",
-                 "We're {dist} light years from {home}. I was built in a lab. This is much better."),
+                 "We're {dist} light years from {home}. I'd much rather be out here than in an archive."),
     "idle_home": ("Home is {dist} light years away. I like knowing where it is. I like not going there yet.",
                   "{dist} light years from home. I've plotted the way back. Only if needed."),
     "idle_home_away": ("{home} is {dist} light years away. I've marked the route. Just in case.",
@@ -314,7 +314,7 @@ VOICED = {
                    "It's {clock}. The galaxy will still be here tomorrow. I'll make sure of it."),
     "idle_morning": ("{clock}. Good morning, Commander. Fresh session, fresh questions.",
                      "Morning. It's {clock}. I've been looking forward to today. I'm not sure why. I just have."),
-    "idle_docked": ("Docked at {station}. Busy, noisy, full of people. It sounds a little like a lab I used to know.",
+    "idle_docked": ("Docked at {station}. Busy, noisy, full of people. I like listening to it.",
                     "{station}. A good time for repairs, refuelling and, if you like, looking out of the window."),
     "idle_landed": ("Landed on {body}. Engines quiet. I'm watching the horizon. Nothing's moving. It's lovely.",
                     "Down on {body}. I wonder how long it's been since anything landed here."),

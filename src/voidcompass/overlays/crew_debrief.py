@@ -17,11 +17,11 @@ EXPIRES_S = 180.0    # a debrief line not said by then is let go
 # {name} is the expedition's.
 DEBRIEF = {
     "nova": ("{name}. I've looked along the whole route. I've a great many questions. I'll ask them as we go.",
-             "{name}. I wasn't built for long voyages. I'm very glad to be going on one.",
+             "{name}. A long voyage. I'm very glad to be going on one.",
              "{name}. Help before you're asked, only if you're needed. I'll be watching for both.",
              "{name}. I've marked the views I'd like to see. You don't have to stop for them. I'd like you to.",
              "{name}. A long way to go. I'll learn your habits all over again out there.",
-             "{name}. Navigation, observation, assistance. All three ready."),
+             "{name}. Observing, and ready to assist."),
     "lyra": ("{name}. Fuel tables are ready, every scoopable star flagged. I will get us home from it.",
              "{name}. I have plotted the way back before the way out. My rules.",
              "{name}. Systems green, reserves full, and I am very much looking forward to it.",

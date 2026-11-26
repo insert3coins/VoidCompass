@@ -10,18 +10,24 @@ export const COMPANION_EXTENT = 1.16;
 // (Axiom: a graduated measuring scale), "compass" (Meridian: a brass rose
 // with cardinal points). 5.8.6: "nova" (Nova: pearl, a lit ring at each temple
 // like hers and a four-point star at the top). Anything else is the plain shared bezel.
-const STYLES = {command:1, scale:2, compass:3, nova:4};
+// 5.8.6: the pets' rings are animated, on the display's own clock: "gyro"
+// (Parallax: two gimbal rings crossing at her collar's pivots, turning on their
+// axes, glow arcs top and bottom) and "collar" (Rivet: a riveted strap with
+// copper plates turning slowly, teal markers and a receiver's sweeping track).
+const STYLES = {command:1, scale:2, compass:3, nova:4, gyro:5, collar:6};
 // 5.7.7: your standing with the officer (Crew Orders), as service pips set
 // into the bottom of the bezel: one for Trusted up to four for Indispensable,
 // the fourth gilding them all. Inside the same silhouette, so no display grows.
-export function createCompanionFrame({colour, energy, opening = .30, style = "", service = {value:0}}) {
+export function createCompanionFrame({colour, energy, opening = .30, style = "", service = {value:0}, time = {value:0}}) {
   const material = front => new THREE.ShaderMaterial({
     uniforms: {uColour:colour, uEnergy:energy, uOpening:{value:opening}, uFront:{value:front?1:0}, uStyle:{value:STYLES[style]||0},
-      uService:service},
+      uService:service, uTime:time},
     vertexShader: `varying vec2 vUv;
       void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader: `varying vec2 vUv;uniform vec3 uColour;uniform float uEnergy,uOpening,uFront,uStyle,uService;
+    fragmentShader: `varying vec2 vUv;uniform vec3 uColour;uniform float uEnergy,uOpening,uFront,uStyle,uService,uTime;
       float stroke(float d,float width){return 1.0-smoothstep(width,width+fwidth(d),abs(d));}
+      // Distance (in arc, roughly) from an angle to a mark at another.
+      float arcTo(float a,float b){return abs(mod(a-b+3.14159265,6.2831853)-3.14159265);}
       void main(){
         vec2 p=(vUv-.5)*2.55;float r=length(p),a=atan(p.y,p.x);
         float edge=1.0-smoothstep(1.125,1.155,r);
@@ -47,7 +53,7 @@ export function createCompanionFrame({colour, energy, opening = .30, style = "",
           float five=1.0-step(.08,fract(turn*24.0));
           float ten=1.0-step(.06,fract(turn*12.0));
           ticks=stroke(r-1.09,.012)*fine*.8+stroke(r-1.08,.022)*five+stroke(r-1.075,.03)*ten;
-        }else if(uStyle>3.5){
+        }else if(uStyle>3.5&&uStyle<4.5){
           // Nova: a ring at each temple (3 and 9 o'clock), a four-point star at the top, fine dots between.
           float rings=0.0;
           for(int i=0;i<2;i++){vec2 c=vec2(float(i)*2.0-1.0,0.0)*1.079;float d=length(p-c);
@@ -75,6 +81,80 @@ export function createCompanionFrame({colour, energy, opening = .30, style = "",
           }
         }
         float alpha=uFront>.5?max(housing*.96*edge,bevel*.94):glass*.76;
+        // The pets' rings: their own colour and coverage, drawn instead of the steel housing.
+        vec3 ringColour=vec3(0.0);float ringAlpha=0.0;
+        if(uStyle>4.5&&uStyle<5.5){
+          // Parallax's gyroscope: two gimbals pivoting at 3 and 9 o'clock, each
+          // turning on that axis at its own pace; the far half of each is dimmer.
+          for(int i=0;i<2;i++){
+            float k=float(i);
+            float th=k<.5?uTime*.55:-uTime*.42+1.9;
+            float tilt=(k<.5?.06:-.05)*sin(uTime*.3+k*2.0);
+            vec2 q=mat2(cos(tilt),-sin(tilt),sin(tilt),cos(tilt))*p;
+            // Tipped, never flat: each ring stays near round, its far half dimming as it tips back.
+            float ry=1.085*(.88+.12*cos(th));
+            vec2 e=q/vec2(1.085,ry);
+            float line=stroke((length(e)-1.0)*min(1.085,ry),.0075);
+            float behind=step(0.0,q.y*sin(th));
+            // Breaks in each ring, turning with it.
+            float gap=step(.15,fract(atan(e.y,e.x)/6.2831853*3.0+k*.37+uTime*.025));
+            float v=line*gap*mix(1.0,.42,behind);
+            ringColour+=(k<.5?vec3(.40,.93,.90):vec3(.66,.48,1.0))*v;
+            ringAlpha=max(ringAlpha,v);
+          }
+          float arcs=exp(-pow((r-1.118)/.013,2.0))*smoothstep(.55,.97,abs(sin(a)))*(.5+.5*sin(uTime*.8))*clamp(.65+uEnergy*.5,0.0,1.0);
+          ringColour+=vec3(.62,.50,1.0)*arcs*.9;ringAlpha=max(ringAlpha,arcs*.7);
+          vec2 dq=vec2(abs(p.x)-1.082,p.y);
+          float diamond=1.0-smoothstep(.0,.006,abs(dq.x)*1.5+abs(dq.y)-.03);
+          ringColour+=vec3(.74,.97,1.0)*diamond;ringAlpha=max(ringAlpha,diamond);
+          ringColour/=max(ringAlpha,.001);
+        }else if(uStyle>5.5){
+          // Rivet's collar: a dark segmented strap with gaps and tan edges, three copper
+          // plates, all turning slowly; teal markers that stay put; a receiver's dashed
+          // track inside, turning the other way with a brighter sweep.
+          float spin=uTime*.05,b=a-spin;
+          float turnB=fract((b+3.14159265)/6.2831853);
+          float strap=smoothstep(1.036,1.046,r)*(1.0-smoothstep(1.118,1.128,r));
+          float gaps=1.0;
+          for(int i=0;i<4;i++){float at=float(i)==0.0?.08:float(i)==1.0?.31:float(i)==2.0?.63:.82;gaps*=step(.018,abs(turnB-at));}
+          strap*=gaps;
+          float seam=step(.86,fract(turnB*90.0));
+          float rim=stroke(r-1.044,.004)+stroke(r-1.12,.004);
+          vec3 band=mix(vec3(.10,.145,.15),vec3(.05,.07,.075),seam);
+          band=mix(band,vec3(.58,.52,.40),clamp(rim,0.0,1.0)*.85);
+          float plate=0.0,hatch=0.0,rivet=0.0;
+          for(int i=0;i<3;i++){
+            float at=float(i)==0.0?.36:float(i)==1.0?3.5:5.5;
+            float d=arcTo(b,at)*r;
+            float on=(1.0-smoothstep(.085,.092,d))*smoothstep(1.046,1.052,r)*(1.0-smoothstep(1.112,1.118,r));
+            plate=max(plate,on);
+            hatch=max(hatch,on*step(.72,fract((b-at)*40.0+(r-1.08)*55.0)));
+            vec2 c1=vec2(cos(at+spin+.075),sin(at+spin+.075))*1.082,c2=vec2(cos(at+spin-.075),sin(at+spin-.075))*1.082;
+            rivet=max(rivet,1.0-smoothstep(.008,.012,min(length(p-c1),length(p-c2))));
+          }
+          vec3 copper=mix(vec3(.80,.45,.19),vec3(.33,.16,.07),hatch);
+          band=mix(band,copper,plate);
+          band=mix(band,vec3(.97,.84,.64),rivet);
+          ringColour=band;ringAlpha=max(strap,max(plate,rivet))*edge;
+          float marks=0.0;
+          for(int i=0;i<3;i++){
+            float at=float(i)==0.0?-.12:float(i)==1.0?2.62:-1.57;
+            vec2 m=p-vec2(cos(at),sin(at))*1.082;
+            vec2 u=vec2(dot(m,vec2(cos(at),sin(at))),dot(m,vec2(-sin(at),cos(at))));
+            marks=max(marks,1.0-smoothstep(.0,.006,abs(u.x)*1.6+abs(u.y)-.026));
+          }
+          float pulse=.65+.35*sin(uTime*1.4);
+          ringColour=mix(ringColour,vec3(.55,.90,.76),marks);ringAlpha=max(ringAlpha,marks*pulse+marks*.0);
+          float c=a+uTime*.18;
+          float dash=step(.5,fract((c+3.14159265)/6.2831853*44.0))*stroke(r-.995,.004);
+          float sweep=exp(-pow(arcTo(a,-uTime*.9)/.35,2.0));
+          float track=dash*(.45+.55*sweep);
+          ringColour=mix(ringColour,vec3(.42,.74,.66)+sweep*.25,track*(1.0-ringAlpha));
+          ringAlpha=max(ringAlpha,track*.85);
+        }
+        if(uFront>.5&&uStyle>4.5){
+          alpha=max(ringAlpha,housing*.32*edge);
+        }
         if(alpha<.001)discard;
         vec3 dark=vec3(.012,.022,.032);
         vec3 steel=mix(vec3(.065,.10,.13),vec3(.24,.31,.36),sheen);
@@ -90,6 +170,7 @@ export function createCompanionFrame({colour, energy, opening = .30, style = "",
           surface+=uColour*bevel*clamp(uEnergy,0.0,1.0)*.12;
           vec3 pipColour=uService>3.5?vec3(1.0,.82,.42):mix(uColour,vec3(.95,.98,1.0),.35);
           surface=mix(surface,pipColour,pips*.95);
+          if(uStyle>4.5)surface=mix(mix(dark,steel*.6,housing),ringColour,clamp(ringAlpha*1.2,0.0,1.0))+pipColour*pips*.9;
         }
         gl_FragColor=vec4(surface,alpha);
         #include <colorspace_fragment>

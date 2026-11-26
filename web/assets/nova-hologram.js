@@ -17,8 +17,17 @@ import * as THREE from "../galactic_map/vendor/three.module.min.js";
 // - A sign-off, once said: goodnight, eyes closed until something new.
 // - A faint projection: scan lines, a slow light band and, rarely, a flicker.
 // Reduced motion holds a still face (an expression's held or middle frame).
+// 5.8.6: the pets (Parallax the cat, Rivet the dog) are drawn the same way from
+// their own folders (addSpriteCompanion), with their own signature moves: a
+// mood's alternatives, a move for certain thoughts, a yawn before settling.
 const BASE = {idle: "idle", listening: "listening", working: "working", charging: "charging", alert: "alert"};
 const MOOD_CLIPS = {joy: ["warm-smile", "delighted"], curious: ["curious"], worry: ["wary"], sad: ["downcast"]};
+// A nod for a yes, a shake of the head for a no, as a thought on one of these arrives.
+const NODS = ["docking_granted", "mission_accepted", "mission_done", "rig_collected", "rig_all_collected", "route_done",
+  "survey_done", "sample_clear", "fss_complete", "impound_cleared", "npc_hired", "engineer_grade_done"];
+const SHAKES = ["docking_denied", "docking_timeout", "docking_cancelled", "mission_failed", "mission_abandoned",
+  "crime_committed", "carrier_jump_cancelled"];
+const GESTURES = Object.fromEntries([...NODS.map((topic) => [topic, "nod"]), ...SHAKES.map((topic) => [topic, "head-shake"])]);
 const SETTLE_S = 45;
 const EAGER = ["idle", "mouth-levels"];
 // A sheet not shown for this long is let go (a full set is ~250 MB of textures); it loads again when wanted.
@@ -26,7 +35,25 @@ const KEEP_S = 90;
 const SIZE = 1.96;
 
 export function addNovaHologram(parent, uniforms, onChange = () => {}) {
-  const base = new URL("./nova/", import.meta.url);
+  return addSpriteCompanion(parent, uniforms, onChange);
+}
+
+// Each pet's own folder, palette of moves and look (no projection fault: they're not projected).
+export const PETS = {
+  parallax: {folder: "parallax-cat", design: "pet-cat", projection: .35, glitch: false,
+    moods: {curious: ["curious", "target-stalk"]}, settle: "big-yawn",
+    topics: [[/target|interdict|scan|fss|dss|approach|bounty|hunt|stalk|probe/, "target-stalk"]]},
+  rivet: {folder: "rivet-dog", design: "pet-dog", projection: .35, glitch: false,
+    moods: {joy: ["warm-smile", "happy-pant", "delighted"], curious: ["curious", "scent-check"]},
+    topics: [[/boarded|welcome|greet|docked_home|back_home|srv_docked|returned/, "happy-pant"],
+             [/signal|fss|scan|codex|bio|first_|new_system|arriv|sniff|scent/, "scent-check"]]},
+};
+
+export function addSpriteCompanion(parent, uniforms, onChange = () => {}, pet = null) {
+  const folder = pet?.folder || "nova", design = pet?.design || "projected-android";
+  const moodClips = {...MOOD_CLIPS, ...(pet?.moods || {})}, topicClips = pet?.topics || [];
+  const projectionLevel = pet?.projection ?? 1, faults = pet?.glitch ?? true;
+  const base = new URL(`./${folder}/`, import.meta.url);
   const loader = new THREE.TextureLoader();
   loader.setCrossOrigin("anonymous");
   const sheets = new Map();
@@ -48,7 +75,7 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
     return row;
   }
 
-  fetch(new URL("nova.json", base).href).then((reply) => reply.json()).then((data) => {
+  fetch(new URL(`${folder}.json`, base).href).then((reply) => reply.json()).then((data) => {
     info = data;
     for (const name of EAGER) texture(name);
     texture("blink-layer", "blink-layer.webp");
@@ -92,11 +119,11 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
     transparent: true, depthWrite: false, depthTest: false, blending: THREE.NormalBlending,
   });
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(SIZE, SIZE), material);
-  plane.name = "nova-hologram"; plane.renderOrder = 1; plane.position.z = .1;
+  plane.name = pet ? `${folder}-portrait` : "nova-hologram"; plane.renderOrder = 1; plane.position.z = .1;
   parent.add(plane);
 
   let clip = "idle", frame = 0, clock = 0, once = null, lastMood = "", lastState = "idle", lastThought = null;
-  let joyTurn = 0, blinkAt = 3.2, blinkClock = -1, glitchAt = 18, glitch = 0, shown = "", show = 0, busy = false;
+  let joyTurn = 0, turns = {}, yawned = false, blinkAt = 3.2, blinkClock = -1, glitchAt = 18, glitch = 0, shown = "", show = 0, busy = false;
   let quiet = 0, night = "", live = {pose: {}}, elapsed = 0, swept = 0;   // night: "" awake, "due" after a sign-off, "asleep" eyes closed
 
   function setFrame(uniform, row, index, cols) {
@@ -149,12 +176,24 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
       const steady = once && (once.name === "surprised" || once.name === "reassuring");
       if (state === "alert" && lastState !== "alert") play("surprised");
       else if (lastState === "alert" && state === "idle") play("reassuring");
-      else if (state !== "alert" && !steady && mood && mood !== lastMood && MOOD_CLIPS[mood]) {
-        const options = MOOD_CLIPS[mood];
-        play(options[(mood === "joy" ? joyTurn++ : 0) % options.length], () => moodOf(expression) === mood);
+      else if (state !== "alert" && !steady && mood && mood !== lastMood && moodClips[mood]) {
+        const options = moodClips[mood].filter((name) => info.clips[name]);
+        const turn = mood === "joy" && !pet ? joyTurn++ : (turns[mood] = (turns[mood] || 0) + 1) - 1;
+        play(options[turn % options.length], () => moodOf(expression) === mood);
+      } else if (fresh && pet && state !== "alert" && !steady && !reduced && !(once && once.keep() && !once.name.startsWith("glance-"))
+                 && topicClips.some(([pattern, name]) => pattern.test(String(thought.topic || "")) && info.clips[name])) {
+        // A pet's own move for what the thought is about (Rivet's scent check, Parallax stalking a target).
+        play(topicClips.find(([pattern, name]) => pattern.test(String(thought.topic || "")) && info.clips[name])[1]);
+      } else if (fresh && GESTURES[thought.topic] && state !== "alert" && !steady && !reduced
+                 && !(once && once.keep() && !once.name.startsWith("glance-"))) {
+        // A nod or a shake of the head. It breaks off a glance (that's only her looking about),
+        // but a mood she's holding (wary, downcast) or sleep isn't interrupted.
+        play(GESTURES[thought.topic]);
       } else if (!once && !night && state === "idle" && !reduced && focus !== "off" && pose.attention > 0 && Math.abs(pose.x || 0) > .3) {
         // Toward the side of the screen something happened on (the viewer's left or right).
-        play(pose.x > 0 ? "glance-right" : "glance-left", () => live.pose.attention > 0);
+        // Held while that side has her attention: when it moves across, she turns back, then the other way.
+        const right = pose.x > 0;
+        play(right ? "glance-right" : "glance-left", () => live.pose.attention > 0 && (live.pose.x > 0) === right);
       } else if (night === "due" && !speaking && !once) {
         night = "asleep";
         play("goodnight", () => night === "asleep");
@@ -163,6 +202,9 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
       lastState = state;
       // Settled after a quiet spell on watch.
       quiet = state === "idle" && !once && !mood && !(pose.attention > 0) ? quiet + dt : 0;
+      if (quiet === 0) yawned = false;
+      // Parallax yawns, once, as a quiet spell turns into settling down.
+      if (pet?.settle && !yawned && quiet >= SETTLE_S && !reduced && info.clips[pet.settle]) { yawned = true; play(pet.settle); quiet = SETTLE_S; }
       let name, index;
       if (speaking && ready("mouth-levels")) {
         // Speech wins: the mouth follows the voice. An expression waits.
@@ -222,10 +264,10 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
       } else blinkClock = -1;
       // Now and then, a flicker in the projection.
       glitch = Math.max(0, glitch - dt * 6);
-      if (animated && !reduced) { glitchAt -= dt; if (glitchAt <= 0) { glitch = 1; glitchAt = 16 + Math.random() * 22; } }
+      if (animated && !reduced && faults) { glitchAt -= dt; if (glitchAt <= 0) { glitch = 1; glitchAt = 16 + Math.random() * 22; } }
       else glitch = 0;
       material.uniforms.uGlitch.value = glitch;
-      material.uniforms.uProjection.value = reduced ? .4 : 1;
+      material.uniforms.uProjection.value = (reduced ? .4 : 1) * projectionLevel;
       // Fades in the first time her frames arrive; drifts a touch with attention.
       show = reduced ? 1 : Math.min(1, show + dt * 3);
       material.uniforms.uShow.value = show;
@@ -238,7 +280,7 @@ export function addNovaHologram(parent, uniforms, onChange = () => {}) {
     },
     get busy() { return busy; },
     inspect() {
-      return {design: "projected-android", clip: shown, frame, expressionClip: once?.name || null, blinking: blinkClock >= 0, night, quiet,
+      return {design, clip: shown, frame, expressionClip: once?.name || null, blinking: blinkClock >= 0, night, quiet,
         glitch, loaded: [...sheets].filter(([, row]) => row.ready).map(([key]) => key), ready: Boolean(info), failed};
     },
     destroy() {

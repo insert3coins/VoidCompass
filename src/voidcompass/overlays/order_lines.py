@@ -9,6 +9,7 @@ isn't used again until every other wording of that topic has been.
 from __future__ import annotations
 
 import random
+import re
 import string
 import zlib
 
@@ -37,7 +38,7 @@ TOPICS = ("floor", "accepted", "declined", "muted", "later", "step", "halfway", 
 # Offers, by the officer who gives that kind.
 OFFERS = {
     "lyra": ("bio_hunt", "cash_bio"),
-    "nova": ("new_codex", "closer_look"),
+    "nova": ("new_codex", "closer_look", "phenomenon", "uncharted"),
     "axiom": ("map_worlds", "first_discoveries", "finish_system"),
     "meridian": ("neutron", "new_region", "record_far"),
     "aster": ("sell_price", "cash_carto", "colony", "merits"),
@@ -74,8 +75,9 @@ def _fingerprint(line):
     return f"{zlib.crc32(line.encode('utf-8')):08x}"
 
 
-def pick(speaker, topic, fields=None, config=None, memory=None, rng=None):
-    """One line, formatted, or None when nothing fits the facts given."""
+def pick(speaker, topic, fields=None, config=None, memory=None, rng=None, avoid=None):
+    """One line, formatted, or None when nothing fits the facts given. ``avoid``:
+    a pattern lines are passed over for, while any line without it fits."""
     fields = {key: value for key, value in (fields or {}).items() if value not in (None, "")}
     # Capitalised copies for sentence starts: {What}, {Words}.
     for key, value in list(fields.items()):
@@ -89,6 +91,8 @@ def pick(speaker, topic, fields=None, config=None, memory=None, rng=None):
             usable.append((line, line.format(**fields)))
         except (KeyError, IndexError, ValueError):
             continue
+    if avoid is not None:
+        usable = [row for row in usable if not avoid.search(row[0])] or usable
     if not usable:
         return None
     memory = memory if memory is not None else {}
@@ -105,8 +109,18 @@ def pick(speaker, topic, fields=None, config=None, memory=None, rng=None):
     return text
 
 
+# 5.8.6: Nova asks for help rather than giving orders. Passing hers on, the
+# crew use their words that don't call it an order.
+NOT_AN_ORDER = re.compile(r"\border", re.I)
+REQUEST_HEADINGS = {"done": "THANK YOU", "ribbon": "COMMENDATION", "stage": "NOVA'S REQUEST", "standing": "USER PROFILE",
+                    "overtaken": "OVERTAKEN", "abandoned": "REQUEST WITHDRAWN", "lapsed": "REQUEST LAPSED",
+                    "reminder": "STILL HOPING"}
+
+
 def heading(speaker, topic):
     """The thought's heading for an order line."""
+    if speaker == "nova":
+        return "NOVA ASKS" if topic.startswith("offer_") else REQUEST_HEADINGS.get(topic, "NOVA'S REQUESTS")
     if topic.startswith("offer_"):
         return "NEW ORDER"
     return {"done": "ORDER COMPLETE", "ribbon": "COMMENDATION", "stage": "CAMPAIGN", "standing": "SERVICE RECORD",

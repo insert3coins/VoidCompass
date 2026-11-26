@@ -49,6 +49,8 @@ KINDS = {
     "errand": ("watcher", "watcher", "errands"),
     "new_codex": ("nova", "exploration", "Codex searches"),
     "closer_look": ("nova", "exploration", "closer looks"),
+    "phenomenon": ("nova", "exploration", "phenomena"),
+    "uncharted": ("nova", "exploration", "uncharted systems"),
 }
 
 WORTHY = ("earthlike", "earth-like", "water world", "ammonia world")
@@ -199,6 +201,34 @@ def nova_closer_look(facts):
         fields={"body": body, "system": system},
         why=[_why(f"{body}: {world.get('type') or 'a remarkable world'}", "Your scans (journal)")],
         target={"system": system, "address": facts["address"]},
+    )]
+
+
+def nova_phenomenon(facts):
+    """A Notable Stellar Phenomenon in this system: drop in and look at it properly."""
+    if not facts.get("nsp_here") or not facts.get("address") or facts.get("docked"):
+        return []
+    system = facts.get("system")
+    return [draft(
+        "phenomenon", "The phenomenon here",
+        f"There's a Notable Stellar Phenomenon in {system}. Drop in at it and scan something there with the composition scanner.",
+        [obj.make("phenomenon", label="Investigate the phenomenon", address=facts["address"])],
+        key=f"nsp:{facts['address']}", score=52, fields={"system": system},
+        why=[_why("A Notable Stellar Phenomenon signal in this system", "Your FSS (journal)")],
+        target={"system": system, "address": facts["address"]},
+    )]
+
+
+def nova_uncharted(facts):
+    """Systems nobody has discovered: well out past the bubble, where they still are."""
+    if facts.get("docked") or float(facts.get("home_ly") or 0) < 500:
+        return []
+    day = int(float(facts.get("now") or time.time()) // 86400)
+    return [draft(
+        "uncharted", "Five uncharted systems", "Five systems nobody has ever discovered. Their stars become ours.",
+        [obj.make("discover", 5, label="Undiscovered systems", stars=True, main_star=True)], key=f"uncharted:{day}", score=38,
+        fields={"count": 5, "system": facts.get("system")},
+        why=[_why(f"{facts.get('system')} is {_ly(facts.get('home_ly'))} from home", "Your journal")],
     )]
 
 
@@ -437,7 +467,8 @@ def watcher_errand(facts):
 
 GENERATORS = (lyra_bio_hunt, lyra_cash_bio, axiom_map_worlds, axiom_first_discoveries, axiom_finish_system,
               meridian_neutron, meridian_new_region, meridian_record, aster_sell_price, aster_cash_carto,
-              aster_colony, aster_merits, watcher_place, watcher_errand, nova_new_codex, nova_closer_look)
+              aster_colony, aster_merits, watcher_place, watcher_errand, nova_new_codex, nova_closer_look,
+              nova_phenomenon, nova_uncharted)
 
 
 def candidates(facts, *, categories=DEFAULT_CATEGORIES, watcher=True, muted=lambda officer, kind: False,
@@ -469,9 +500,9 @@ def candidates(facts, *, categories=DEFAULT_CATEGORIES, watcher=True, muted=lamb
 # What fits each watch duty (core.crew_rota duties).
 DUTY_KINDS = {
     "docked": {"sell_price", "colony", "merits", "neutron", "new_region"},
-    "scanning": {"map_worlds", "finish_system", "first_discoveries"},
+    "scanning": {"map_worlds", "finish_system", "first_discoveries", "phenomenon", "closer_look"},
     "surface": {"bio_hunt", "cash_bio"},
     "route": {"neutron", "record_far", "new_region"},
-    "deep": {"place", "errand", "first_discoveries", "bio_hunt"},
+    "deep": {"place", "errand", "first_discoveries", "bio_hunt", "uncharted", "new_codex"},
     "flight": {"cash_bio", "cash_carto", "bio_hunt", "record_far"},
 }

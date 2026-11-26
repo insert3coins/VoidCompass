@@ -12,8 +12,8 @@
   const overlay = params.get("overlay") || "stream-chat";
   const ids = ["stream", "content", "stream-head", "stream-banner", "stream-game", "stream-cards", "stream-lines", "stream-hint", "stream-credits"];
   const dom = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
-  const OFFICERS = ["watcher", "aster", "axiom", "meridian", "lyra", "nova"];
-  const OFFICER_HUE = {watcher: "#e0574f", aster: "#d9a441", axiom: "#8f9bff", meridian: "#3fbf8f", lyra: "#74ddff", nova: "#e3b0ff"};
+  const OFFICERS = ["watcher", "aster", "axiom", "meridian", "lyra", "nova", "parallax", "rivet"];
+  const OFFICER_HUE = {watcher: "#e0574f", aster: "#d9a441", axiom: "#8f9bff", meridian: "#3fbf8f", lyra: "#74ddff", nova: "#e3b0ff", parallax: "#6fe8df", rivet: "#e0915a"};
   const DESIGN_WIDTH = 420, MIN_HEIGHT = 48;
   const BADGES = {broadcaster: "◆", mod: "⚔", sub: "★"};
   // Twitch's roles as coloured initials, when there's no badge picture.

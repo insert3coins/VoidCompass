@@ -203,7 +203,8 @@ class AsterMind(watcher_mind.WatcherMind):
             return self.random.choice(fresh)[:2]
         # Its interests make it speak up more, not repeat itself: once the
         # lines for an everyday topic are used, it still goes quiet on it.
-        if watcher_mind.IMPORTANCE.get(topic, 1) < 2:
+        # 5.8.6: what you do yourself (DEEDS) goes round again instead.
+        if watcher_mind.IMPORTANCE.get(topic, 1) < 2 and topic not in watcher_mind.DEEDS:
             fresh = [row for row in candidates
                      if not self._said_recently(row[0], 86400 if row[2] else 3 * 86400)
                      and text_fresh(row, 86400 if row[2] else 3 * 86400)]
@@ -251,10 +252,11 @@ class AsterMind(watcher_mind.WatcherMind):
             importance = max(importance, 2)
         now = self.clock()
         fields = dict(fields or {})
+        pace = watcher_mind.deed_pace(topic, self.config)
         if not force:
-            if importance < setting["minimum"] or (importance < 3 and now - self._last_spoke < setting["gap"]):
+            if importance < setting["minimum"] or (importance < 3 and now - self._last_spoke < (pace[0] if pace else setting["gap"])):
                 return None
-            rest = setting.get("rest", 1200)
+            rest = pace[1] if pace else setting.get("rest", 1200)
             if topic.startswith("idle_"):
                 rest = max(rest, watcher_mind.IDLE_REST_S)
             if topic == "idle_galnet":
@@ -515,13 +517,13 @@ class AsterMind(watcher_mind.WatcherMind):
         return None
 
     def _wish_fields(self):
-        place = self.persona.keepsakes.WISH["place"]
+        place = (self.persona.keepsakes.WISH or {}).get("place", "")
         return {"place": place, "Place": place[:1].upper() + place[1:]}
 
     def _wish(self, now):
         """Once its story reaches the right chapter, it asks to go somewhere."""
         spec = self.persona.keepsakes.WISH
-        if self.memory.get("pilgrimage"):
+        if not spec or self.memory.get("pilgrimage"):
             return None
         story = self.persona.story
         index = next((i for i, chapter in enumerate(story.chapters) if chapter["numeral"] == spec["after"]), None)

@@ -164,7 +164,7 @@ AFTER = {
                   ("lyra", "My favourite part was the fuel. It never once dropped below a fifth. Never once."),
                   ("axiom", "I've counted the systems we passed. I'll tell you the number one day. It's big."),
                   ("watcher", "We came back different. Ships do. People too. I think."),
-                  ("nova", "I wasn't built for voyages that long. I've been thinking about the halfway stars ever since.")),
+                  ("nova", "A voyage that long. I've been thinking about the halfway stars ever since.")),
     "clean_sheet": (("axiom", "I still have the region open in a window. Ten systems, whole. I check it sometimes."),
                     ("meridian", "Those ten names on the chart are ours. Somebody will fly past them one day and wonder."),
                     ("aster", "Universal Cartographics sent a receipt. I've framed it. Figuratively."),

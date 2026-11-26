@@ -40,7 +40,7 @@ ARRIVALS = {"FSDJump", "CarrierJump", "Location"}
 
 def _fresh_place():
     return {"address": None, "system": "", "arrived_at": 0.0, "bodies": {}, "body_count": 0, "fss_done": False,
-            "undiscovered": False, "bio_signals": 0}
+            "undiscovered": False, "bio_signals": 0, "nsp": 0}
 
 
 class DashboardOrdersMixin:
@@ -158,6 +158,11 @@ class DashboardOrdersMixin:
                 place["system"] = raw["SystemName"]
         elif event == "FSSAllBodiesFound":
             place["fss_done"] = True
+        elif event == "FSSSignalDiscovered":
+            # 5.8.6: a Notable Stellar Phenomenon here (Nova's orders).
+            name = str(raw.get("SignalName") or "")
+            if name.startswith("$Fixed_Event_Life_") or "notable stellar" in str(raw.get("SignalName_Localised") or "").casefold():
+                place["nsp"] = int(place.get("nsp") or 0) + 1
         elif event in {"FSSBodySignals", "SAASignalsFound"}:
             bio = sum(int(row.get("Count") or 0) for row in raw.get("Signals") or ()
                       if isinstance(row, dict) and "biological" in str(row.get("Type") or "").casefold())
@@ -308,6 +313,7 @@ class DashboardOrdersMixin:
             "body_count": 0 if place.get("fss_done") else int(place.get("body_count") or 0),
             "bodies_found": sum(1 for row in place["bodies"].values() if row.get("type") and "belt" not in str(row.get("name", "")).casefold()),
             "bio_signals_here": int(place.get("bio_signals") or 0),
+            "nsp_here": int(place.get("nsp") or 0),
             "cargo_capacity": self._active_cargo_capacity() if hasattr(self, "_active_cargo_capacity") else 0,
             "route": route, "power": self._orders_power(),
         }
@@ -479,6 +485,13 @@ class DashboardOrdersMixin:
     def _orders_maybe_offer(self, now, force=False):
         ledger = self.order_ledger
         session = self._orders_session()
+        # 5.8.6: Nova watching in silence, or waiting on "Who are you?": nothing is
+        # offered (or relayed through her) until she's been answered.
+        mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        holding = getattr(mind, "observing", None)
+        if callable(holding) and holding():
+            self._orders_why = f"{companions.name(self.config)} hasn't introduced herself yet"
+            return False
         if not force:
             allowed, why = pacing.may_offer(self._orders_pacing_facts(now), ledger.offers(), now, self.config, session)
             self._orders_why = why
@@ -579,12 +592,14 @@ class DashboardOrdersMixin:
             order["last_line"] = {"speaker": speaker, "text": text, "at": time.time()}
         if mind is None or not hasattr(mind, "order_line"):
             return text
-        say_as, words, heading = speaker, text, order_lines.heading(speaker, topic)
+        # The heading follows whose order it is (Nova asks; the others order), not who speaks.
+        say_as, words, heading = speaker, text, order_lines.heading((order or {}).get("officer") or speaker, topic)
         on_watch = companions.identity(self.config)
         if speaker != on_watch and not self._orders_voice(speaker) and self._orders_voice(on_watch):
             relay = {"offer": "relay_offer", "done": "relay_done"}.get(kind, "relay_news")
             relayed = order_lines.pick(on_watch, relay, {"officer": order_lines.NAMES.get(speaker, speaker),
-                                                         "title": fields.get("title") or ""}, self.config, memory)
+                                                         "title": fields.get("title") or ""}, self.config, memory,
+                                       avoid=order_lines.NOT_AN_ORDER if speaker == "nova" else None)
             if relayed:
                 say_as, words = on_watch, relayed
         try:
@@ -771,8 +786,11 @@ class DashboardOrdersMixin:
         log = getattr(self, "captains_log", None)
         if log is not None and hasattr(log, "add_manual_highlight"):
             try:
-                log.add_manual_highlight("ORDER", f"Order complete: {order.get('title')}",
-                                         f"For {order_lines.NAMES.get(order.get('officer'), 'the crew')}")
+                if order.get("officer") == "nova":
+                    log.add_manual_highlight("REQUEST", f"Helped Nova: {order.get('title')}", "Something she asked for")
+                else:
+                    log.add_manual_highlight("ORDER", f"Order complete: {order.get('title')}",
+                                             f"For {order_lines.NAMES.get(order.get('officer'), 'the crew')}")
             except Exception:
                 logging.debug("Captain's Log order note skipped", exc_info=True)
 
@@ -1186,6 +1204,9 @@ class DashboardOrdersMixin:
         stage = next((row for row in view["stages"] if row["current"]), None)
         steps = [row for row in view["objectives"] if not row["done"]] or view["objectives"][:1]
         tag = "NEW ORDER" if offer else ("CAMPAIGN" if order.get("size") == "campaign" else "LONG ORDER" if order.get("size") == "long" else "ORDER")
+        if order.get("officer") == "nova" and order.get("size") != "campaign":
+            # 5.8.6: Nova asks for help rather than giving orders.
+            tag = "NOVA ASKS" if offer else "LONG REQUEST" if order.get("size") == "long" else "REQUEST"
         return {
             "id": order.get("id"), "plot": bool(view.get("target")),
             "state": "offer" if offer else "active", "tag": tag, "title": view["title"], "officer": view["officer"],

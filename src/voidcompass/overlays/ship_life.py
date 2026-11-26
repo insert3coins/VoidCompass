@@ -412,6 +412,17 @@ for _identity, _banks in _docking.PERSONAS.items():
     PERSONAS[_identity]["plain"].update(_banks["plain"])
     PERSONAS[_identity]["voiced"].update(_banks["voiced"])
 
+# 5.8.6: coming and going (back aboard, lift-off, the concourse). Their lines
+# only: watcher_mind raises them itself (see boarding_talk).
+from voidcompass.overlays import boarding_talk as _boarding  # noqa: E402
+
+IMPORTANCE.update(_boarding.IMPORTANCE)
+WATCHER_NORMAL.update(_boarding.WATCHER_NORMAL)
+WATCHER_WEARY.update(_boarding.WATCHER_WEARY)
+for _identity, _banks in _boarding.PERSONAS.items():
+    PERSONAS[_identity]["plain"].update(_banks["plain"])
+    PERSONAS[_identity]["voiced"].update(_banks["voiced"])
+
 # 5.7.6: the rest of the journal worth a word (life_events), as everyday life.
 from voidcompass.overlays import life_events as _life_more  # noqa: E402
 

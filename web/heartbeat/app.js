@@ -171,7 +171,7 @@
       }).then((response) => response.arrayBuffer()).catch(() => {});
     });
     showThought(model.thought, asterReduced, showing !== "watcher" ? shown.orb.accent : shown.orb?.eye, model.personality, showing);
-    const companionLabel = {aster:"Aster",axiom:"Axiom",meridian:"Meridian",lyra:"Lyra",nova:"Nova"}[showing] || "Journal watcher";
+    const companionLabel = {aster:"Aster",axiom:"Axiom",meridian:"Meridian",lyra:"Lyra",nova:"Nova",parallax:"Parallax",rivet:"Rivet"}[showing] || "Journal watcher";
     const label = stalled ? `${companionLabel}: feed quiet`
       : orb.lastEvent ? `${companionLabel}: ${orb.lastEvent}` : companionLabel;
     root.setAttribute("aria-label", label);

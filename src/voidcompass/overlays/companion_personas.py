@@ -31,7 +31,7 @@ _SPEC = {
              "humour": ("Nova’s commentary", (("dry", "Playful"), ("off", "Assistant"))),
              "watch": "NOVA · OBSERVING", "advisory": "NOVA · ASSISTANCE", "reply": "NOVA'S REPLY",
              "asks": "NOVA ASKS", "pace": 1.0, "signature": "Nova",
-             "test": "Hello, Commander. This is Nova. Voice check complete. I wasn't built to explore, but I must admit, I'm starting to enjoy the view."},
+             "test": "Hello, Commander. This is Nova. Voice check complete. I think I rather like travelling."},
 }
 IDENTITIES = tuple(_SPEC)
 _CACHE = {}

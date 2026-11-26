@@ -36,7 +36,7 @@ Fixed focus keeps her head still; the expression still shows in her face. Idle a
 
 **Overlay Studio → Companion** offers the shared display controls:
 
-- Sizes: **54, 72, 96, 144, 192 and 256 px**.
+- Sizes: **54, 72, 96, 120, 144, 192 and 256 px**.
 - **Lyra aurora**: cyan `#74ddff` with rose `#ec9fdb` accents. Theme accent, Ice cyan and Brass are also available. The shell stays pearl while the optics, lights and frame follow the palette.
 - Fixed, Tracking or Expressive focus; Calm, Standard or Lively animation; idle animation; and the shared frame rate.
 

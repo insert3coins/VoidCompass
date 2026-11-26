@@ -7,6 +7,8 @@ export const SIGNATURES = {
   meridian: {label:"Meridian gold",primary:"#e8c48c",secondary:"#74bbff"},
   lyra: {label:"Lyra aurora",primary:"#74ddff",secondary:"#ec9fdb"},
   nova: {label:"Nova ice",primary:"#8fd8ff",secondary:"#e6ecff"},
+  parallax: {label:"Parallax gyro",primary:"#6fe8df",secondary:"#a98bff"},
+  rivet: {label:"Rivet copper",primary:"#e0915a",secondary:"#8fe0c4"},
 };
 
 export function companionColours(identity, accent, theme) {

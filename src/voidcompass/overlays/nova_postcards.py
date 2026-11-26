@@ -1,4 +1,4 @@
-"""Nova's postcard hand: a prototype learning why people stop to look."""
+"""Nova's postcard hand: an assistance program learning why people stop to look."""
 from voidcompass.overlays import companion_postcards
 
 SIGNATURE = "Nova"
@@ -39,7 +39,7 @@ PLAIN = {
     ),
     "docked": (
         "{place}. Docked, and busy, and full of people's lights.",
-        "Alongside at {place}. Stations always sound like a lab I used to know.",
+        "Alongside at {place}. Stations always sound so busy. I like listening.",
         "{place}. A safe berth and a good window.",
     ),
     "star": (
@@ -51,7 +51,7 @@ DRY = {
     "any": (
         "{place}. I've run the numbers on stopping here. There's no efficiency in it at all. Lovely.",
         "Observation: {place}. Conclusion: I see why you do this.",
-        "{place}. I wasn't built to enjoy views. I've been told that's a bug. I'm not filing a report.",
+        "{place}. I'm not sure anyone meant me to enjoy views. I do anyway. I'm not filing a report.",
         "I took this picture before you asked. Help before you're asked. I'm fairly sure that applies to postcards.",
         "{place}. Filed under detours, which is quickly becoming my largest folder.",
     ),
@@ -60,11 +60,11 @@ DRY = {
         "Nobody before us at {place}. I've checked. I'm still a little delighted.",
     ),
     "rare": (
-        "A {kind}. I'd like to say I'm composed about this. I'm not. I'm a prototype. We're allowed to be excited.",
+        "A {kind}. I'd like to say I'm composed about this. I'm not. I'm an assistance program. We're allowed to be excited, I've decided.",
         "{place}. I asked myself why this one feels different. I don't have an answer. I'm keeping the question.",
     ),
     "far": (
-        "{far} light years out. I wasn't built to come this far. I'm starting to think that was an oversight.",
+        "{far} light years out. I'd like to see how much further we can go.",
         "{place}. A very long way from where I was made. Further every day.",
     ),
     "landed": (

@@ -1,0 +1,2570 @@
+{
+  "library_id": "nova_scientific_knowledge",
+  "version": "1.0.1",
+  "locale": "en-GB",
+  "reviewed_on": "2026-11-25",
+  "unlock": {
+    "chapter": "VIII",
+    "entry": "48C",
+    "status": "Completed",
+    "permanent": true
+  },
+  "categories": {
+    "AST": "Stellar Astronomy",
+    "PLA": "Planetary Science",
+    "EXO": "Exobiology",
+    "GAL": "Galactic Geography",
+    "LOC": "Notable Locations & Phenomena"
+  },
+  "sources": {
+    "types": {
+      "scope": "science",
+      "title": "NASA · Types of Stars",
+      "url": "https://science.nasa.gov/universe/stars/types/"
+    },
+    "spectra": {
+      "scope": "science",
+      "title": "NASA · Stars in an Exoplanet World",
+      "url": "https://science.nasa.gov/exoplanets/stars/"
+    },
+    "chart": {
+      "scope": "science",
+      "title": "NASA · Spectral Classification of Stars",
+      "url": "https://assets.science.nasa.gov/content/dam/science/hpd/heat/space-math/5Page43.pdf"
+    },
+    "dwarfs": {
+      "scope": "science",
+      "title": "Caltech/IPAC · 2MASS L and T dwarfs",
+      "url": "https://irsa.ipac.caltech.edu/data/2MASS/docs/overview/dwarfs.html"
+    },
+    "gloss": {
+      "scope": "science",
+      "title": "NASA · Universe Glossary",
+      "url": "https://science.nasa.gov/universe/glossary/"
+    },
+    "lifecycle": {
+      "scope": "science",
+      "title": "NASA · Webb Star Lifecycle",
+      "url": "https://science.nasa.gov/mission/webb/star-lifecycle/"
+    },
+    "herbig": {
+      "scope": "science",
+      "title": "Guzmán-Díaz et al. · Herbig Ae/Be census using Gaia EDR3",
+      "url": "https://doi.org/10.1051/0004-6361/202039519"
+    },
+    "tauri": {
+      "scope": "science",
+      "title": "Eisner et al. · Observations of young stars",
+      "url": "https://academic.oup.com/mnras/article/447/1/202/989808"
+    },
+    "carbon": {
+      "scope": "science",
+      "title": "NASA/ESA Hubble · Dying stars in a nearby galaxy",
+      "url": "https://science.nasa.gov/asset/hubble/hubble-surveys-dying-stars-in-nearby-galaxy/"
+    },
+    "stype": {
+      "scope": "science",
+      "title": "Green · S stars and their spectral signatures",
+      "url": "https://hea-www.harvard.edu/~pgreen/Papers/Sstars11.pdf"
+    },
+    "flares": {
+      "scope": "science",
+      "title": "NASA · Solar Storms and Flares",
+      "url": "https://science.nasa.gov/sun/solar-storms-and-flares/"
+    },
+    "jet": {
+      "scope": "science",
+      "title": "NASA · Webb observes a stellar jet",
+      "url": "https://science.nasa.gov/missions/webb/nasas-webb-observes-immense-stellar-jet-on-outskirts-of-our-milky-way/"
+    },
+    "shell": {
+      "scope": "science",
+      "title": "NASA · Hubble observes glowing shells of gas",
+      "url": "https://science.nasa.gov/missions/hubble/hubble-observes-glowing-fiery-shells-of-gas/"
+    },
+    "exofacts": {
+      "scope": "science",
+      "title": "NASA · Exoplanets In Depth",
+      "url": "https://science.nasa.gov/exoplanets/facts/"
+    },
+    "planets": {
+      "scope": "science",
+      "title": "NASA · Planet Types",
+      "url": "https://science.nasa.gov/exoplanets/planet-types/"
+    },
+    "solar": {
+      "scope": "science",
+      "title": "NASA · Solar System Facts",
+      "url": "https://science.nasa.gov/solar-system/solar-system-facts/"
+    },
+    "ocean": {
+      "scope": "science",
+      "title": "NASA · Ocean Worlds",
+      "url": "https://science.nasa.gov/solar-system/ocean-worlds/"
+    },
+    "hz": {
+      "scope": "science",
+      "title": "NASA · The Habitable Zone",
+      "url": "https://science.nasa.gov/exoplanets/habitable-zone/"
+    },
+    "exogloss": {
+      "scope": "science",
+      "title": "NASA · Exoplanet Glossary",
+      "url": "https://science.nasa.gov/exoplanets/glossary/"
+    },
+    "venus": {
+      "scope": "science",
+      "title": "NASA · Venus Facts",
+      "url": "https://science.nasa.gov/venus/venus-facts/"
+    },
+    "mars": {
+      "scope": "science",
+      "title": "NASA · Mars Facts",
+      "url": "https://science.nasa.gov/mars/facts/"
+    },
+    "saturn": {
+      "scope": "science",
+      "title": "NASA · Saturn Facts",
+      "url": "https://science.nasa.gov/saturn/facts/"
+    },
+    "rogue": {
+      "scope": "science",
+      "title": "NASA Scientific Visualization Studio · Rogue Planet",
+      "url": "https://svs.gsfc.nasa.gov/13644/"
+    },
+    "journal": {
+      "scope": "game",
+      "title": "Frontier Developments · Player Journal Manual v37",
+      "url": "https://hosting.zaonce.net/community/journal/v37/Journal_Manual_v37.pdf"
+    },
+    "guide": {
+      "scope": "game",
+      "title": "New Pilots Initiative · Odyssey Exploration & Exobiology",
+      "url": "https://newp.io/ody-exploration"
+    },
+    "sampler": {
+      "scope": "game",
+      "title": "Elite Dangerous Wiki · Genetic Sampler",
+      "url": "https://elite-dangerous.fandom.com/wiki/Genetic_Sampler"
+    },
+    "bio": {
+      "scope": "game",
+      "title": "Canonn Bioforge · Codex Data Explorer",
+      "url": "https://bioforge.canonn.tech/"
+    },
+    "species": {
+      "scope": "game",
+      "title": "Elite Dangerous Wiki · Exobiologist (taxonomy and field traits)",
+      "url": "https://elite-dangerous.fandom.com/wiki/Exobiologist"
+    },
+    "electric": {
+      "scope": "game",
+      "title": "Elite Dangerous Wiki · Electricae (field records)",
+      "url": "https://elite-dangerous.fandom.com/wiki/Electricae"
+    },
+    "osseus": {
+      "scope": "game",
+      "title": "Elite Dangerous Wiki · Osseus (field records)",
+      "url": "https://elite-dangerous.fandom.com/wiki/Osseus"
+    },
+    "recepta": {
+      "scope": "game",
+      "title": "Elite Dangerous Codex All Species · Codex mirror",
+      "url": "https://edcas.de/codex/all-species"
+    },
+    "maps": {
+      "scope": "game",
+      "title": "Canonn · Interactive Phenomena and Site Maps",
+      "url": "https://map.canonn.tech/"
+    },
+    "biosig": {
+      "scope": "science",
+      "title": "NASA · Avoiding False Positives in the Search for Living Worlds",
+      "url": "https://science.nasa.gov/universe/exoplanets/life-or-illusion-avoiding-false-positives-in-the-search-for-living-worlds/"
+    },
+    "extreme": {
+      "scope": "science",
+      "title": "NASA Astrobiology · Conditions Life Can Survive In",
+      "url": "https://science.nasa.gov/astrobiology/learning-resources/alp/conditions-can-life-survive-in/"
+    },
+    "astrobiology": {
+      "scope": "science",
+      "title": "NASA · Astrobiology at NASA",
+      "url": "https://science.nasa.gov/astrobiology/at-nasa/"
+    },
+    "galaxies": {
+      "scope": "science",
+      "title": "NASA · Galaxy Types",
+      "url": "https://science.nasa.gov/universe/galaxies/types/"
+    },
+    "milky": {
+      "scope": "science",
+      "title": "NASA · The Milky Way Galaxy",
+      "url": "https://science.nasa.gov/resource/the-milky-way-galaxy/"
+    },
+    "centre": {
+      "scope": "science",
+      "title": "NASA · What Is the Center of Our Galaxy Like?",
+      "url": "https://science.nasa.gov/mission/webb/science-overview/science-explainers/what-is-the-center-of-our-galaxy-like/"
+    },
+    "nebulae": {
+      "scope": "science",
+      "title": "NASA Hubble · Nebulae",
+      "url": "https://science.nasa.gov/mission/hubble/science/universe-uncovered/hubble-nebulae/"
+    },
+    "clusters": {
+      "scope": "science",
+      "title": "NASA · Star Clusters",
+      "url": "https://science.nasa.gov/universe/stars/star-clusters-inside-the-universes-stellar-collections/"
+    },
+    "large": {
+      "scope": "science",
+      "title": "NASA · Large-Scale Structures",
+      "url": "https://science.nasa.gov/universe/galaxies/large-scale-structures/"
+    },
+    "regions": {
+      "scope": "game",
+      "title": "Elite Dangerous Wiki · Galactic Regions (Codex map breakdown)",
+      "url": "https://elite-dangerous.fandom.com/wiki/Galactic_regions"
+    },
+    "bubble": {
+      "scope": "game",
+      "title": "EDSM · Sightseeing From The Bubble To Colonia",
+      "url": "https://www.edsm.net/en/galactic-routes/show/id/1700/name/Sightseeing%2BFrom%2BThe%2BBubble%2BTo%2BColonia"
+    },
+    "colonia": {
+      "scope": "game",
+      "title": "EDSM · Colonia System",
+      "url": "https://www.edsm.net/en_GB/system/id/3384966/name/Colonia"
+    },
+    "eht": {
+      "scope": "science",
+      "title": "ESO/EHT · First Image of Sagittarius A*",
+      "url": "https://www.eso.org/public/science/EHT-MilkyWay/"
+    },
+    "eRoute": {
+      "scope": "game",
+      "title": "EDSM · Colonia, Sagittarius A* and Beagle Point Route",
+      "url": "https://www.edsm.net/en/galactic-routes/show/id/1180/name/Colonia%2B%7C%2BSag%2BA%2B%7C%2BBeagle%2BPoint%2B%7C%2BColonia%2B%7C%2BSol"
+    },
+    "beagle": {
+      "scope": "game",
+      "title": "EDSM · Beagle Point System",
+      "url": "https://www.edsm.net/en/system/id/124406/name/Beagle%20Point"
+    },
+    "annihilator": {
+      "scope": "game",
+      "title": "EDSM · Great Annihilator System",
+      "url": "https://www.edsm.net/en/system/id/65259/name/Great%2BAnnihilator"
+    },
+    "realann": {
+      "scope": "science",
+      "title": "NASA Swift · Monitored Black Holes and Candidates",
+      "url": "https://swift.gsfc.nasa.gov/results/transients/BlackHoles.html"
+    },
+    "anchorage": {
+      "scope": "game",
+      "title": "EDSM · Explorer's Anchorage Station Record",
+      "url": "https://www.edsm.net/en/system/stations/id/39180/name/Stuemeae%2BFG-Y%2Bd7561/details/idS/63917/nameS/Explorer%27s%2BAnchorage"
+    },
+    "orion": {
+      "scope": "science",
+      "title": "NASA Hubble · The Orion Nebula",
+      "url": "https://science.nasa.gov/asset/hubble/orion-nebula-3/"
+    },
+    "pillars": {
+      "scope": "science",
+      "title": "NASA Hubble · The Pillars of Creation",
+      "url": "https://science.nasa.gov/asset/hubble/the-pillars-of-creation-a-3d-multiwavelength-exploration/"
+    },
+    "crab": {
+      "scope": "science",
+      "title": "NASA Hubble · Core of the Crab Nebula",
+      "url": "https://science.nasa.gov/asset/hubble/core-of-the-crab-nebula/"
+    },
+    "pleiades": {
+      "scope": "science",
+      "title": "NASA Hubble · Messier 45",
+      "url": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-45/"
+    },
+    "proxima": {
+      "scope": "science",
+      "title": "NASA/ESA Hubble · Proxima Centauri",
+      "url": "https://science.nasa.gov/asset/hubble/proxima-centauri/"
+    },
+    "betel": {
+      "scope": "science",
+      "title": "NASA Hubble · Time Travel and Betelgeuse",
+      "url": "https://science.nasa.gov/mission/hubble/science/science-behind-the-discoveries/time-travel-observing-cosmic-history/"
+    },
+    "trappist": {
+      "scope": "science",
+      "title": "NASA · Webb and TRAPPIST-1",
+      "url": "https://science.nasa.gov/mission/webb/science-overview/science-explainers/what-is-webb-revealing-about-the-trappist-1-system/"
+    },
+    "andromeda": {
+      "scope": "science",
+      "title": "NASA Hubble · Messier 31",
+      "url": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-31/"
+    },
+    "magellanic": {
+      "scope": "science",
+      "title": "NASA · Magellanic Clouds",
+      "url": "https://www.nasa.gov/universe/galaxies/magellanic-clouds/"
+    },
+    "lagrange": {
+      "scope": "science",
+      "title": "NASA · What Are Lagrange Points?",
+      "url": "https://science.nasa.gov/solar-system/resources/faq/what-are-lagrange-points/"
+    },
+    "ruins": {
+      "scope": "game",
+      "title": "Canonn · Guardian Ancient Ruins Survey",
+      "url": "https://ruins.canonn.tech/"
+    },
+    "barnacles": {
+      "scope": "game",
+      "title": "Canonn · Field Data and Thargoid Barnacle Categories",
+      "url": "https://github.com/canonn-science/CAPIv2-Strapi"
+    },
+    "kdwarf": {
+      "scope": "science",
+      "title": "NASA Hubble · Goldilocks Stars",
+      "url": "https://science.nasa.gov/missions/hubble/goldilocks-stars-are-best-places-to-look-for-life/"
+    },
+    "ydwarf": {
+      "scope": "science",
+      "title": "NASA JPL · WISE discovers Y dwarfs",
+      "url": "https://www.jpl.nasa.gov/news/nasas-wise-mission-discovers-coolest-class-of-stars/"
+    },
+    "planetdef": {
+      "scope": "science",
+      "title": "NASA · What Is a Planet?",
+      "url": "https://science.nasa.gov/solar-system/planets/what-is-a-planet/"
+    },
+    "marsorbit": {
+      "scope": "science",
+      "title": "NASA · Betelgeuse and the Crab Nebula",
+      "url": "https://science.nasa.gov/solar-system/skywatching/night-sky-network/betelgeuse-and-the-crab-nebula/"
+    },
+    "gaia": {
+      "scope": "science",
+      "title": "ESA Gaia · Guide to Our Galaxy",
+      "url": "https://www.esa.int/ga/articles/about-us/directorates/science/gaia/guide-to-our-galaxy"
+    },
+    "dw": {
+      "scope": "game",
+      "title": "EDSM · Distant Worlds Expedition (2016)",
+      "url": "https://www.edsm.net/en/expeditions/summary/id/1/name/Distant%2BWorlds%2BExpedition%2B%282016%29"
+    },
+    "carbonstudy": {
+      "scope": "science",
+      "title": "IAC · Witnessing the emergence of a carbon star",
+      "url": "https://www.iac.edu.es/en/science-and-technology/publications/witnessing-emergence-carbon-star"
+    },
+    "spiral": {
+      "scope": "science",
+      "title": "Grand et al. · The dynamics of stars around spiral arms",
+      "url": "https://arxiv.org/abs/1112.0019"
+    },
+    "gameplanets": {
+      "scope": "game",
+      "title": "Elite Dangerous Wiki · Planet class descriptions",
+      "url": "https://elite-dangerous.fandom.com/wiki/Planets"
+    },
+    "stratum": {
+      "scope": "game",
+      "title": "EDCAS · Stratum Codex index",
+      "url": "https://edcas.de/codex/stratum"
+    },
+    "neutron": {
+      "scope": "science",
+      "title": "NASA · Neutron Stars Are Weird",
+      "url": "https://science.nasa.gov/universe/stories/quick-reads/neutron-stars-are-weird/"
+    }
+  },
+  "entries": [
+    {
+      "id": "AST-001",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a star?",
+      "alternatives": [
+        "How does a star work?",
+        "What makes a star shine?"
+      ],
+      "keywords": [
+        "star",
+        "stellar fusion"
+      ],
+      "answer": "A star is an enormous ball of hot gas held together by gravity. For most of a star's life, nuclear fusion deep inside releases the energy that makes it shine. Our Sun is one of billions of stars in the Milky Way.",
+      "source_ids": [
+        "types"
+      ],
+      "fact_check": "Preserved the definition and solar example. Limited active fusion to the long-lived phase so the line also fits a library that covers stellar remnants."
+    },
+    {
+      "id": "AST-002",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "Why do stars have different colours?",
+      "alternatives": [
+        "Why are some stars blue and others red?",
+        "What determines a star's colour?"
+      ],
+      "keywords": [
+        "star colour",
+        "stellar temperature"
+      ],
+      "answer": "Mostly their surface temperature. The hottest stars appear blue or blue-white, while cooler stars glow orange or red. It's rather fascinating that a star's colour can tell us so much about it.",
+      "source_ids": [
+        "spectra"
+      ],
+      "fact_check": "Retained the spoken answer verbatim. Surface temperature is the principal factor in the intrinsic colour trend."
+    },
+    {
+      "id": "AST-003",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What are stellar spectral classes?",
+      "alternatives": [
+        "What do O, B, A, F, G, K and M mean?",
+        "How are stellar spectra classified?"
+      ],
+      "keywords": [
+        "spectral class",
+        "OBAFGKM"
+      ],
+      "answer": "They're a way of classifying stars by the patterns in their light, which tell us about their temperatures. O-type stars are the hottest, while M-type stars are the coolest of the main sequence. Our Sun belongs to class G.",
+      "source_ids": [
+        "spectra"
+      ],
+      "fact_check": "Retained the spoken answer verbatim. Read O–M in the context of the conventional sequence. Luminosity classes are covered in AST-028. The O to M sequence is ordered from hot to cool."
+    },
+    {
+      "id": "AST-004",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is an O-type star?",
+      "alternatives": [
+        "Tell me about O-class stars.",
+        "What makes O-type stars special?"
+      ],
+      "keywords": [
+        "O-type star",
+        "O-class star"
+      ],
+      "answer": "O-type stars are among the hottest. On the main sequence they're also among the most massive, shining with blue light and using their fuel so quickly that some live only a few million years.",
+      "source_ids": [
+        "spectra"
+      ],
+      "fact_check": "Qualified the mass and lifetime comparison as main sequence. Spectral type alone does not specify evolutionary state."
+    },
+    {
+      "id": "AST-005",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a B-type blue-white star?",
+      "alternatives": [
+        "Tell me about B-class stars.",
+        "What are B-type stars like?"
+      ],
+      "keywords": [
+        "B-type star",
+        "B-class star"
+      ],
+      "answer": "B-type stars are extremely hot and usually appear blue-white. On the main sequence they're much brighter and more massive than the Sun, and they use up their fuel much sooner.",
+      "source_ids": [
+        "spectra"
+      ],
+      "fact_check": "Kept the blue-white topic and qualified the mass, brightness and lifetime comparison as main sequence. Removed the colour-only alias because the colour overlaps with neighbouring types."
+    },
+    {
+      "id": "AST-006",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is an A-type white star?",
+      "alternatives": [
+        "Tell me about A-class stars.",
+        "What kind of star is Vega?"
+      ],
+      "keywords": [
+        "A-type star",
+        "A-class star"
+      ],
+      "answer": "A-type stars are hot, bright stars that usually appear white. They're hotter than our Sun, but cooler than the blue giants of classes O and B. Vega is a well-known example.",
+      "source_ids": [
+        "spectra",
+        "chart"
+      ],
+      "fact_check": "Revised the explanation for accessibility. Vega is a well-known A-type star. The temperature comparison refers to the standard stellar spectral sequence."
+    },
+    {
+      "id": "AST-007",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is an F-type star?",
+      "alternatives": [
+        "Tell me about F-class stars.",
+        "What are F-type stars like?"
+      ],
+      "keywords": [
+        "F-type star",
+        "F-class star"
+      ],
+      "answer": "F-type main-sequence stars are generally a little hotter and more massive than our Sun. They appear white to yellow-white and can remain stable for billions of years. Quite respectable lifetimes, by stellar standards.",
+      "source_ids": [
+        "spectra"
+      ],
+      "fact_check": "Scoped mass and lifetime to F-type main-sequence stars. Kept the closing line."
+    },
+    {
+      "id": "AST-008",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a G-type star?",
+      "alternatives": [
+        "What type of star is our Sun?",
+        "Tell me about G-class stars."
+      ],
+      "keywords": [
+        "G-type star",
+        "G-class star"
+      ],
+      "answer": "G-type stars include our own Sun. A G-type main-sequence star fuses hydrogen in its core and can shine steadily for billions of years.",
+      "source_ids": [
+        "spectra"
+      ],
+      "fact_check": "Kept the solar example. Replaced the claim about life developing with the better supported statement about core fusion and lifetime."
+    },
+    {
+      "id": "AST-009",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a K-type star?",
+      "alternatives": [
+        "What is an orange dwarf?",
+        "Tell me about K-class stars."
+      ],
+      "keywords": [
+        "K-type star",
+        "orange dwarf"
+      ],
+      "answer": "K-type dwarfs are cooler and usually smaller than our Sun, with an orange appearance. Many can shine steadily for tens of billions of years, giving their planetary systems a remarkably long time to evolve.",
+      "source_ids": [
+        "spectra",
+        "kdwarf"
+      ],
+      "fact_check": "Scoped size and longevity to K dwarfs. K-type spectra also occur in evolved stars."
+    },
+    {
+      "id": "AST-010",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is an M-type red dwarf?",
+      "alternatives": [
+        "What is a red dwarf?",
+        "Tell me about M-class dwarfs."
+      ],
+      "keywords": [
+        "M-type dwarf",
+        "red dwarf"
+      ],
+      "answer": "M-type red dwarfs are small, cool stars and the most common stars in our galaxy. They use their fuel very slowly, and models predict some will shine for trillions of years. An M-type spectrum can belong to a red giant too.",
+      "source_ids": [
+        "types"
+      ],
+      "fact_check": "Marked trillion-year lifetimes as theoretical and added the distinction between M dwarfs and M giants."
+    },
+    {
+      "id": "AST-011",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a brown dwarf?",
+      "alternatives": [
+        "Are brown dwarfs stars?",
+        "Why are brown dwarfs different from stars?"
+      ],
+      "keywords": [
+        "brown dwarf",
+        "substellar object"
+      ],
+      "answer": "A brown dwarf is an object more massive than most planets, but too light to sustain the hydrogen fusion that powers ordinary stars. It gradually cools as it ages and is usually easier to see in infrared light.",
+      "source_ids": [
+        "types"
+      ],
+      "fact_check": "Kept the sustained hydrogen-fusion criterion and cooling. Replaced the planet-to-star analogy with an infrared observation clue."
+    },
+    {
+      "id": "AST-012",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What are L, T and Y dwarfs?",
+      "alternatives": [
+        "What's the difference between L, T and Y dwarfs?",
+        "Tell me about Y-class dwarfs."
+      ],
+      "keywords": [
+        "L dwarf",
+        "T dwarf",
+        "Y dwarf"
+      ],
+      "answer": "These classes describe progressively cooler objects, many of them brown dwarfs. L includes a few very low-mass stars, while T and Y extend to cooler temperatures. These objects are easiest to study in infrared light.",
+      "source_ids": [
+        "dwarfs",
+        "ydwarf"
+      ],
+      "fact_check": "Kept the temperature sequence and infrared emphasis. Added the qualification that the warm end of class L includes some very low-mass stars."
+    },
+    {
+      "id": "AST-013",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "How are stars born?",
+      "alternatives": [
+        "Where do stars come from?",
+        "How does a star form?"
+      ],
+      "keywords": [
+        "star formation",
+        "stellar nursery"
+      ],
+      "answer": "Stars begin inside enormous clouds of gas and dust. Gravity pulls some of that material together, making it increasingly hot and dense. If the core gets hot enough for sustained hydrogen fusion, the star enters its main sequence.",
+      "source_ids": [
+        "types"
+      ],
+      "fact_check": "Distinguished protostar formation and earlier luminosity from the onset of sustained hydrogen burning."
+    },
+    {
+      "id": "AST-014",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a protostar?",
+      "alternatives": [
+        "What is a baby star?",
+        "Tell me about protostars."
+      ],
+      "keywords": [
+        "protostar",
+        "forming star"
+      ],
+      "answer": "A protostar is a star that's still forming. Gravity is pulling material together and heating it, but stable hydrogen fusion hasn't begun yet. Think of it as a star preparing for its first day on the job.",
+      "source_ids": [
+        "lifecycle"
+      ],
+      "fact_check": "Retained the spoken answer verbatim. Stable hydrogen fusion is the dividing line used here."
+    },
+    {
+      "id": "AST-015",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a T Tauri star?",
+      "alternatives": [
+        "Tell me about T Tauri stars.",
+        "Are T Tauri stars young?"
+      ],
+      "keywords": [
+        "T Tauri",
+        "T-Tauri"
+      ],
+      "answer": "A T Tauri star is a very young, relatively low-mass star that hasn't settled into its stable adult life yet. Its brightness can change, and it may still be gathering material from its surroundings. A rather restless youngster.",
+      "source_ids": [
+        "herbig",
+        "tauri"
+      ],
+      "fact_check": "Retained the spoken answer verbatim. Accretion is qualified with ‘may’ since it applies in particular to classical T Tauri stars."
+    },
+    {
+      "id": "AST-016",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a Herbig Ae/Be star?",
+      "alternatives": [
+        "Tell me about Herbig stars.",
+        "How are Herbig stars different from T Tauri stars?"
+      ],
+      "keywords": [
+        "Herbig Ae",
+        "Herbig Be"
+      ],
+      "answer": "Herbig Ae and Be stars are young stars, generally more massive and hotter than T Tauri stars. They're still approaching their stable adult phase and are often surrounded by gas and dust. Some of that material may eventually form planets.",
+      "source_ids": [
+        "herbig"
+      ],
+      "fact_check": "Retained the spoken answer verbatim. The Herbig Ae/Be census supports the mass contrast and disc material."
+    },
+    {
+      "id": "AST-017",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a red giant?",
+      "alternatives": [
+        "Why do stars become red giants?",
+        "Will our Sun become a red giant?"
+      ],
+      "keywords": [
+        "red giant",
+        "red giant phase"
+      ],
+      "answer": "A red giant is an aging star whose outer layers have expanded enormously after it used up the hydrogen in its core. Its surface becomes cooler and redder, even as the star grows much larger. Our Sun will become one in about five billion years.",
+      "source_ids": [
+        "types"
+      ],
+      "fact_check": "Retained the spoken answer verbatim. Five billion years is a rounded projection from present-day real-world astronomy."
+    },
+    {
+      "id": "AST-018",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a supergiant?",
+      "alternatives": [
+        "What is a red supergiant?",
+        "How big are supergiant stars?"
+      ],
+      "keywords": [
+        "supergiant",
+        "red supergiant"
+      ],
+      "answer": "Supergiants are exceptionally luminous stars, usually formed as massive stars evolve. Some red supergiants are so enormous that they'd extend beyond the orbit of Mars if placed where our Sun is. Rather inconvenient for the inner planets.",
+      "source_ids": [
+        "betel",
+        "types",
+        "marsorbit"
+      ],
+      "fact_check": "Limited the Mars size comparison to red supergiants. Described supergiants by luminosity and evolution without implying that all have the same radius."
+    },
+    {
+      "id": "AST-019",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a white dwarf?",
+      "alternatives": [
+        "What remains when a Sun-like star dies?"
+      ],
+      "keywords": [
+        "white dwarf",
+        "degenerate stellar remnant"
+      ],
+      "answer": "A white dwarf is the exposed core left after a star like the Sun sheds its outer layers. It can pack over half the Sun's mass into roughly the size of Earth and slowly cools as it radiates away stored heat.",
+      "source_ids": [
+        "types"
+      ],
+      "fact_check": "Uses the Sun-like evolution pathway. A typical white dwarf is of order Earth's size."
+    },
+    {
+      "id": "AST-020",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a supernova?",
+      "alternatives": [
+        "How can a star explode?"
+      ],
+      "keywords": [
+        "supernova",
+        "stellar explosion"
+      ],
+      "answer": "A supernova is an enormous stellar explosion. It can happen when a massive star's core collapses, or when a white dwarf undergoes runaway nuclear burning. Either way, the blast can briefly shine brighter than billions of stars.",
+      "source_ids": [
+        "gloss",
+        "types"
+      ],
+      "fact_check": "Covers core-collapse and thermonuclear supernovae. Peak luminosities vary."
+    },
+    {
+      "id": "AST-021",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a neutron star?",
+      "alternatives": [
+        "What is left when a stellar core collapses into neutron-rich matter?"
+      ],
+      "keywords": [
+        "neutron star",
+        "compact stellar core"
+      ],
+      "answer": "A neutron star is the compact core some massive stars leave behind when they collapse. It can pack more mass than the Sun into a sphere the size of a city. An exceptionally poor choice of paperweight.",
+      "source_ids": [
+        "types",
+        "neutron"
+      ],
+      "fact_check": "NASA's city-scale description refers to diameter and uses approximate masses."
+    },
+    {
+      "id": "AST-022",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a pulsar?",
+      "alternatives": [
+        "Why do pulsars pulse?"
+      ],
+      "keywords": [
+        "pulsar",
+        "cosmic lighthouse"
+      ],
+      "answer": "A pulsar is a spinning neutron star that sends out beams of radiation. If a beam sweeps past us on each rotation, we detect regular pulses, much like seeing the flash of a distant lighthouse.",
+      "source_ids": [
+        "types"
+      ],
+      "fact_check": "Pulse visibility depends on where the beam points. The compact star is rotating throughout."
+    },
+    {
+      "id": "AST-023",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a black hole?",
+      "alternatives": [
+        "How does a black hole trap light?",
+        "Tell me about black holes."
+      ],
+      "keywords": [
+        "black hole",
+        "event horizon"
+      ],
+      "answer": "A black hole is a region where gravity has curved spacetime so strongly that even light cannot escape from inside its boundary, the event horizon. We can still study black holes through their effects on surrounding matter and light.",
+      "source_ids": [
+        "gloss"
+      ],
+      "fact_check": "The event horizon is the boundary for escape to the outside universe. The answer avoids treating the hole as a material surface."
+    },
+    {
+      "id": "AST-024",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a Wolf-Rayet star?",
+      "alternatives": [
+        "Why do Wolf-Rayet stars have such strong winds?"
+      ],
+      "keywords": [
+        "Wolf-Rayet",
+        "WR star"
+      ],
+      "answer": "Wolf-Rayet stars are very hot stars with powerful winds that give their spectra distinctive bright emission lines. In many massive examples, those winds reveal layers that were once buried beneath the star's outer envelope.",
+      "source_ids": [
+        "gloss"
+      ],
+      "fact_check": "Broad emission lines and strong winds define the observational class. The exposed-envelope description is qualified for many massive examples."
+    },
+    {
+      "id": "AST-025",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a carbon star?",
+      "alternatives": [
+        "Why are carbon stars so red?"
+      ],
+      "keywords": [
+        "carbon star",
+        "carbon-rich giant"
+      ],
+      "answer": "A carbon star has more carbon than oxygen in its outer atmosphere. In many of these stars, carbon produced deeper inside has been mixed up to the surface, where carbon-bearing molecules help give the star a deep red appearance.",
+      "source_ids": [
+        "carbon",
+        "carbonstudy"
+      ],
+      "fact_check": "Sources cover carbon star as described in the linked reference."
+    },
+    {
+      "id": "AST-026",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is an S-type star?",
+      "alternatives": [
+        "What distinguishes an S star from a carbon star?"
+      ],
+      "keywords": [
+        "S-type star",
+        "zirconium oxide star"
+      ],
+      "answer": "An S-type star is a cool giant with distinctive spectral features, including bands from zirconium oxide. In many examples, the atmosphere has nearly as much carbon as oxygen. Its spectrum gives us a glimpse of that unusual chemistry.",
+      "source_ids": [
+        "stype"
+      ],
+      "fact_check": "S-type is a real stellar spectral designation. It is distinct from the unrelated S-type orbital designation."
+    },
+    {
+      "id": "AST-027",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a variable star?",
+      "alternatives": [
+        "Why does a star's brightness change?"
+      ],
+      "keywords": [
+        "variable star",
+        "stellar variability"
+      ],
+      "answer": "A variable star changes in apparent brightness over time. Some stars actually brighten and fade as they expand and contract, while others seem to dim when an orbiting companion passes in front.",
+      "source_ids": [
+        "gloss"
+      ],
+      "fact_check": "Pulsation is intrinsic variability. Eclipsing binaries exemplify apparent changes from geometry."
+    },
+    {
+      "id": "AST-028",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is the difference between a giant and a supergiant?",
+      "alternatives": [
+        "How do astronomers tell giants and supergiants apart?"
+      ],
+      "keywords": [
+        "giant versus supergiant",
+        "stellar luminosity class"
+      ],
+      "answer": "Supergiants are generally more luminous than giants. Astronomers distinguish their luminosity classes using clues in their spectra, including features affected by surface gravity. Colour alone can't tell you which one you're looking at.",
+      "source_ids": [
+        "gloss",
+        "types"
+      ],
+      "fact_check": "Luminosity class compares spectral features and is independent of the O–M temperature ordering."
+    },
+    {
+      "id": "AST-029",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a binary star system?",
+      "alternatives": [
+        "Can two stars orbit one another?"
+      ],
+      "keywords": [
+        "binary star",
+        "double star orbit"
+      ],
+      "answer": "In a binary system, two stars are held together by gravity and orbit a common centre of mass. Some pairs are so close that one star can transfer material to the other.",
+      "source_ids": [
+        "gloss"
+      ],
+      "fact_check": "A binary is gravitationally bound. The transfer example applies to sufficiently close systems."
+    },
+    {
+      "id": "AST-030",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a solar flare?",
+      "alternatives": [
+        "Why does the Sun produce flares?"
+      ],
+      "keywords": [
+        "solar flare",
+        "stellar flare"
+      ],
+      "answer": "A solar flare is a sudden burst of radiation from the Sun, powered by energy released when magnetic fields rapidly rearrange. Flares can happen on other stars too, where they're called stellar flares.",
+      "source_ids": [
+        "flares"
+      ],
+      "fact_check": "Magnetic energy release produces a radiation burst. A flare and a coronal mass ejection are distinct phenomena."
+    },
+    {
+      "id": "AST-031",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a stellar corona?",
+      "alternatives": [
+        "What is the Sun's outer atmosphere?"
+      ],
+      "keywords": [
+        "stellar corona",
+        "solar corona"
+      ],
+      "answer": "A corona is a star's outer atmosphere. The Sun's is made of very hot, thin plasma, and you can see it as a pale glow around the Moon during a total solar eclipse.",
+      "source_ids": [
+        "gloss"
+      ],
+      "fact_check": "The eclipse example applies to the solar corona. The bright photosphere is blocked by the Moon."
+    },
+    {
+      "id": "AST-032",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a stellar jet?",
+      "alternatives": [
+        "Why do some young stars shoot out jets?"
+      ],
+      "keywords": [
+        "stellar jet",
+        "protostellar outflow"
+      ],
+      "answer": "A stellar jet is a narrow stream of fast-moving material launched from near a star. Around a young star, jets can shoot out in opposite directions as material from a surrounding disc feeds the star.",
+      "source_ids": [
+        "jet"
+      ],
+      "fact_check": "The source describes a protostellar jet driven by material interacting near the star. The answer is scoped to young stars."
+    },
+    {
+      "id": "AST-033",
+      "category": "Stellar Astronomy",
+      "scope": "science",
+      "question": "What is a planetary nebula?",
+      "alternatives": [
+        "How does a planetary nebula form?"
+      ],
+      "keywords": [
+        "planetary nebula",
+        "ionised stellar shell"
+      ],
+      "answer": "A planetary nebula forms when a dying star like the Sun sheds its outer layers and the exposed hot core makes the gas glow. The name comes from its planet-like appearance in early telescopes. The planets can sit this one out.",
+      "source_ids": [
+        "shell"
+      ],
+      "fact_check": "Ionised gas glows around a hot remnant of a low- or intermediate-mass star. The name describes its historical appearance."
+    },
+    {
+      "id": "PLA-001",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is an exoplanet?",
+      "alternatives": [
+        "What counts as a planet beyond the Solar System?"
+      ],
+      "keywords": [
+        "exoplanet",
+        "extrasolar planet"
+      ],
+      "answer": "An exoplanet is a planet beyond our Solar System. Most known examples orbit other stars, and their variety is rather humbling: some are scorched giants and others are rocky worlds closer to Earth's size.",
+      "source_ids": [
+        "exofacts"
+      ],
+      "fact_check": "Definition and examples from NASA's exoplanet overview."
+    },
+    {
+      "id": "PLA-002",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is a rocky planet?",
+      "alternatives": [
+        "What is a terrestrial planet?"
+      ],
+      "keywords": [
+        "rocky planet",
+        "terrestrial planet"
+      ],
+      "answer": "A rocky planet is made mostly of rock and metal, with a solid surface beneath any atmosphere. Mercury, Venus, Earth and Mars are our local examples, and they show how differently rocky worlds can turn out.",
+      "source_ids": [
+        "planets"
+      ],
+      "fact_check": "Rock and metal distinguish terrestrial planets by bulk composition."
+    },
+    {
+      "id": "PLA-003",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is a super-Earth?",
+      "alternatives": [
+        "Does super-Earth mean Earth-like?"
+      ],
+      "keywords": [
+        "super-Earth",
+        "super Earth"
+      ],
+      "answer": "A super-Earth is a planet more massive than Earth and less massive than Neptune. That's a description of mass. Its surface, atmosphere and prospects for life are separate questions.",
+      "source_ids": [
+        "planets"
+      ],
+      "fact_check": "Mass category in NASA's exoplanet guide. Composition remains an independent question."
+    },
+    {
+      "id": "PLA-004",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is a gas giant?",
+      "alternatives": [
+        "What are planets like Jupiter made of?"
+      ],
+      "keywords": [
+        "gas giant",
+        "Jupiter-like planet"
+      ],
+      "answer": "A gas giant is a large planet made mostly of hydrogen and helium. Deeper down, the pressure rises until those familiar gases behave in unfamiliar ways. There is no solid surface like Earth's to stand on.",
+      "source_ids": [
+        "planets"
+      ],
+      "fact_check": "Hydrogen and helium dominate the giant planet. The interior description avoids assigning it a solid surface."
+    },
+    {
+      "id": "PLA-005",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is an ice giant?",
+      "alternatives": [
+        "Why are Uranus and Neptune called ice giants?"
+      ],
+      "keywords": [
+        "ice giant",
+        "Neptune-like planet"
+      ],
+      "answer": "Ice giants such as Uranus and Neptune contain a greater proportion of substances like water, ammonia and methane than Jupiter and Saturn do. In planetary science those ingredients are called ices, even when they're hot and under enormous pressure.",
+      "source_ids": [
+        "solar"
+      ],
+      "fact_check": "Water, ammonia and methane are planetary-science ices. Actual states vary with pressure and temperature."
+    },
+    {
+      "id": "PLA-006",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is a hot Jupiter?",
+      "alternatives": [
+        "How close can a gas giant orbit its star?"
+      ],
+      "keywords": [
+        "hot Jupiter",
+        "close-in gas giant"
+      ],
+      "answer": "A hot Jupiter is a gas giant that orbits very close to its star. Many complete an orbit in just a few days, so their years are short and their atmospheres receive an extraordinary amount of starlight.",
+      "source_ids": [
+        "planets"
+      ],
+      "fact_check": "Uses the established close-orbit term and a representative period range."
+    },
+    {
+      "id": "PLA-007",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is a dwarf planet?",
+      "alternatives": [
+        "Why is Pluto called a dwarf planet?"
+      ],
+      "keywords": [
+        "dwarf planet",
+        "Pluto classification"
+      ],
+      "answer": "A dwarf planet orbits the Sun directly and is massive enough for gravity to pull it into a nearly round shape. It hasn't cleared its orbital neighbourhood. Pluto is the familiar example out beyond Neptune.",
+      "source_ids": [
+        "solar",
+        "planetdef"
+      ],
+      "fact_check": "Uses the IAU Solar System definition through NASA. ‘Directly’ distinguishes orbiting the Sun from being a satellite."
+    },
+    {
+      "id": "PLA-008",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is an ocean world?",
+      "alternatives": [
+        "Can an ocean exist beneath ice?"
+      ],
+      "keywords": [
+        "ocean world",
+        "subsurface ocean"
+      ],
+      "answer": "An ocean world has a substantial body of liquid, sometimes hidden beneath a crust of ice. Europa and Enceladus are examples where evidence points to subsurface oceans, with energy from tidal flexing helping keep water liquid.",
+      "source_ids": [
+        "ocean"
+      ],
+      "fact_check": "NASA ocean-world evidence distinguishes subsurface water from exposed surface oceans."
+    },
+    {
+      "id": "PLA-009",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is the habitable zone?",
+      "alternatives": [
+        "What is the Goldilocks zone?"
+      ],
+      "keywords": [
+        "habitable zone",
+        "Goldilocks zone"
+      ],
+      "answer": "The habitable zone is the range of distances from a star where a rocky planet with a suitable atmosphere could have liquid water on its surface. It's a good place to look, and the atmosphere still has a great deal to say about the outcome.",
+      "source_ids": [
+        "hz"
+      ],
+      "fact_check": "A surface-water criterion with an atmosphere assumption. Compare PLA-008 for subsurface oceans."
+    },
+    {
+      "id": "PLA-010",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is tidal locking?",
+      "alternatives": [
+        "Why does the Moon keep the same face toward Earth?"
+      ],
+      "keywords": [
+        "tidal locking",
+        "synchronous rotation"
+      ],
+      "answer": "An object is tidally locked in synchronous rotation when it spins once in the time it takes to orbit its partner. That keeps the same side facing its companion, as the Moon does with Earth. It still rotates, just in step with its orbit.",
+      "source_ids": [
+        "exogloss"
+      ],
+      "fact_check": "Sources cover tidal locking as described in the linked reference."
+    },
+    {
+      "id": "PLA-011",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is tidal heating?",
+      "alternatives": [
+        "How can gravity warm a moon?"
+      ],
+      "keywords": [
+        "tidal heating",
+        "tidal flexing"
+      ],
+      "answer": "A moon can flex as the gravitational pull across it changes along its orbit. The repeated squeezing and stretching generates heat inside. On an icy world, that heat can help sustain an ocean beneath the surface.",
+      "source_ids": [
+        "ocean"
+      ],
+      "fact_check": "Tidally driven flexing supplies internal heat where changing stresses dissipate energy."
+    },
+    {
+      "id": "PLA-012",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is the greenhouse effect?",
+      "alternatives": [
+        "Why does an atmosphere trap heat?"
+      ],
+      "keywords": [
+        "greenhouse effect",
+        "atmospheric warming"
+      ],
+      "answer": "A greenhouse effect occurs when gases absorb some of the infrared radiation a planet's surface gives off and re-emit it. That leaves the surface warmer than it would otherwise be. Venus shows how powerful this can become.",
+      "source_ids": [
+        "venus"
+      ],
+      "fact_check": "Absorption and emission of infrared radiation describe the greenhouse effect. Venus provides a worked natural example."
+    },
+    {
+      "id": "PLA-013",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "Why is Venus hotter than Mercury?",
+      "alternatives": [
+        "How is Venus the hottest planet?"
+      ],
+      "keywords": [
+        "Venus temperature",
+        "Venus greenhouse"
+      ],
+      "answer": "Venus has a thick carbon dioxide atmosphere that produces an exceptionally strong greenhouse effect. Mercury orbits closer to the Sun, yet Venus has the hotter surface. Distance from a star is only part of the story.",
+      "source_ids": [
+        "venus"
+      ],
+      "fact_check": "NASA's comparison identifies the thick atmosphere and greenhouse warming as the reason for Venus's higher surface temperature."
+    },
+    {
+      "id": "PLA-014",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "Why is Mars red?",
+      "alternatives": [
+        "What gives Mars its rusty colour?"
+      ],
+      "keywords": [
+        "red planet",
+        "Mars colour"
+      ],
+      "answer": "Much of the dust on Mars contains iron oxides, the family of compounds that gives rust its colour. Fine dust covers large areas and can spread through the atmosphere, lending the planet its familiar reddish look.",
+      "source_ids": [
+        "mars"
+      ],
+      "fact_check": "NASA describes iron oxidation and widespread dust as the source of the colour."
+    },
+    {
+      "id": "PLA-015",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What are planetary rings made of?",
+      "alternatives": [
+        "Are Saturn's rings solid?"
+      ],
+      "keywords": [
+        "planetary rings",
+        "Saturn rings"
+      ],
+      "answer": "Planetary rings are swarms of independently orbiting particles. Saturn's rings consist mainly of water ice with some dust and rock, and the pieces range from tiny grains to much larger chunks.",
+      "source_ids": [
+        "saturn"
+      ],
+      "fact_check": "NASA describes mainly ice plus some rock and dust. Individual particles orbit independently."
+    },
+    {
+      "id": "PLA-016",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is an asteroid?",
+      "alternatives": [
+        "What is a minor rocky Solar System body?"
+      ],
+      "keywords": [
+        "asteroid",
+        "rocky minor body"
+      ],
+      "answer": "Asteroids are small bodies left over from the Solar System's formation. Many are rocky or metallic, and many orbit between Mars and Jupiter. That belt is a broad region of space with ample room between objects.",
+      "source_ids": [
+        "solar"
+      ],
+      "fact_check": "Main-belt location applies to many asteroids. The answer avoids implying a dense obstacle field."
+    },
+    {
+      "id": "PLA-017",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "Why does a comet grow a tail?",
+      "alternatives": [
+        "Why do comet tails point away from the Sun?"
+      ],
+      "keywords": [
+        "comet tail",
+        "comet coma"
+      ],
+      "answer": "As a comet warms near the Sun, its ices release gas and dust, forming a cloud around the nucleus. Sunlight pushes dust away while the solar wind shapes the ionised gas. The tails point broadly away from the Sun, even when the comet is heading outward.",
+      "source_ids": [
+        "solar",
+        "gloss"
+      ],
+      "fact_check": "Solar radiation pressure and solar wind act on different material. Direction is approximate, especially for a curved dust tail."
+    },
+    {
+      "id": "PLA-018",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "What is a rogue planet?",
+      "alternatives": [
+        "Can a planet travel without a star?"
+      ],
+      "keywords": [
+        "rogue planet",
+        "free-floating planet"
+      ],
+      "answer": "A rogue planet travels through space without orbiting a star. One way this can happen is through a gravitational encounter that ejects a planet from its original system. Finding such a faint wanderer takes a little ingenuity.",
+      "source_ids": [
+        "rogue"
+      ],
+      "fact_check": "NASA describes ejection as a possible origin. It is presented as one pathway."
+    },
+    {
+      "id": "PLA-019",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "How does the transit method find planets?",
+      "alternatives": [
+        "Why does a star dim when a planet crosses it?"
+      ],
+      "keywords": [
+        "planet transit",
+        "transit photometry"
+      ],
+      "answer": "When a planet crosses in front of its star from our viewpoint, it blocks a little starlight. Repeated dips can reveal the planet's orbital period, and the depth of a dip helps estimate its size if we know the star's size.",
+      "source_ids": [
+        "exofacts"
+      ],
+      "fact_check": "Depth depends on the fraction of the star's light blocked. The period comes from repeat timing."
+    },
+    {
+      "id": "PLA-020",
+      "category": "Planetary Science",
+      "scope": "science",
+      "question": "How does radial velocity reveal a planet?",
+      "alternatives": [
+        "Can a star's wobble reveal a planet?"
+      ],
+      "keywords": [
+        "radial velocity",
+        "Doppler wobble"
+      ],
+      "answer": "A planet tugs its star back and forth as they orbit their common centre of mass. That motion shifts the star's spectral lines slightly toward red and blue. The pattern can reveal an unseen planet and help constrain its mass.",
+      "source_ids": [
+        "exofacts"
+      ],
+      "fact_check": "Doppler shifts measure line-of-sight motion. Inclination can limit the mass inferred."
+    },
+    {
+      "id": "PLA-021",
+      "category": "Planetary Science",
+      "scope": "game",
+      "question": "What is an Earth-like World in Elite Dangerous?",
+      "alternatives": [
+        "What does ELW mean in the game?"
+      ],
+      "keywords": [
+        "Earth-like World",
+        "ELW"
+      ],
+      "answer": "In Elite Dangerous, Earth-like World is a planet class with a breathable atmosphere and native life. It's a broad classification. Two Earth-like Worlds can still differ in their gravity, temperature and other properties.",
+      "source_ids": [
+        "journal",
+        "gameplanets"
+      ],
+      "fact_check": "Frontier Scan event and planet-class appendix. The gameplay label is distinct from a real exoplanet habitability claim."
+    },
+    {
+      "id": "PLA-022",
+      "category": "Planetary Science",
+      "scope": "game",
+      "question": "What is a High Metal Content body in Elite Dangerous?",
+      "alternatives": [
+        "What does HMC mean on the system map?"
+      ],
+      "keywords": [
+        "High Metal Content body",
+        "HMC world"
+      ],
+      "answer": "In Elite Dangerous, High Metal Content is a planet class for solid bodies with a substantial metal component. The class describes the body's composition. Surface biology and landing suitability are separate pieces of exploration data.",
+      "source_ids": [
+        "journal",
+        "gameplanets"
+      ],
+      "fact_check": "Frontier Scan event and planet-class appendix. Landable, atmosphere and geological or biological signals are independent data."
+    },
+    {
+      "id": "PLA-023",
+      "category": "Planetary Science",
+      "scope": "game",
+      "question": "What is an Ammonia World in Elite Dangerous?",
+      "alternatives": [
+        "What does the game's Ammonia World class mean?"
+      ],
+      "keywords": [
+        "Ammonia World",
+        "ammonia planet class"
+      ],
+      "answer": "An Ammonia World is a planet where ammonia plays a role similar to water on Earth, forming lakes or oceans. In Elite Dangerous, these worlds can even support ammonia-based life. A rather different recipe for a living planet.",
+      "source_ids": [
+        "journal",
+        "gameplanets"
+      ],
+      "fact_check": "Describes the in-game Ammonia World classification, including ammonia-rich surface liquids and the possibility of ammonia-based life within Elite Dangerous lore."
+    },
+    {
+      "id": "PLA-024",
+      "category": "Planetary Science",
+      "scope": "game",
+      "question": "What is a Water World in Elite Dangerous?",
+      "alternatives": [
+        "What does Water World mean on the system map?"
+      ],
+      "keywords": [
+        "Water World",
+        "water planet class"
+      ],
+      "answer": "In Elite Dangerous, a Water World is a planet with large amounts of water, often covering much of its surface. Some may be suitable for terraforming, but that depends on more than just the presence of water.",
+      "source_ids": [
+        "journal",
+        "gameplanets"
+      ],
+      "fact_check": "Frontier Scan event and planet-class appendix. Planet class and TerraformState are separate values."
+    },
+    {
+      "id": "EXO-001",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is exobiology in Elite Dangerous?",
+      "alternatives": [
+        "How does on-foot biology sampling work?"
+      ],
+      "keywords": [
+        "Odyssey exobiology",
+        "on-foot biology"
+      ],
+      "answer": "In Elite Dangerous: Odyssey, exobiology lets you collect biological samples on foot. The Artemis suit carries a Genetic Sampler, and a completed set can be turned in at Vista Genomics. It's a field trip with rather better equipment.",
+      "source_ids": [
+        "guide",
+        "sampler"
+      ],
+      "fact_check": "The Odyssey guide and sampler record cover the Artemis loadout and Vista Genomics handoff."
+    },
+    {
+      "id": "EXO-002",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Stratum?",
+      "alternatives": [
+        "What are those low Stratum colonies in Odyssey?"
+      ],
+      "keywords": [
+        "Stratum",
+        "Stratum colonies"
+      ],
+      "answer": "In Odyssey, Stratum is a genus of low-growing organisms that spread in broad patches across the ground. Different species can share that low profile, so the overall shape is a clue to the genus and the sampler can confirm the identification.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta",
+        "stratum"
+      ],
+      "fact_check": "Codex genus Stratum. Low layered patches are a visual cue. Stratum Tectonicas is one species in this genus."
+    },
+    {
+      "id": "EXO-003",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Bacterium?",
+      "alternatives": [
+        "What are Bacterium colonies in Odyssey?"
+      ],
+      "keywords": [
+        "Bacterium",
+        "Bacterium colonies"
+      ],
+      "answer": "In Odyssey, Bacterium is a genus of microbial colonies that can look like flat stains on the ground. Depending on the surface and lighting, they can be easy to miss. Apparently camouflage doesn't require legs.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Codex genus Bacterium. Field descriptions support the flat, stain-like forms. Capitalisation distinguishes the game label from the generic noun."
+    },
+    {
+      "id": "EXO-004",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is an Aleoida?",
+      "alternatives": [
+        "What does the Aleoida genus look like?"
+      ],
+      "keywords": [
+        "Aleoida",
+        "Aleoida genus"
+      ],
+      "answer": "In Odyssey, Aleoida is a genus with clustered, pointed growths. Some forms look like rosettes. That's a handy visual cue when you're learning the genus, and the Genetic Sampler can settle the identification.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-005",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Cactoida?",
+      "alternatives": [
+        "What does the Cactoida genus look like?"
+      ],
+      "keywords": [
+        "Cactoida",
+        "Cactoida genus"
+      ],
+      "answer": "In Odyssey, Cactoida is a genus with compact, often rounded growths. The name is a useful reminder of its cactus-like appearance. It belongs to the game's own catalogue of alien life.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-006",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Clypeus?",
+      "alternatives": [
+        "What does the Clypeus genus look like?"
+      ],
+      "keywords": [
+        "Clypeus",
+        "Clypeus genus"
+      ],
+      "answer": "In Odyssey, Clypeus is a genus known for broad, shield-like forms. That's the main shape to look for, even when the colour or finer details differ.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-007",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Concha?",
+      "alternatives": [
+        "What does the Concha genus look like?"
+      ],
+      "keywords": [
+        "Concha",
+        "Concha genus"
+      ],
+      "answer": "In Odyssey, Concha is a genus with curved, shell-like growths. The silhouette is particularly helpful when you're looking over broken terrain.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-008",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Electricae?",
+      "alternatives": [
+        "What are the glowing Electricae organisms?"
+      ],
+      "keywords": [
+        "Electricae",
+        "Electricae genus"
+      ],
+      "answer": "In Odyssey, Electricae is a genus of luminous organisms. Its glow is a helpful visual clue when you're exploring in low light. The Genetic Sampler can identify the species.",
+      "source_ids": [
+        "bio",
+        "electric",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-009",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Fonticulua?",
+      "alternatives": [
+        "What does the Fonticulua genus look like?"
+      ],
+      "keywords": [
+        "Fonticulua",
+        "Fonticulua genus"
+      ],
+      "answer": "In Odyssey, Fonticulua is a genus of upright organisms with profiles that can look like mushrooms or branching fountains. The contours vary by species. A pleasing bit of variety for something rooted to the spot.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-010",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Frutexa?",
+      "alternatives": [
+        "What does the Frutexa genus look like?"
+      ],
+      "keywords": [
+        "Frutexa",
+        "Frutexa genus"
+      ],
+      "answer": "In Odyssey, Frutexa is a genus with shrub-like growth. Think of clusters of branching stems close to the ground. The resemblance to a shrub is a visual cue for the game.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-011",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Fumerola?",
+      "alternatives": [
+        "How is Fumerola different from a fumarole?"
+      ],
+      "keywords": [
+        "Fumerola",
+        "Fumerola genus"
+      ],
+      "answer": "Fumerola is a genus of alien organisms found around active volcanic vents. They thrive in environments that would be hostile to many other forms of life. Apparently, some organisms prefer their surroundings rather hot.",
+      "source_ids": [
+        "bio",
+        "species",
+        "maps",
+        "recepta"
+      ],
+      "fact_check": "Describes Fumerola as an Odyssey biological genus associated with volcanic environments. The geological term fumarole is distinct from the biological genus."
+    },
+    {
+      "id": "EXO-012",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Fungoida?",
+      "alternatives": [
+        "What does the Fungoida genus look like?"
+      ],
+      "keywords": [
+        "Fungoida",
+        "Fungoida genus"
+      ],
+      "answer": "In Odyssey, Fungoida is a genus of fungus-like organisms. Their compact growths can be easy to overlook against rocky terrain. The name is a good way to remember the general shape.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-013",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Osseus?",
+      "alternatives": [
+        "What does the Osseus genus look like?"
+      ],
+      "keywords": [
+        "Osseus",
+        "Osseus genus"
+      ],
+      "answer": "In Odyssey, Osseus is a genus with hard-looking forms that can blend in among rocks. Its shapes vary, so a promising silhouette is a reason to look closer.",
+      "source_ids": [
+        "bio",
+        "osseus",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-014",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Recepta?",
+      "alternatives": [
+        "What is the Recepta genus in Odyssey?"
+      ],
+      "keywords": [
+        "Recepta",
+        "Recepta genus"
+      ],
+      "answer": "Recepta is a genus of alien life found on planetary surfaces. Its species form unusual, often lattice-like structures that can look almost artificial. Nature does seem rather fond of geometry.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Describes the Recepta genus using its distinctive geometric and lattice-like structures. Visual appearance may vary between species and variants."
+    },
+    {
+      "id": "EXO-015",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Tubus?",
+      "alternatives": [
+        "What does the Tubus genus look like?"
+      ],
+      "keywords": [
+        "Tubus",
+        "Tubus genus"
+      ],
+      "answer": "In Odyssey, Tubus is a genus of tall, tube-like organisms. The upright profile is a useful clue when you're learning to distinguish the surface genera.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-016",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Tussock?",
+      "alternatives": [
+        "What are those grass-like Tussock growths?"
+      ],
+      "keywords": [
+        "Tussock",
+        "Tussock genus"
+      ],
+      "answer": "In Odyssey, Tussock is a genus of tufted, grass-like organisms. Their low clumps can be easier to pick out by shape than by colour alone.",
+      "source_ids": [
+        "bio",
+        "species",
+        "recepta"
+      ],
+      "fact_check": "Codex genus spelling checked against the species index. Appearance is a broad field cue and varies among species and colour variants."
+    },
+    {
+      "id": "EXO-017",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "Why does the sampler need three samples?",
+      "alternatives": [
+        "Why is a colony too close to sample?"
+      ],
+      "keywords": [
+        "genetic diversity",
+        "three genetic samples"
+      ],
+      "answer": "In Odyssey, the Genetic Sampler needs three sufficiently separated samples of the same species to complete a set. The required separation varies with the organism. If the sampler flags a colony as too close, look farther from the sites you've already sampled.",
+      "source_ids": [
+        "guide",
+        "sampler"
+      ],
+      "fact_check": "Confirmed same-species three-part sampling and variable separation. Exact distances, scanner ranges and payouts are excluded."
+    },
+    {
+      "id": "EXO-018",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What does the biological filter on the DSS show?",
+      "alternatives": [
+        "Does the blue overlay pinpoint a specimen?"
+      ],
+      "keywords": [
+        "DSS biology filter",
+        "biological overlay",
+        "detailed surface scanner biology"
+      ],
+      "answer": "In Odyssey, after mapping a body you can switch the Detailed Surface Scanner overlay between available biological filters. The shaded areas guide you toward possible habitat. You'll still need to search the surface for actual specimens.",
+      "source_ids": [
+        "guide"
+      ],
+      "fact_check": "The overlay is a search aid after mapping. It does not promise specimens at a coordinate."
+    },
+    {
+      "id": "EXO-019",
+      "category": "Exobiology",
+      "scope": "game",
+      "question": "What is Vista Genomics?",
+      "alternatives": [
+        "Where do I turn in finished genetic samples?"
+      ],
+      "keywords": [
+        "Vista Genomics",
+        "hand in genetic samples"
+      ],
+      "answer": "In Odyssey, Vista Genomics is where you turn in completed genetic samples. Look for its counter in supported station concourses. The staff handle the paperwork, which seems fair after all that walking.",
+      "source_ids": [
+        "guide",
+        "sampler"
+      ],
+      "fact_check": "The Odyssey guide documents the Vista Genomics turn-in. Payouts and service availability are build-sensitive."
+    },
+    {
+      "id": "EXO-020",
+      "category": "Exobiology",
+      "scope": "science",
+      "question": "What is a biosignature?",
+      "alternatives": [
+        "What might count as evidence of alien life?"
+      ],
+      "keywords": [
+        "biosignature",
+        "sign of life"
+      ],
+      "answer": "A biosignature is a possible sign of life, such as a chemical pattern that living organisms might produce. Scientists also look for non-living processes that could make the same signal. One intriguing clue is usually the beginning of the investigation.",
+      "source_ids": [
+        "biosig"
+      ],
+      "fact_check": "NASA discusses false positives from non-biological processes. A candidate signal requires corroboration."
+    },
+    {
+      "id": "EXO-021",
+      "category": "Exobiology",
+      "scope": "science",
+      "question": "What is an extremophile?",
+      "alternatives": [
+        "Can life live under extreme conditions?"
+      ],
+      "keywords": [
+        "extremophile",
+        "life in extreme conditions"
+      ],
+      "answer": "An extremophile is an organism that thrives in conditions many other organisms would find harsh, such as intense heat, acidity or salinity. Studying these organisms on Earth helps us think about which environments could support life elsewhere.",
+      "source_ids": [
+        "extreme"
+      ],
+      "fact_check": "NASA Astrobiology describes Earth organisms thriving across extremes. Applicability beyond Earth is an inference."
+    },
+    {
+      "id": "EXO-022",
+      "category": "Exobiology",
+      "scope": "science",
+      "question": "What is astrobiology?",
+      "alternatives": [
+        "What do real scientists mean by exobiology?"
+      ],
+      "keywords": [
+        "astrobiology",
+        "real-world exobiology"
+      ],
+      "answer": "Astrobiology studies life's origins, evolution and prospects across the universe. That includes learning from life on Earth and working out how we might recognise evidence of life elsewhere. It's part biology, part astronomy and very much a team effort.",
+      "source_ids": [
+        "astrobiology"
+      ],
+      "fact_check": "NASA's programme defines the field broadly. Its research covers Earth life and the search beyond Earth."
+    },
+    {
+      "id": "GAL-001",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What kind of galaxy is the Milky Way?",
+      "alternatives": [
+        "Is the Milky Way a barred spiral?"
+      ],
+      "keywords": [
+        "Milky Way",
+        "barred spiral galaxy"
+      ],
+      "answer": "The Milky Way is a barred spiral galaxy. It has a flat disc with spiral arms and a bar of stars through its central region. From inside that disc, much of the galaxy appears as a band across our sky.",
+      "source_ids": [
+        "galaxies",
+        "milky",
+        "gaia"
+      ],
+      "fact_check": "NASA and ESA identify the Milky Way as a barred spiral with a disc and arms."
+    },
+    {
+      "id": "GAL-002",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is a galactic spiral arm?",
+      "alternatives": [
+        "Are stars trapped in spiral arms?"
+      ],
+      "keywords": [
+        "spiral arm",
+        "galactic arm"
+      ],
+      "answer": "A spiral arm is a curved structure in a galaxy's disc, often traced by young stars and clouds of gas. The arms are patterns in the disc, and individual stars can move relative to them.",
+      "source_ids": [
+        "galaxies",
+        "milky",
+        "spiral"
+      ],
+      "fact_check": "The cited spiral-arm study models stars moving relative to arm structure. The answer makes no universal claim about how arms form."
+    },
+    {
+      "id": "GAL-003",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "Where is the Sun in the Milky Way?",
+      "alternatives": [
+        "What is the Orion Spur?"
+      ],
+      "keywords": [
+        "Orion Spur",
+        "Sun galactic location"
+      ],
+      "answer": "The Sun sits in the Milky Way's disc, in a small structure called the Orion Spur, between the Sagittarius and Perseus arms. It's about twenty-six thousand light-years from the Galactic Centre. A suburban address, as galaxies go.",
+      "source_ids": [
+        "milky",
+        "gaia"
+      ],
+      "fact_check": "NASA and ESA place the Sun in the local spur; galactocentric distance is rounded."
+    },
+    {
+      "id": "GAL-004",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is the galactic bulge?",
+      "alternatives": [
+        "What is the dense middle of a spiral galaxy?"
+      ],
+      "keywords": [
+        "galactic bulge",
+        "central stellar bulge"
+      ],
+      "answer": "The bulge is a dense central concentration of stars. In the Milky Way it rises above and below the flatter disc, and the central bar helps shape it. It spans a region far larger than the black hole at the centre.",
+      "source_ids": [
+        "galaxies",
+        "milky",
+        "gaia"
+      ],
+      "fact_check": "ESA describes the central stellar bulge and bar within the disc."
+    },
+    {
+      "id": "GAL-005",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is a galactic halo?",
+      "alternatives": [
+        "What surrounds the Milky Way's disc?"
+      ],
+      "keywords": [
+        "galactic halo",
+        "stellar halo"
+      ],
+      "answer": "The Milky Way's stellar halo is a sparse, extended population of stars and clusters around the disc. A more massive halo of dark matter also surrounds the visible galaxy. We infer the latter largely through its gravitational effects.",
+      "source_ids": [
+        "galaxies",
+        "milky",
+        "gaia"
+      ],
+      "fact_check": "Distinguishes the observed stellar population from the inferred dark matter halo."
+    },
+    {
+      "id": "GAL-006",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is the Galactic Centre?",
+      "alternatives": [
+        "What lies at the centre of the Milky Way?"
+      ],
+      "keywords": [
+        "Galactic Centre",
+        "galactic nucleus"
+      ],
+      "answer": "The Galactic Centre is the Milky Way's crowded central region, rich in stars, gas and dust. The supermassive black hole Sagittarius A-star sits at its heart. Infrared and radio observations can reveal features that dust hides from visible-light telescopes.",
+      "source_ids": [
+        "centre"
+      ],
+      "fact_check": "NASA Webb describes the observationally crowded central region. Compare LOC-001 for the black hole itself."
+    },
+    {
+      "id": "GAL-007",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is the galactic plane?",
+      "alternatives": [
+        "What does above the galactic disc mean?"
+      ],
+      "keywords": [
+        "galactic plane",
+        "galactic midplane"
+      ],
+      "answer": "The galactic plane is the reference plane along the middle of the Milky Way's disc. It gives us a way to describe how far above or below the disc something lies. The disc itself has thickness, so the plane is a useful reference.",
+      "source_ids": [
+        "milky",
+        "gloss",
+        "gaia"
+      ],
+      "fact_check": "The midplane is a reference within an extended, finite-thickness disc."
+    },
+    {
+      "id": "GAL-008",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is the interstellar medium?",
+      "alternatives": [
+        "Is the space between stars empty?"
+      ],
+      "keywords": [
+        "interstellar medium",
+        "gas between stars"
+      ],
+      "answer": "The interstellar medium is the gas and dust between stars. Some of it is cold enough to form dense clouds, and some is extremely hot and diffuse. Empty space turns out to have quite a range of working conditions.",
+      "source_ids": [
+        "gloss",
+        "nebulae"
+      ],
+      "fact_check": "Interstellar material includes both diffuse gas and colder clouds. Temperature examples stay qualitative."
+    },
+    {
+      "id": "GAL-009",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is a molecular cloud?",
+      "alternatives": [
+        "Where can interstellar molecules gather?"
+      ],
+      "keywords": [
+        "molecular cloud",
+        "stellar nursery cloud"
+      ],
+      "answer": "A molecular cloud is a cold interstellar cloud where much of the hydrogen is in molecular form. Dense pockets can collapse under gravity and form stars. The dust also makes parts of a cloud hard to see in visible light.",
+      "source_ids": [
+        "gloss",
+        "nebulae"
+      ],
+      "fact_check": "Cold molecular hydrogen clouds contain dense regions that can form stars."
+    },
+    {
+      "id": "GAL-010",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is a dark nebula?",
+      "alternatives": [
+        "Why do some nebulae look like holes in the sky?"
+      ],
+      "keywords": [
+        "dark nebula",
+        "absorption nebula"
+      ],
+      "answer": "A dark nebula is a cloud whose dust blocks visible light from stars or glowing gas behind it. Its silhouette can make it look like a gap in the sky. Infrared observations can sometimes show what the dust conceals.",
+      "source_ids": [
+        "nebulae"
+      ],
+      "fact_check": "Hubble distinguishes dark nebulae by the light blocked by their dust."
+    },
+    {
+      "id": "GAL-011",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is an open star cluster?",
+      "alternatives": [
+        "Why are some young stars grouped together?"
+      ],
+      "keywords": [
+        "open cluster",
+        "open star cluster"
+      ],
+      "answer": "An open cluster is a group of stars that formed from the same cloud. Open clusters are typically looser and younger than globular clusters. Over time, interactions with other objects in the galaxy can scatter their members.",
+      "source_ids": [
+        "clusters"
+      ],
+      "fact_check": "NASA contrasts typical open and globular clusters by age and structure. Open-cluster dispersal is gradual."
+    },
+    {
+      "id": "GAL-012",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is a globular cluster?",
+      "alternatives": [
+        "What are those dense round star clusters?"
+      ],
+      "keywords": [
+        "globular cluster",
+        "globular star cluster"
+      ],
+      "answer": "A globular cluster is a tightly bound, roughly spherical group of stars. Many in the Milky Way contain very old stars and orbit in the halo. They give astronomers a glimpse of the galaxy's early history.",
+      "source_ids": [
+        "clusters"
+      ],
+      "fact_check": "Old stars and a spherical, bound distribution are characteristic. Halo membership is qualified."
+    },
+    {
+      "id": "GAL-013",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is a light-year?",
+      "alternatives": [
+        "Is a light-year a distance or a time?"
+      ],
+      "keywords": [
+        "light-year",
+        "light year"
+      ],
+      "answer": "A light-year is the distance light travels in vacuum in one year. It's about nine and a half trillion kilometres. The name sounds like a calendar entry, but it belongs on a map.",
+      "source_ids": [
+        "gloss"
+      ],
+      "fact_check": "The distance assumes light propagation in vacuum. The kilometre conversion is rounded."
+    },
+    {
+      "id": "GAL-014",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is a parsec?",
+      "alternatives": [
+        "How many light-years are in a parsec?"
+      ],
+      "keywords": [
+        "parsec",
+        "stellar parallax distance"
+      ],
+      "answer": "A parsec is about three and a quarter light-years. The unit comes from parallax, the tiny apparent shift of nearby stars against the background as Earth changes position in its orbit.",
+      "source_ids": [
+        "gloss"
+      ],
+      "fact_check": "A parsec comes from parallax and equals approximately 3.26 light-years."
+    },
+    {
+      "id": "GAL-015",
+      "category": "Galactic Geography",
+      "scope": "science",
+      "question": "What is the Local Group?",
+      "alternatives": [
+        "Which group of galaxies includes the Milky Way?"
+      ],
+      "keywords": [
+        "Local Group",
+        "nearby galaxy group"
+      ],
+      "answer": "The Local Group is the collection of nearby galaxies that includes the Milky Way, Andromeda, Triangulum and many smaller galaxies. It's our neighbourhood on a scale where whole galaxies count as neighbours.",
+      "source_ids": [
+        "large",
+        "andromeda"
+      ],
+      "fact_check": "NASA's group description includes the three named major members and smaller galaxies."
+    },
+    {
+      "id": "GAL-016",
+      "category": "Galactic Geography",
+      "scope": "game",
+      "question": "What are Galactic Regions in Elite Dangerous?",
+      "alternatives": [
+        "How does the game divide the galaxy for the Codex?"
+      ],
+      "keywords": [
+        "Galactic Regions",
+        "Codex regions"
+      ],
+      "answer": "In Elite Dangerous, the galaxy is divided into forty-two named regions. The Codex organises exploration records by these regions, so the boundary can affect where an entry is filed.",
+      "source_ids": [
+        "regions",
+        "journal"
+      ],
+      "fact_check": "The Codex uses named game regions. The map breakdown gives the count of 42."
+    },
+    {
+      "id": "GAL-017",
+      "category": "Galactic Geography",
+      "scope": "game",
+      "question": "What is the Bubble in Elite Dangerous?",
+      "alternatives": [
+        "What does the inhabited Bubble mean?"
+      ],
+      "keywords": [
+        "the Bubble",
+        "human Bubble"
+      ],
+      "answer": "In Elite Dangerous, the Bubble is the main expanse of inhabited human space around Sol. The name describes a broad region with many settled systems and stations. Human settlements also exist far beyond it.",
+      "source_ids": [
+        "bubble"
+      ],
+      "fact_check": "EDSM usage identifies the Bubble as the main inhabited region near Sol. No fixed political boundary is claimed."
+    },
+    {
+      "id": "GAL-018",
+      "category": "Galactic Geography",
+      "scope": "game",
+      "question": "What is the Colonia region?",
+      "alternatives": [
+        "What does Colonia mean as a destination in Elite Dangerous?"
+      ],
+      "keywords": [
+        "Colonia region",
+        "Colonia settlement"
+      ],
+      "answer": "In Elite Dangerous, Colonia is both the name of a system and a name for the surrounding region of human settlement. It's far from the main Bubble and a familiar destination on long-distance exploration routes.",
+      "source_ids": [
+        "colonia"
+      ],
+      "fact_check": "EDSM records Colonia and long-distance routes from the Bubble. The answer distinguishes system from region."
+    },
+    {
+      "id": "LOC-001",
+      "category": "Notable Locations & Phenomena",
+      "scope": "mixed",
+      "question": "What is Sagittarius A*?",
+      "alternatives": [
+        "What is Sag A-star?",
+        "Tell me about Sagittarius A-star."
+      ],
+      "keywords": [
+        "Sagittarius A*",
+        "Sag A star"
+      ],
+      "answer": "In astronomy, Sagittarius A-star is the supermassive black hole at the centre of the Milky Way, with about four million times the Sun's mass. Elite Dangerous makes it a visitable destination. The real one is best admired by telescope.",
+      "source_ids": [
+        "eht",
+        "eRoute"
+      ],
+      "fact_check": "ESO/EHT supplies the real black hole and rounded mass. EDSM supplies the visitable game destination."
+    },
+    {
+      "id": "LOC-002",
+      "category": "Notable Locations & Phenomena",
+      "scope": "game",
+      "question": "What is Beagle Point?",
+      "alternatives": [
+        "Why is Beagle Point an exploration landmark?"
+      ],
+      "keywords": [
+        "Beagle Point",
+        "Ceeckia ZQ-L c24-0"
+      ],
+      "answer": "In Elite Dangerous, Beagle Point is a remote system on the far side of the galaxy from Sol. Explorers know it as the destination of the original Distant Worlds expedition. It makes a fitting place to pause and look back.",
+      "source_ids": [
+        "beagle",
+        "dw"
+      ],
+      "fact_check": "Sources cover Beagle Point as an in-game classification, mechanic or recorded location."
+    },
+    {
+      "id": "LOC-003",
+      "category": "Notable Locations & Phenomena",
+      "scope": "mixed",
+      "question": "What is the Great Annihilator?",
+      "alternatives": [
+        "What is the Great Annihilator in Elite Dangerous?"
+      ],
+      "keywords": [
+        "Great Annihilator",
+        "1E 1740.7-2942"
+      ],
+      "answer": "In Elite Dangerous, Great Annihilator is a named black-hole system toward the Galactic Centre. The name comes from a real X-ray source that astronomers interpret as a likely black-hole binary.",
+      "source_ids": [
+        "annihilator",
+        "realann"
+      ],
+      "fact_check": "EDSM records the named game system. NASA Swift catalogues the real candidate 1E 1740.7−2942. Game body properties are excluded."
+    },
+    {
+      "id": "LOC-004",
+      "category": "Notable Locations & Phenomena",
+      "scope": "game",
+      "question": "What is Explorer's Anchorage?",
+      "alternatives": [
+        "Which station is close to Sagittarius A-star in Elite Dangerous?"
+      ],
+      "keywords": [
+        "Explorer's Anchorage",
+        "Stuemeae FG-Y d7561"
+      ],
+      "answer": "In Elite Dangerous, Explorer's Anchorage is a station in Stuemeae FG-Y d7561, near Sagittarius A-star. Its name is a small kindness to anyone who has just crossed half the galaxy.",
+      "source_ids": [
+        "anchorage"
+      ],
+      "fact_check": "EDSM associates the station with Stuemeae FG-Y d7561 near the Galactic Centre. No services or live availability are asserted."
+    },
+    {
+      "id": "LOC-005",
+      "category": "Notable Locations & Phenomena",
+      "scope": "science",
+      "question": "What is the Orion Nebula?",
+      "alternatives": [
+        "What is Messier 42?"
+      ],
+      "keywords": [
+        "Orion Nebula",
+        "M42"
+      ],
+      "answer": "The Orion Nebula is a cloud of glowing gas and dust where stars are forming. Ultraviolet light from young stars makes some of the surrounding gas shine. We can see the nebula from Earth in the region of Orion's sword.",
+      "source_ids": [
+        "orion"
+      ],
+      "fact_check": "Hubble identifies the Orion Nebula as an emission nebula and nearby star-forming region."
+    },
+    {
+      "id": "LOC-006",
+      "category": "Notable Locations & Phenomena",
+      "scope": "science",
+      "question": "What are the Pillars of Creation?",
+      "alternatives": [
+        "Where are the Pillars of Creation?"
+      ],
+      "keywords": [
+        "Pillars of Creation",
+        "Eagle Nebula pillars"
+      ],
+      "answer": "The Pillars of Creation are columns of gas and dust in the Eagle Nebula. Radiation from nearby young stars erodes their surfaces. Infrared images can show stars within and around the pillars that visible light struggles to reveal.",
+      "source_ids": [
+        "pillars"
+      ],
+      "fact_check": "Hubble compares visible and infrared views of the Eagle Nebula pillars and explains erosion by nearby stars."
+    },
+    {
+      "id": "LOC-007",
+      "category": "Notable Locations & Phenomena",
+      "scope": "science",
+      "question": "What is the Crab Nebula?",
+      "alternatives": [
+        "What did the supernova of 1054 leave behind?"
+      ],
+      "keywords": [
+        "Crab Nebula",
+        "Messier 1"
+      ],
+      "answer": "The Crab Nebula is the expanding remnant of a supernova observed in 1054. A pulsar at its centre supplies energy to the surrounding nebula. The original flash has faded, but the remnant is still luminous.",
+      "source_ids": [
+        "crab"
+      ],
+      "fact_check": "Hubble identifies the historical 1054 supernova, pulsar and energetic surrounding remnant."
+    },
+    {
+      "id": "LOC-008",
+      "category": "Notable Locations & Phenomena",
+      "scope": "science",
+      "question": "What are the Pleiades?",
+      "alternatives": [
+        "What are the Seven Sisters in astronomy?"
+      ],
+      "keywords": [
+        "Pleiades",
+        "Messier 45"
+      ],
+      "answer": "The Pleiades are a nearby open cluster of young stars, also called the Seven Sisters. The blue haze in deep images is dust reflecting starlight. The cluster itself contains many more stars than the familiar handful we see easily.",
+      "source_ids": [
+        "pleiades"
+      ],
+      "fact_check": "Hubble's M45 catalogue describes the star cluster and dusty reflection nebulosity."
+    },
+    {
+      "id": "LOC-009",
+      "category": "Notable Locations & Phenomena",
+      "scope": "science",
+      "question": "What is Proxima Centauri?",
+      "alternatives": [
+        "Which star is closest to the Sun?"
+      ],
+      "keywords": [
+        "Proxima Centauri",
+        "closest star to the Sun"
+      ],
+      "answer": "Proxima Centauri is a red dwarf just over four light-years away and the nearest star to the Sun. Even at that distance it's too faint for the unaided eye. It occasionally brightens in flares.",
+      "source_ids": [
+        "proxima"
+      ],
+      "fact_check": "Hubble identifies the nearest stellar neighbour and its flares. Distance is rounded."
+    },
+    {
+      "id": "LOC-010",
+      "category": "Notable Locations & Phenomena",
+      "scope": "science",
+      "question": "What is Betelgeuse?",
+      "alternatives": [
+        "What kind of star is Betelgeuse?"
+      ],
+      "keywords": [
+        "Betelgeuse",
+        "Orion red supergiant"
+      ],
+      "answer": "Betelgeuse is a red supergiant in Orion. Its brightness varies, and during its famous dimming a dust cloud helped obscure the star. A striking change in brightness can tell us a great deal about a star's outer layers.",
+      "source_ids": [
+        "betel"
+      ],
+      "fact_check": "Hubble reports a cloud of dust as a contributor to the dimming episode. No explosion date is implied."
+    },
+    {
+      "id": "LOC-011",
+      "category": "Notable Locations & Phenomena",
+      "scope": "science",
+      "question": "What is TRAPPIST-1?",
+      "alternatives": [
+        "Why is the TRAPPIST-1 planet system interesting?"
+      ],
+      "keywords": [
+        "TRAPPIST-1",
+        "TRAPPIST one"
+      ],
+      "answer": "TRAPPIST-1 is a small, cool star orbited by seven known planets roughly the size of Earth. Astronomers can watch them transit the star to learn about their sizes and investigate whether they have atmospheres.",
+      "source_ids": [
+        "trappist"
+      ],
+      "fact_check": "NASA discusses the seven known transiting planets. Atmospheres remain under study."
+    },
+    {
+      "id": "LOC-012",
+      "category": "Notable Locations & Phenomena",
+      "scope": "science",
+      "question": "What is the Andromeda Galaxy?",
+      "alternatives": [
+        "What is Messier 31?"
+      ],
+      "keywords": [
+        "Andromeda Galaxy",
+        "M31"
+      ],
+      "answer": "Andromeda is a large spiral galaxy in the Local Group, about two and a half million light-years away. Under dark skies it can look like a faint smudge. That's a whole galaxy's worth of stars in a rather modest patch of sky.",
+      "source_ids": [
+        "andromeda"
+      ],
+      "fact_check": "Hubble's M31 catalogue supports the galaxy type and rounded distance."
+    },
+    {
+      "id": "LOC-013",
+      "category": "Notable Locations & Phenomena",
+      "scope": "science",
+      "question": "What are the Magellanic Clouds?",
+      "alternatives": [
+        "Are the Magellanic Clouds galaxies?"
+      ],
+      "keywords": [
+        "Magellanic Clouds",
+        "Large and Small Magellanic Clouds"
+      ],
+      "answer": "The Large and Small Magellanic Clouds are nearby dwarf galaxies visible from the southern sky. Their cloudy appearance comes from the combined light of many stars, and their gas contains regions where new stars are forming.",
+      "source_ids": [
+        "magellanic"
+      ],
+      "fact_check": "NASA identifies the two dwarf galaxies and their visible stellar and gas components."
+    },
+    {
+      "id": "LOC-014",
+      "category": "Notable Locations & Phenomena",
+      "scope": "science",
+      "question": "What is a Lagrange point?",
+      "alternatives": [
+        "How can an object keep its position relative to two orbiting bodies?"
+      ],
+      "keywords": [
+        "Lagrange point",
+        "Lagrangian point"
+      ],
+      "answer": "A Lagrange point is a location in a system of two orbiting bodies where a small third object can keep the same relative position as it moves with them. Some of these locations are more stable than others, which matters when choosing a place for a spacecraft.",
+      "source_ids": [
+        "lagrange"
+      ],
+      "fact_check": "Uses the restricted three-body interpretation. Stability depends on the point and system."
+    },
+    {
+      "id": "LOC-015",
+      "category": "Notable Locations & Phenomena",
+      "scope": "game",
+      "question": "What is a Lagrange Cloud in Elite Dangerous?",
+      "alternatives": [
+        "What can a Lagrange Cloud contain in the game?"
+      ],
+      "keywords": [
+        "Lagrange Cloud",
+        "Lagrange storm cloud"
+      ],
+      "answer": "In Elite Dangerous, Lagrange Clouds are encounters in space that can contain crystals and unusual lifeforms. Some are catalogued as storm clouds. A visit is a chance to inspect the particular phenomena recorded there.",
+      "source_ids": [
+        "maps"
+      ],
+      "fact_check": "Canonn maps the in-game encounters and storm-cloud subclass. See LOC-014 for the real orbital concept."
+    },
+    {
+      "id": "LOC-016",
+      "category": "Notable Locations & Phenomena",
+      "scope": "game",
+      "question": "What is a Notable Stellar Phenomenon in Elite Dangerous?",
+      "alternatives": [
+        "What does an NSP signal mean?"
+      ],
+      "keywords": [
+        "Notable Stellar Phenomenon",
+        "NSP signal"
+      ],
+      "answer": "In Elite Dangerous, a Notable Stellar Phenomenon is a signal in space you can investigate. Such encounters can include unusual minerals, lifeforms or anomalies. The signal label is an invitation to look closer, and the findings can go in the Codex.",
+      "source_ids": [
+        "maps",
+        "journal"
+      ],
+      "fact_check": "Canonn records classes of space encounters and Frontier documents Codex records. No encounter is promised at a given location."
+    },
+    {
+      "id": "LOC-017",
+      "category": "Notable Locations & Phenomena",
+      "scope": "game",
+      "question": "What are Guardian ruins?",
+      "alternatives": [
+        "What are Guardian Ancient Ruins in Elite Dangerous?"
+      ],
+      "keywords": [
+        "Guardian ruins",
+        "Guardian Ancient Ruins"
+      ],
+      "answer": "In Elite Dangerous, Guardian ruins are archaeological sites left by an alien civilisation. Canonn's surveys record recurring layouts and locations across multiple systems. They're a chance to investigate the Guardians through what they left behind.",
+      "source_ids": [
+        "ruins"
+      ],
+      "fact_check": "Canonn's ruin survey lists sites and recurring layouts. No invented Guardian events are included."
+    },
+    {
+      "id": "LOC-018",
+      "category": "Notable Locations & Phenomena",
+      "scope": "game",
+      "question": "What are Crystalline Shards in Elite Dangerous?",
+      "alternatives": [
+        "What are the game's surface Crystalline Shards?"
+      ],
+      "keywords": [
+        "Crystalline Shards",
+        "surface crystalline shards"
+      ],
+      "answer": "In Elite Dangerous, Crystalline Shards are catalogued surface growths that look like clusters of crystals. They're a separate encounter from the crystals found in Lagrange Clouds. Same eye for decoration, different address.",
+      "source_ids": [
+        "maps",
+        "species"
+      ],
+      "fact_check": "Canonn lists the surface category separately from cloud crystals. Mineral appearance serves as a visual cue."
+    },
+    {
+      "id": "LOC-019",
+      "category": "Notable Locations & Phenomena",
+      "scope": "game",
+      "question": "What are Thargoid Barnacles?",
+      "alternatives": [
+        "What are the large barnacle formations in Elite Dangerous?"
+      ],
+      "keywords": [
+        "Thargoid Barnacle",
+        "Thargoid Barnacles"
+      ],
+      "answer": "In Elite Dangerous, Thargoid Barnacles are alien formations found at surface sites. Canonn surveys catalogue those sites across planets and moons. The in-game name describes a Thargoid feature and its appearance is quite distinct from an Earth barnacle.",
+      "source_ids": [
+        "maps",
+        "barnacles"
+      ],
+      "fact_check": "Canonn records Thargoid Barnacles as distinct surface sites. The biology comparison is limited to ordinary appearance."
+    }
+  ]
+}

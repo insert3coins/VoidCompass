@@ -5,7 +5,7 @@ planetary ports, surface outposts and Odyssey settlements don't, and nobody
 has mapped which numbered pad is where. So the app learns them: docking is
 granted with a pad number, and when you've landed and docked on it, Status.json
 has exactly where that pad is. Next time you're given that pad there, the
-planet compass can take you to it.
+pad finder (the Nav HUD and the Bridge's pad card) can take you to it.
 
 Kept per station (its MarketID), per pad: where it is, which way a ship
 faces on it, and how many times you've landed on it (later landings refine it).

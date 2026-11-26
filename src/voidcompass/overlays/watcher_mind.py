@@ -31,7 +31,7 @@ from voidcompass.core import ranks
 from voidcompass.exploration import bio_values
 from voidcompass.exploration.notable_bodies import is_green_giant_codex, rarity
 from voidcompass.mining.mining_record import material_name
-from voidcompass.overlays import crew_debrief, crew_lore, crew_story, crew_voices, mining_talk, rhino_lines, route_lines, ship_life, squadron_talk, survey_report
+from voidcompass.overlays import boarding_talk, crew_debrief, crew_lore, crew_story, crew_voices, mining_talk, rhino_lines, route_lines, ship_life, squadron_talk, survey_report
 from voidcompass.overlays import life_engineering
 from voidcompass.overlays import (
     watcher_deeper, watcher_field, watcher_habits, watcher_idle, watcher_lines, watcher_lore, watcher_natures,
@@ -68,6 +68,15 @@ DEFAULT_PERSONALITY = "weary"
 THOUGHT_SECONDS = 9.0
 # The same topic is not raised again for this long.
 TOPIC_REST_S = 20 * 60.0
+# 5.8.6: what you do yourself, coming and going: docking and undocking, landing
+# and lifting off, stepping out and coming back aboard, a vehicle out and back.
+# Always worth a word: a remark a moment ago doesn't silence one, it can come
+# round again sooner, and it never runs out of lines.
+DEEDS = frozenset({"docked_home", "docked_away", "undocked", "touchdown", "liftoff", "on_foot", "station_walk",
+                   "boarded_ship", "boarded_srv", "srv_docked", "fighter_docked", "srv_launch", "launch_scarab",
+                   "launch_scorpion", "launch_rhino", "launch_nomad", "launch_fighter"})
+# (gap, rest) for those at each setting, in place of the usual ones.
+DEED_PACE = {"rare": (20.0, 600.0), "occasional": (15.0, 180.0), "chatty": (6.0, 60.0)}
 # The same kind of idle thought is not raised again for this long (5.5.3.2).
 IDLE_REST_S = 30 * 60.0
 # 5.7.6: a docking request this soon after a TALK reply was asked for by you; the reply said it.
@@ -168,6 +177,11 @@ _MEMORY_LIMIT = 3000
 def frequency(config):
     value = str((config or {}).get("heartbeat_thoughts") or DEFAULT_FREQUENCY).casefold()
     return value if value in FREQUENCIES else DEFAULT_FREQUENCY
+
+
+def deed_pace(topic, config):
+    """(gap, rest) for something you did yourself (DEEDS), or None."""
+    return DEED_PACE.get(frequency(config)) if topic in DEEDS else None
 
 
 THOUGHT_COLOURS = ("bright", "accent", "eye")
@@ -326,7 +340,7 @@ IMPORTANCE = {
     # 5.8.6: deploying a vehicle is your own deliberate act, worth a word (was 0: rarely said).
     "srv_launch": 2,
     "settlement_seen": 0,
-    "taxi_ride": 0,
+    "taxi_ride": 1,
     "carrier_jump": 1,
     # It remembers (5.5.3.2): places, your records, the day you started.
     "revisit": 2,
@@ -368,16 +382,17 @@ IMPORTANCE = {
     "mapped": 1,
     "mapped_efficient": 1,
     "analysed": 1,
-    "touchdown": 0,
-    "undocked": 1,
-    "on_foot": 0,
+    # 5.8.6: landing, leaving the pad and stepping outside are your own doing (were 0, 1, 0).
+    "touchdown": 2,
+    "undocked": 2,
+    "on_foot": 2,
     "mission_done": 1,
     "bounty": 0,
     "mined": 0,
     # 5.5.11: refined in the Rhino, from rigs on a planet (no asteroids, no limpets).
     "mined_surface": 0,
     # 5.5.12: each vehicle by name, and the moments of a mining run.
-    "launch_scarab": 2, "launch_scorpion": 2, "launch_rhino": 2, "launch_nomad": 2, "launch_fighter": 1,
+    "launch_scarab": 2, "launch_scorpion": 2, "launch_rhino": 2, "launch_nomad": 2, "launch_fighter": 2,
     "prospected_rich": 0, "motherlode": 2, "cracked": 1, "rhino_full": 1, "hold_full_mining": 1,
     "hold_full": 1, "srv_full": 1, "srv_fuel_low": 2,
     # 5.5.4: how you play, as it has come to know it; a milestone as it happens.
@@ -875,7 +890,7 @@ class WatcherMind:
             fresh = [row for row in options if not self._said_recently(row[0], window(row))]
             if fresh:
                 return self.random.choice(fresh)[:2]
-            cycles = topic in ship_life.ANSWERS or topic == "docking_requested" or (
+            cycles = topic in ship_life.ANSWERS or topic == "docking_requested" or topic in DEEDS or (
                 topic in route_lines.TRAVEL and (FREQUENCIES.get(frequency(self.config)) or {}).get("cycle"))
             if not cycles:
                 return None
@@ -906,12 +921,13 @@ class WatcherMind:
         if weight <= 0:
             return None
         now = self.clock()
+        pace = deed_pace(topic, self.config)
         if not force:
             if importance < setting["minimum"]:
                 return None
-            if importance < 3 and now - self._last_spoke < setting["gap"]:
+            if importance < 3 and now - self._last_spoke < (pace[0] if pace else setting["gap"]):
                 return None
-            rest = setting.get("rest", TOPIC_REST_S)
+            rest = pace[1] if pace else setting.get("rest", TOPIC_REST_S)
             if topic in watcher_idle.IDLE_TOPICS:
                 rest = max(rest, IDLE_REST_S)  # each kind of idle remark, at most every half hour
             # An echo of its past, or a look back at its story, rests hours or
@@ -1825,9 +1841,18 @@ class WatcherMind:
         if event == "LaunchSRV":
             self._srv_full_said = False
             kind = watcher_idle.vehicle_kind(raw)
+            self._srv_kind = kind  # boarding it again on foot names it (Embark doesn't)
             return self.consider(f"launch_{kind}" if kind in watcher_idle.SRV_KINDS else "srv_launch")
         if event in ("LaunchFighter", "LaunchVessel") and raw.get("PlayerControlled", True):
             return self.consider(f"launch_{watcher_idle.vehicle_kind(raw)}")
+        # 5.8.6: back aboard (from the SRV, a fighter, or on foot), lift-off, the concourse.
+        if event == "LoadGame" and watcher_idle.vehicle_kind(raw) in boarding_talk.SRV_NAMES:
+            self._srv_kind = watcher_idle.vehicle_kind(raw)
+        srv_kind = getattr(self, "_srv_kind", "") or (
+            self.surroundings.vehicle if self.surroundings.vehicle in boarding_talk.SRV_NAMES else "")
+        boarding = boarding_talk.moment(event, raw, srv_kind=srv_kind)
+        if boarding:
+            return self.consider(*boarding)
         if event == "Loadout":
             try:
                 self._cargo_capacity = int(raw.get("CargoCapacity") or 0)
@@ -2157,6 +2182,9 @@ class WatcherMind:
             self._crew_unlocked = bool(crew.get("total")) and int(crew.get("told") or 0) >= int(crew.get("total") or 0)
             self._crew_story_shared = set(crew.get("story") or ())
         context = context or {}
+        deployed = str(context.get("srv_name") or "").casefold()
+        if deployed in boarding_talk.SRV_NAMES and not getattr(self, "_srv_kind", ""):
+            self._srv_kind = deployed  # 5.8.6: launched before a restart
         kind = str(context.get("vehicle") or "").casefold()
         if kind in SRV_HOLD_T or kind in ("nomad", "fighter"):
             if not self.surroundings.vehicle:

@@ -31,7 +31,7 @@ _RANGE = re.compile(r"bytes=(\d*)-(\d*)")
 # The skins' fonts (open licences, beside them in web/assets/fonts/).
 _SKIN_FONT = re.compile(r"/assets/fonts/[A-Za-z0-9-]+\.ttf")
 # Nova's face (5.8.6): her sprite sheets and their index.
-_NOVA_ART = re.compile(r"/assets/nova/[a-z-]+\.(?:webp|json)")
+_NOVA_ART = re.compile(r"/assets/(?:nova|parallax-cat|rivet-dog)/[a-z-]+\.(?:webp|json)")
 _SANDBOXED_MODULES = frozenset({
     "/assets/heartbeat-3d.js",
     "/assets/aster-companion.js",
@@ -340,7 +340,7 @@ class HtmlDashboardServer:
                             "/assets/companion-core.js",
                             "/assets/companion-mood.js",
                             "/assets/companion-caption.js",
-                            "/assets/music-visualizers.js", "/assets/rhino-draw.js", "/galactic_map/vendor/three.module.min.js",
+                            "/assets/music-visualizers.js", "/assets/rhino-draw.js", "/assets/pad-map.js", "/galactic_map/vendor/three.module.min.js",
                             "/galactic_map/vendor/three.core.min.js", "/assets/skins/deck-skins.css"} \
                 or _SKIN_FONT.fullmatch(request_path) or _NOVA_ART.fullmatch(request_path):
             candidate = (self.static_root.parent / request_path.lstrip("/")).resolve()

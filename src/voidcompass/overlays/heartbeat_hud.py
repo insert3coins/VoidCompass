@@ -367,7 +367,19 @@ class HeartbeatHUD:
 
     def reset(self):
         """The Watcher page's RESET: it forgets everything, and wakes again."""
+        # 5.8.6: forgetting isn't losing its voice. The reset clears what it holds
+        # for the session (voice on included) and numbers its thoughts from 1
+        # again, so this window's record of what it last said starts over too:
+        # otherwise its first new thought shares an old one's id and is never said.
+        active = self.mind.voice_active
         backup = self.mind.reset()
+        self.mind.voice_active = active
+        self._spoken_id = None
+        self._thought_seen = None
+        self._shown_thought = None
+        self._voiced = None
+        self._voice_thoughts = {}
+        self._voice_caption = None
         self._redraw()
         return backup
 

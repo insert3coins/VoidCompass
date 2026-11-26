@@ -600,6 +600,13 @@ class DashboardScanMixin:
         on_position = getattr(self, "_expedition_on_position", None)
         if callable(on_position):
             on_position()
+        # 5.8.6: callouts closing on a learnt surface pad.
+        on_pad = getattr(self, "_surface_pad_on_position", None)
+        if callable(on_pad):
+            try:
+                on_pad()
+            except Exception:
+                pass
         flags = data.get("Flags")
         in_supercruise = False
         if isinstance(flags, int):

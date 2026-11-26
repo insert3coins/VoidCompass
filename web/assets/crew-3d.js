@@ -4,7 +4,7 @@ import {createCompanionFrame, COMPANION_EXTENT} from "./companion-frame.js";
 import {SIGNATURES} from "./companion-colours.js";
 import {createCompanionCore} from "./companion-core.js";
 import {addLyraRobot, addLyraHalo} from "./lyra-robot.js";
-import {addNovaHologram} from "./nova-hologram.js";
+import {addNovaHologram, addSpriteCompanion, PETS} from "./nova-hologram.js";
 import {addAxiomSurveyor, addMeridianNavigator, addOfficerHalo, createOfficerFinish} from "./officer-robots.js";
 import {createMood} from "./companion-mood.js";
 
@@ -13,7 +13,9 @@ const clamp = (n, lo=0, hi=1) => Math.max(lo, Math.min(hi, n));
 
 // Original procedural displays: no image plates, opaque backdrops or character likenesses.
 export function createCrewDisplay(canvas, identity) {
-  const lyra = identity === "lyra", nova = identity === "nova";
+  const lyra = identity === "lyra", pet = PETS[identity] || null;
+  // 5.8.6: the pets are drawn as Nova is: an illustrated face in the bezel, with their own rings.
+  const nova = identity === "nova" || Boolean(pet);
   const portrait = identity === "meridian" || lyra || identity === "axiom" || nova;
   const meridian = identity === "meridian", axiom = identity === "axiom";
   const signature = SIGNATURES[identity];
@@ -32,8 +34,8 @@ export function createCrewDisplay(canvas, identity) {
     colour:uniforms.uColour,highlight:uniforms.uOther});
   if(reactor){reactor.group.position.z=.45;rig.add(reactor.group);}
   const service={value:0};
-  scene.add(createCompanionFrame({colour:uniforms.uColour,energy:uniforms.uEnergy,opening:portrait?0:.48,service,
-    style:axiom?"scale":meridian?"compass":nova?"nova":""}));
+  scene.add(createCompanionFrame({colour:uniforms.uColour,energy:uniforms.uEnergy,opening:portrait?0:.48,service,time:uniforms.uTime,
+    style:axiom?"scale":meridian?"compass":identity==="parallax"?"gyro":identity==="rivet"?"collar":nova?"nova":""}));
   const shader = (vertexShader,fragmentShader,extra={}) => new THREE.ShaderMaterial({vertexShader,fragmentShader,uniforms:{...uniforms,uOpacity:{value:1},...extra},
     transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide});
   const lineVertex = `uniform float uTime,uEnergy,uScan;varying vec3 vPos;
@@ -112,13 +114,15 @@ export function createCrewDisplay(canvas, identity) {
   if(lyra)for(const object of [rotor,counter,inner,sweep])object.visible=false;
   // Nova is projected, not built: her bezel and a slow sweep, nothing over her face.
   if(nova)for(const object of [rotor,counter,inner])object.visible=false;
+  // The pets' rings are their own (the bezel draws them): no shared ring or sweep over them.
+  if(pet)for(const object of [outer,sweep])object.visible=false;
   if(axiom||meridian){inner.visible=false;rotor.position.z=counter.position.z=-.35;}
   if(axiom)sweep.visible=false;
   let portraitLayer=null,needle=null,needleMaterial=null,bodyMap=null,wake=null;
   if(lyra) {
     portraitLayer=addLyraRobot(field,uniforms,renderer,scene);
   } else if(nova) {
-    portraitLayer=addNovaHologram(field,uniforms,()=>changed());
+    portraitLayer=pet?addSpriteCompanion(field,uniforms,()=>changed(),pet):addNovaHologram(field,uniforms,()=>changed());
   } else if(axiom) {
     portraitLayer=addAxiomSurveyor(field,uniforms,renderer,scene);
     portraitLayer.coreMount.add(reactor.group);reactor.group.position.set(0,0,0);reactor.group.scale.setScalar(.32);
@@ -325,7 +329,7 @@ export function createCrewDisplay(canvas, identity) {
     setReducedMotion(value){if(reduced!==Boolean(value)){reduced=Boolean(value);changed();}},
     setFrameRate(value){const next=[15,24,30,60].includes(Number(value))?Number(value):30;if(frameRate!==next){frameRate=next;changed();}},
     setVisible(value){if(visible!==Boolean(value)){visible=Boolean(value);if(!visible){cancelAnimationFrame(frame);frame=0;}else changed();}},
-    inspect(){return {...pose,identity,design:lyra?"robot-companion":nova?"projected-android":axiom?"precision-android":"navigator-android",frames,state,reduced,idle,focus,frameRate,time,accent,secondary,intensity:activity,
+    inspect(){return {...pose,identity,design:lyra?"robot-companion":pet?pet.design:nova?"projected-android":axiom?"precision-android":"navigator-android",frames,state,reduced,idle,focus,frameRate,time,accent,secondary,intensity:activity,
       width:canvas.clientWidth,height:canvas.clientHeight,drawCalls,reactor:reactor?.inspect()||null,mouthOpen,mood:moods.mood,expression:{...expression},expressing:moods.settling,smileCurve:uniforms.uSmile.value,
       needle:needle?{visible:needle.visible,angle:needleAngle,show:needleShow,target:needleTarget}:null,
       wake:wake?wakeAt:null,

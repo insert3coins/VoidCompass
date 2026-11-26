@@ -557,7 +557,7 @@ class DashboardApiMixin(ApiRecordsMixin):
                        "hours": round(hours, 1), "sessions": int(memory.get("sessions") or 0),
                        "story": {"title": page.get("title") or "", "told": page.get("told", 0), "total": page.get("total", 0),
                                  "complete": bool(page.get("complete"))},
-                       "voice": {"model": None if companions.overlay_only(selected) else voice_assets.model_name(selected), "installed": installed}})
+                       "voice": {"model": None if companions.voiceless(selected) else voice_assets.model_name(selected), "installed": installed}})
 
     def api_companion_status(self):
         from voidcompass.core import companions
@@ -638,7 +638,7 @@ class DashboardApiMixin(ApiRecordsMixin):
         live = speaker.live() if speaker is not None else None
         from voidcompass.core import companions
         return {"identity": companions.identity(self.config), "companion": self._api_companion_tag(),
-                "model": None if companions.overlay_only(self.config) else voice_assets.model_name(companions.identity(self.config)),
+                "model": None if companions.voiceless(self.config) else voice_assets.model_name(companions.identity(self.config)),
                 "enabled": bool(companions.settings(self.config).get("watcher_voice_enabled")),
                 "installed": bool(self._companion_voice_installed()),
                 "ready": bool(self._watcher_voice_on()),

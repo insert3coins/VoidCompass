@@ -1,8 +1,10 @@
-"""Surface station pads on the deck (5.8.3): learnt as you land, and the
-planet compass pointed at one you're given that's been learnt (core/surface_pads.py)."""
+"""Surface station pads on the deck (5.8.3): learnt as you land
+(core/surface_pads.py). 5.8.6: one you're given that's been learnt is shown on
+the pad finder (the Nav HUD and the Bridge's pad card) with callouts as you
+close in, rather than on the planet compass."""
 from __future__ import annotations
 
-import logging
+import math
 
 from voidcompass.core import surface_pads
 from voidcompass.core.config import get_active_profile, get_profile_file
@@ -71,8 +73,10 @@ class DashboardSurfacePadsMixin:
 
     def _surface_pad_granted(self, raw):
         """Docking granted at a station on a planet's surface: remember which
-        pad, and if it's been learnt, point the planet compass at it. Its
-        words for the pad card, or None (an orbital station, or not on a planet)."""
+        pad and, if it's been learnt, where it and the station's other known
+        pads are, for the pad finder. Its words for the pad card (and
+        "surface", what the finder needs), or None (an orbital station, or not
+        on a planet)."""
         try:
             pad = int(raw.get("LandingPad"))
         except (TypeError, ValueError):
@@ -95,13 +99,68 @@ class DashboardSurfacePadsMixin:
         bearing = surface_pads.bearing_deg(lat, lon, known["lat"], known["lon"])
         words = surface_pads.way_words(distance, bearing, heading)
         source = " (worked out from this station's design)" if known.get("predicted") else ""
-        try:
-            self.set_ground_target(known["lat"], known["lon"], system=self._surface_pad_pending["system"],
-                                   body=self._surface_pad_pending["body"], label=f"Pad {pad}")
-            self._surface_pad_target = (round(known["lat"], 6), round(known["lon"], 6))
-        except Exception:
-            logging.debug("Pad not put on the planet compass", exc_info=True)
-        return {"words": words + source, "say": f"Pad {pad}: {words}{source}. The planet compass is on it."}
+        store = self.surface_pad_store()
+        others = store.known_pads(market) or {}
+        pads = [(pad, float(known["lat"]), float(known["lon"]))]
+        for number in (others.get("landed") or []) + (others.get("worked_out") or []):
+            place = store.find(market, number) if number != pad else None
+            if place:
+                pads.append((int(number), float(place["lat"]), float(place["lon"])))
+        surface = {"pad": pad, "pads": pads, "predicted": bool(known.get("predicted")),
+                   "body": self._surface_pad_pending["body"], "start": distance, "called": []}
+        return {"words": words + source, "say": f"Pad {pad}: {words}{source}.", "surface": surface}
+
+    def _surface_pad_live(self, surface):
+        """The pad finder at a surface station, from where you are now:
+        {words, distance, map: {kind "surface", pad, pads [[number, metres
+        right, metres ahead]], heading_up, predicted}}, or None off the planet."""
+        here = self._surface_here()
+        if here is None or not surface or not surface.get("pads"):
+            return None
+        body = str(surface.get("body") or "")
+        if body and body.casefold() != str(getattr(self, "current_body_name", "") or "").casefold():
+            return None
+        lat, lon, radius, heading = here
+        facing = float(heading) if heading is not None else 0.0
+        rows, words, distance = [], "", None
+        for number, pad_lat, pad_lon in surface["pads"]:
+            far = surface_pads.distance_m(lat, lon, pad_lat, pad_lon, radius)
+            bearing = surface_pads.bearing_deg(lat, lon, pad_lat, pad_lon)
+            turn = math.radians(bearing - facing)
+            rows.append([int(number), round(far * math.sin(turn), 1), round(far * math.cos(turn), 1)])
+            if number == surface["pad"]:
+                distance, words = far, surface_pads.way_words(far, bearing, heading)
+        if distance is None:
+            return None
+        return {"words": words, "distance": distance,
+                "map": {"kind": "surface", "pad": surface["pad"], "pads": rows, "heading_up": heading is not None,
+                        "predicted": bool(surface.get("predicted"))}}
+
+    # Callouts on the way in: (metres, said once each when you close within it).
+    PAD_CALLOUTS = (1000.0, 300.0, 45.0)
+
+    def _surface_pad_on_position(self):
+        """Status.json moved you: a callout as you close on a learnt surface pad."""
+        info = getattr(self, "_pad_info", None)
+        surface = (info or {}).get("surface")
+        if not surface or getattr(self, "current_docked", False):
+            return None
+        live = self._surface_pad_live(surface)
+        if not live:
+            return None
+        distance, pad = live["distance"], surface["pad"]
+        due = [mark for mark in self.PAD_CALLOUTS if distance <= mark and mark not in surface["called"]]
+        if not due:
+            return None
+        # The closest mark you're inside; any further out are past now too.
+        mark = min(due)
+        surface["called"].extend(due)
+        if surface.get("start", 0.0) <= mark:
+            return None  # granted inside it already: nothing to call
+        say = f"Pad {pad} is below you." if mark == self.PAD_CALLOUTS[-1] else f"Pad {pad}: {live['words']}."
+        if self.config.get("pad_location", True) and hasattr(self, "_small_say"):
+            self._small_say(say, heading=f"PAD {pad}", topic="pad")
+        return say
 
     def _surface_settlement_approach(self, raw, now=None):
         """Coming in to a settlement or surface port (ApproachSettlement): how
@@ -167,18 +226,5 @@ class DashboardSurfacePadsMixin:
         self._surface_pad_forget()
 
     def _surface_pad_forget(self):
-        """Docked, or the pad's no longer yours: the compass comes off it, if
-        it's still pointing there (you may have set another target since)."""
+        """Docked, or the pad's no longer yours: nothing more to learn from it."""
         self._surface_pad_pending = None
-        target = getattr(self, "_surface_pad_target", None)
-        self._surface_pad_target = None
-        if not target or not getattr(self, "target_latlon_active", False):
-            return False
-        try:
-            lat, lon = float(getattr(self, "target_lat", None)), float(getattr(self, "target_lon", None))
-        except (TypeError, ValueError):
-            return False
-        if abs(lat - target[0]) < 1e-5 and abs(((lon - target[1] + 540.0) % 360.0) - 180.0) < 1e-5:
-            self.clear_ground_target()
-            return True
-        return False

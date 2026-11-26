@@ -4,8 +4,8 @@
 // client-only; every button sends a command and the next snapshot redraws.
 
 const TABS = [["orders", "ORDERS"], ["campaign", "CAMPAIGN"], ["record", "SERVICE RECORD"], ["log", "LOG"]];
-const OFFICERS = ["watcher", "aster", "axiom", "meridian", "lyra", "nova"];
-const GLYPHS = {watcher: "◉", aster: "✶", axiom: "⬡", meridian: "⌖", lyra: "◈", nova: "✦"};
+const OFFICERS = ["watcher", "aster", "axiom", "meridian", "lyra", "nova", "parallax", "rivet"];
+const GLYPHS = {watcher: "◉", aster: "✶", axiom: "⬡", meridian: "⌖", lyra: "◈", nova: "✦", parallax: "❂", rivet: "⚙"};
 let tab = "orders";
 // The officer open on the SERVICE RECORD tab (client-only, like the tabs).
 let recordOfficer = "";
@@ -92,10 +92,17 @@ function lastLine(order, data, esc) {
   return `<blockquote class="ord-line ord-${esc(line.speaker)}"><p>${esc(line.text)}</p><cite>${esc(name)}</cite></blockquote>`;
 }
 
+
+// 5.8.6: Nova asks for help rather than giving orders.
+function sizeLabel(order) {
+  if (order.size === "campaign") return "CAMPAIGN";
+  if (order.officer === "nova") return order.size === "long" ? "LONG REQUEST" : "REQUEST";
+  return order.size === "long" ? "LONG ORDER" : "FIELD ORDER";
+}
 function offerCard(order, data, esc) {
   const plot = order.target && (order.target.system || order.target.plot);
   return `<article class="ord-card offer ord-${esc(order.officer)}">
-    <header>${officerTag(order.officer, order.officer_name, esc, data.on_watch)}<span class="ord-size">${esc(order.size === "long" ? "LONG ORDER" : order.size === "campaign" ? "CAMPAIGN" : "FIELD ORDER")}</span>
+    <header>${officerTag(order.officer, order.officer_name, esc, data.on_watch)}<span class="ord-size">${esc(sizeLabel(order))}</span>
       <span class="ord-time">${order.later ? "ON THE BOARD · " : ""}${stamp("until", order.expires_at)}</span></header>
     <h3>${esc(order.title)}</h3>
     <p class="ord-brief">${esc(order.brief)}</p>
@@ -112,7 +119,7 @@ function offerCard(order, data, esc) {
 function activeCard(order, data, esc) {
   const plot = order.target && (order.target.system || order.target.plot);
   return `<article class="ord-card active ord-${esc(order.officer)}">
-    <header>${officerTag(order.officer, order.officer_name, esc, data.on_watch)}<span class="ord-size">${esc(order.size === "long" ? "LONG ORDER" : "FIELD ORDER")}</span>
+    <header>${officerTag(order.officer, order.officer_name, esc, data.on_watch)}<span class="ord-size">${esc(sizeLabel(order))}</span>
       <span class="ord-time">${stamp("until", order.expires_at)}</span></header>
     <h3>${esc(order.title)}</h3>
     <div class="ord-progress">${bar(order.progress)}<b>${Math.round(n(order.progress) * 100)}%</b></div>

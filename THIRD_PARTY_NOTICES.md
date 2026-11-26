@@ -211,3 +211,15 @@ code (`src/voidcompass/bgs`) is its own implementation of these rules.
 Systems, bodies, stations and routes come from [Spansh](https://spansh.co.uk), with [EDSM](https://www.edsm.net) for
 your own flight log when you ask for it. Known Guardian sites and reported geology come from Canonn's services when a
 body's panel opens; nothing is stored or sent about you. Each source's data stays under its own terms.
+
+## Piper voices for Parallax and Rivet
+
+Downloaded on request from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) (tag `v1.0.0`), not bundled.
+Their model cards, sources and hashes are kept in `models/parallax` and `models/rivet`.
+
+- **Parallax:** the voice of **Jenny (Dioco)**, `en_GB-jenny_dioco-medium`, trained on the
+  [Jenny TTS dataset](https://github.com/dioco-group/jenny-tts-dataset). Its licence permits commercial use and requires the
+  voice to be credited as "Jenny (Dioco)" in software that generates audio from it.
+- **Rivet:** `en_GB-northern_english_male-medium`, trained on [OpenSLR 83](http://www.openslr.org/83/) (Crowdsourced
+  high-quality UK and Ireland English Dialect speech data set, Google), licensed
+  [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).

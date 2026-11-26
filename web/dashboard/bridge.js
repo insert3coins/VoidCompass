@@ -35,24 +35,8 @@ function panel(p) {
 }
 
 // Where the pad is (bgol's LandingPad layouts, as ED-Outrider draws them).
-function padMap(map) {
-  if (!map) return "";
-  if (map.kind === "starport") {
-    const dots = (map.pads || []).map(([sector, depth, place, count], index) => {
-      const angle = (sector * 30 + (place - (count + 1) / 2) * 7) * Math.PI / 180;
-      const r = 18 + depth * 11;
-      const on = index + 1 === map.pad;
-      return `<circle cx="${(50 + r * Math.sin(angle)).toFixed(1)}" cy="${(50 - r * Math.cos(angle)).toFixed(1)}" r="${on ? 4 : 2.2}" class="${on ? "br-pad-on" : "br-pad"}"/>`;
-    }).join("");
-    return `<svg class="br-padmap" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48" class="br-pad-ring"/><rect x="44" y="94" width="12" height="5" class="br-pad-slot"/>${dots}</svg>`;
-  }
-  const boxes = map.pads || [];
-  const xs = boxes.flatMap(([x, , w]) => [x, x + w]);
-  const minX = Math.min(-30, ...xs) - 2, maxX = Math.max(30, ...xs) + 2;
-  const outline = (map.outline || []).map(([x, y]) => `${x},${y}`).join(" ");
-  const rects = boxes.map(([x, y, w, h], index) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" class="${index + 1 === map.pad ? "br-pad-on" : "br-pad"}"/>`).join("");
-  return `<svg class="br-padmap" viewBox="${minX} -50 ${maxX - minX} 95" aria-hidden="true">${outline ? `<polygon points="${outline}" class="br-pad-ring"/>` : ""}${rects}</svg>`;
-}
+// The pad drawing is /assets/pad-map.js, the same as the Nav HUD's.
+const padMap = (map) => window.VoidPadMap?.svg(map, "br-padmap") || "";
 
 export function renderBridge(activity, ui) {
   const slot = document.getElementById("bridge-activity");

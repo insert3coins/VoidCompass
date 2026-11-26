@@ -117,6 +117,18 @@ def latest_session(folder, max_files=40) -> dict:
     return result
 
 
+def session_open(folder, max_files=3):
+    """Whether the newest journals end in a game session: True when the last
+    LoadGame comes after any Shutdown, False when a Shutdown is last, None
+    when neither is found (a launch still at the main menu). A journal split
+    mid-session ("Continued") carries no LoadGame, so it walks back a little."""
+    for path in reversed(list_journals(folder)[-max(1, int(max_files)):]):
+        rows = _events(path, ('"event":"LoadGame"', '"event":"Shutdown"'))
+        if rows:
+            return rows[-1].get("event") == "LoadGame"
+    return None
+
+
 # The commander's standing, written at the top of every session: replayed on
 # a first run so a new profile starts with its ranks, credits and ship.
 SESSION_HEADER_EVENTS = (

@@ -65,6 +65,14 @@ def _rota_of(deck):
     return rota
 
 
+
+# 5.8.6: "copy the destination", "copy where you want to go": the place a
+# companion's story has asked to be taken (not the route's next stop). Never a
+# bare "copy that", which a commander says to mean "understood".
+STORY_PLACE_COPY = re.compile(r"\bcopy (?:the (?:destination|place|location|station|settlement|system)|"
+                              r"your (?:destination|place|station|system)|"
+                              r"where (?:you want to go|you'd like to go|we're going|we are going|to go))\b", re.I)
+
 class DashboardWatcherVoiceMixin:
     # -- the speaker ---------------------------------------------------------
     def _watcher_speaker(self):
@@ -75,17 +83,17 @@ class DashboardWatcherVoiceMixin:
         return speaker
 
     def _watcher_voice_on(self):
-        return not companions.overlay_only(self.config) and bool(companions.settings(self.config).get("watcher_voice_enabled")) and self._companion_voice_installed()
+        return not companions.voiceless(self.config) and bool(companions.settings(self.config).get("watcher_voice_enabled")) and self._companion_voice_installed()
 
     def _crewmate_voice_on(self, selected):
-        if selected not in companions.IDENTITIES or companions.overlay_only(selected):
+        if selected not in companions.IDENTITIES or companions.voiceless(selected):
             return False
         installed = voice_assets.installed(model=selected) if selected != "watcher" else voice_assets.installed()
         return bool(companions.settings(self.config, selected).get("watcher_voice_enabled")) and installed
 
     def _companion_voice_installed(self):
         selected = companions.identity(self.config)
-        if companions.overlay_only(selected):
+        if companions.voiceless(selected):
             return False
         return voice_assets.installed(model=selected) if selected != "watcher" else voice_assets.installed()
 
@@ -709,6 +717,23 @@ class DashboardWatcherVoiceMixin:
                            "genera": bio_values.likely_genera(item.get("predicted_genuses")), "colours": colours})
         return watcher_copilot.life_lines(bodies)
 
+    def _story_place_copy(self, text, mind):
+        """The place a story has asked you to take your companion (Nova's), to
+        the clipboard when asked ("copy that"). Her reply, or None."""
+        story = getattr(mind, "_progress", None)
+        words = str(text or "")
+        if story is None or not STORY_PLACE_COPY.search(words) or re.search(r"\bnext\b", words, re.I):
+            return None
+        target = story.objective(mind.memory)
+        if not target:
+            return None
+        place, system = target
+        if not system:
+            return f"I don't know where {place} is yet, Commander. If you find it, I'd love to know."
+        if self._copy_waypoint_to_clipboard(system, "STORY DESTINATION"):
+            return f"{system} is on the clipboard. Paste it into the galaxy map whenever you're ready."
+        return "I couldn't copy it, I'm afraid."
+
     def _watcher_mind_action(self, text):
         """The small things it does when you ask (5.7.1): the music, the
         overlays, the next system to the clipboard, its own voice. Its reply,
@@ -716,6 +741,10 @@ class DashboardWatcherVoiceMixin:
         original_text = text
         text = companions.addressed(text, companions.identity(self.config))
         mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        # 5.8.6: "Nova, copy the destination": where her story asked you to take her.
+        story_place = self._story_place_copy(text, mind)
+        if story_place:
+            return story_place
         rng = getattr(mind, "random", None)
         # 5.7.4: asked of a crewmate off watch, worded in its own lines.
         who = getattr(mind, "talking_as", None)
@@ -1000,7 +1029,7 @@ class DashboardWatcherVoiceMixin:
 
     # -- the download --------------------------------------------------------
     def _watcher_voice_downloader(self):
-        if companions.overlay_only(self.config):
+        if companions.voiceless(self.config):
             raise ValueError("This companion has no voice model yet")
         download = getattr(self, "_watcher_voice_download", None)
         selected = companions.identity(self.config)
@@ -1076,7 +1105,7 @@ class DashboardWatcherVoiceMixin:
 
     def _html_watcher_voice(self, memory):
         selected = companions.identity(self.config)
-        if companions.overlay_only(selected):
+        if companions.voiceless(selected):
             return {"identity": selected, "available": False, "model_name": "Voice pending", "enabled": False,
                     "installed": False, "download": {"stage": "idle"}, "size_mb": 0, "speaking": False,
                     "orb_on": getattr(self, "heartbeat_hud", None) is not None}
@@ -1118,6 +1147,17 @@ class DashboardWatcherVoiceMixin:
         """The Watcher page's own controls. True when handled and done."""
         if operation == "companion_identity":
             return self._companion_switch(str(payload.get("value") or ""))
+        if operation == "library_play":
+            # 5.8.6: a question picked from Nova's library in her book.
+            mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+            if mind is None or not callable(getattr(mind, "library_play", None)) or not mind.library_play(payload.get("id")):
+                return False
+            self._watcher_mind_watch()
+            return True
+        if operation == "copy_system":
+            # 5.8.6: a place her story names, to paste into the galaxy map.
+            system = " ".join(str(payload.get("system") or "").split())[:80]
+            return bool(system) and bool(self._copy_waypoint_to_clipboard(system, "STORY DESTINATION"))
         if companions.overlay_only(self.config) and operation != "settings":
             return False
         if operation in ("aster_humour", "companion_humour"):

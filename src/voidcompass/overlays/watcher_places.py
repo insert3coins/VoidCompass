@@ -17,6 +17,8 @@ CORE_LY = 1000.0
 # Far out on the rim: Beagle Point is about 39,400 ly from the core.
 EDGE_LY = 38000.0
 BLACK_HOLES = {"H", "SUPERMASSIVEBLACKHOLE"}
+# 5.8.6: where Nova was developed (Nyx Evera's story), a fixed system for once.
+GORGON_SYSTEM = "NGC 7822 Sector BQ-Y d12"
 
 # kind: (how the Watcher says it, how you find it)
 PLACES = {
@@ -25,6 +27,7 @@ PLACES = {
     "edge": ("the edge of the galaxy", "38,000 ly or more from the galactic core, like Beagle Point"),
     "first_place": ("where you first switched me on", "The system the Watcher first woke in"),
     "undiscovered": ("somewhere nobody has ever been", "A system whose main star nobody had discovered"),
+    "gorgon": ("Gorgon Research Facility", "NGC 7822 Sector BQ-Y d12, thousands of light years from the Bubble"),
 }
 
 
@@ -51,6 +54,8 @@ def place_of(event, raw):
             return "undiscovered"
         return None
     if event in {"FSDJump", "Location", "CarrierJump"}:
+        if str(raw.get("StarSystem") or "").casefold() == GORGON_SYSTEM.casefold():
+            return "gorgon"
         here = _position(raw.get("StarPos"))
         if here is None:
             return None

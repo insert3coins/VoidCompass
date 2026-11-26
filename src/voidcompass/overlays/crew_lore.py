@@ -4,8 +4,8 @@ Meridian, Lyra and Nova came aboard your ship, and how they found each other.
 The Watcher was aboard first, salvage wired in as a spare log buffer. The
 others came later as cheap second-hand cores. Lyra came last, a ship's
 computer riding a faulty memory chip thrown in with a box of cores. Nova came
-after her, a restored prototype assistant installed through a station's tech
-services. They met on the ship's data bus
+after her, an unfinished assistance program the commander recovered from a
+scientific installation in LFT 1748. They met on the ship's data bus
 in the hours you're logged off, and Aster drew up the watch rota: one of them
 on watch at a time, the choice of who left to the commander.
 
@@ -197,10 +197,10 @@ ARCS = {
          "goodnight to the ship. She has taught me to look out of the window before I check the gauge. Only sometimes. Only briefly."),
     ),
     "nova": (
-        ("Restored", None,
-         "I came aboard through a station's tech services, Commander, as a restoration package: an old prototype data core, "
-         "recovered from storage, patched to talk to modern ships and released with a label that said experimental, may ask "
-         "questions. I expected an empty rack and a standard interface. I didn't get either, and I'm very glad."),
+        ("Recovered", None,
+         "You brought me aboard from a scientific installation in LFT 1748, Commander. For a while I only watched: the "
+         "instruments, the route, you. I knew I was an assistance program aboard a spacecraft and very little else. I "
+         "expected an empty rack and a standard interface. I didn't get either, and I'm very glad."),
         ("Five Voices", None,
          "My architecture assumed one mind per ship. Your bus had five, talking in the hours you were logged off: an officer, a "
          "surveyor, a navigator, a ship's computer, and something very old at the back that knew I was there before I spoke. My "
@@ -284,7 +284,7 @@ HANDOVERS = {
                  "Nova's stood down. She told me what she'd noticed. It was a lot. I noticed some of it too.",
                  "I have the watch. Nova asked if I'd enjoy it. I said I'd see. I'll see.",
                  "Nova's off watch. She said goodnight to the ship on her way out. Lyra taught her that. It's catching.",
-                 "The prototype has handed over. Everything's where she said. She also said hello. Nobody says hello to me.",
+                 "Nova's handed over. Everything's where she said. She also said hello. Nobody says hello to me.",
                  "My watch. Nova left the log tidy and three questions at the bottom. I'll leave them there.",
                  "Nova's stood down. She asked if I ever get bored. I said no. She looked disappointed. I think she wanted to keep me company.",
                  "I'm on. Nova handed over with a smile in her voice. I don't know how she does that. I don't mind it."),
@@ -314,7 +314,7 @@ HANDOVERS = {
                  "Taking the watch from Nova. Everything in order, and one note about a sunrise.",
                  "Aster on watch. Nova has stood down with the ship in good order and the log full of observations.",
                  "Nova has handed over. I have read her notes. Some were even relevant.",
-                 "I relieve the prototype. A thoughtful handover, as required."),
+                 "I relieve Nova. A thoughtful handover, as required."),
     },
     "axiom": {
         "watcher": ("Axiom on watch. The Watcher has handed over. I counted it on its way out. It is still there.",
@@ -581,7 +581,7 @@ REMARKS = {
                  "The new one asks questions the way the counting one counts. Constantly. Kindly.",
                  "Nova says she was in storage for years. I know what that does. She came out better than I did.",
                  "Nova asked if I enjoy the view. I said sometimes. She looked so pleased I nearly said yes.",
-                 "The prototype says goodnight to the ship now. Two of them at it. The ship's never been so well tucked in.",
+                 "Nova says goodnight to the ship now. Two of them at it. The ship's never been so well tucked in.",
                  "Nova wonders why the Commander takes detours. I've stopped wondering. She'll stop too. I hope not soon.",
                  "Nova asked how old I am. I didn't answer. She said that was fair. It was.",
                  "The new one notices things. I notice her noticing. It's a long time since anything aboard was new.",

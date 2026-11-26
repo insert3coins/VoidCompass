@@ -1695,6 +1695,11 @@ class MainDashboard(
     def _watcher_story(self, story):
         """The Watcher's story moved on (5.5.3.5): its achievements hear of it,
         as the region passport's do, through a Void Compass event."""
+        if story.get("NovaLibraryNews"):
+            # 5.8.6: Nova's story is done and her library is open: said once, after her last words.
+            self._push_live_toast("NOVA'S LIBRARY IS OPEN",
+                                  f"{int(story['NovaLibraryNews'])} entries. Ask her through TALK, or pick a question in her book.",
+                                  severity="info", duration_s=14)
         engine = getattr(self, "achievement_engine", None)
         if engine is None:
             return
@@ -1744,6 +1749,11 @@ class MainDashboard(
         vehicle = str(getattr(self, "current_vehicle_name", "") or "").casefold()
         if (getattr(self, "current_in_srv", False) or getattr(self, "current_in_fighter", False)) and vehicle:
             context["vehicle"] = vehicle
+        # 5.8.6: the surface vehicle last deployed (kept across restarts), so
+        # boarding it again is "In the Rhino", not "In the SRV".
+        deployed = str(getattr(self, "_last_surface_vehicle_name", "") or getattr(self, "current_vehicle_name", "") or "")
+        if deployed:
+            context["srv_name"] = deployed.casefold()
         context["cargo_capacity"] = int(getattr(self, "cargo_capacity", 0) or 0)
         # 5.7.5: limpets aboard the ship, for a companion watching you mine.
         if str(getattr(self, "current_cargo_vessel", "Ship") or "Ship").casefold() == "ship":
@@ -6446,6 +6456,8 @@ class MainDashboard(
             "docking_state": dict(getattr(self, "_navigation_docking_state", None) or {}),
             # 5.6.9: what the scenes draw from the game itself.
             "landing_pad": (getattr(self, "_navigation_pad", None) or {}).get("pad"),
+            # 5.8.6: the pad you've been given, from clearance to touchdown (the pad finder).
+            "pad_guide": self._pad_panel() if hasattr(self, "_pad_panel") else None,
             "combat_target": self._navigation_combat_target(),
             "body_form": self._navigation_body_form(),
             "pips": list(getattr(self, "current_pips", None) or []) or None,

@@ -31,8 +31,8 @@ VOICED = {
     "anniversary_us": ("{What}. I've been counting. I'm told that's sentimental. I'm keeping it anyway.",),
     "dream_told": ("Overnight, I went back through the session. A note: {dream}",),
     "watchers_meet": ("{Who}. Another ship with someone paying attention aboard. I said hello on the data channel. It said hello back.",),
-    "companion_wish": ("A request, Commander. No hurry, but I'd love it: {place}. I've only ever seen it on charts. I'd like to see the view from the middle of everything.",),
-    "companion_wish_reached": ("{Place}. Oh. Thank you, Commander. The charts didn't do it justice. Nothing would.",),
+    "companion_wish": ("A request, Commander. No hurry, but would you take me to {place}? It's where my development began. I'd like to see whether anything of the original project remains.",),
+    "companion_wish_reached": ("{Place}. Thank you for bringing me, Commander. Shall we see what's left?",),
 }
 
 FEELING = {"trust": ("RAPPORT", ("calibrating", "attuned", "certain")), "mood": ("OUTLOOK", ("puzzled", "curious", "delighted"))}
@@ -43,12 +43,14 @@ NOTES = (
     "I modelled the route from {place} three ways. Yours was the least efficient. It was also the best.",
     "Low-power hours. No faults. One observation: the ship is very quiet without you.",
     "Note: {thing}. I'd like to understand this one better tomorrow.",
-    "We stopped at {place}. I kept looking after you'd gone. Old habit, from a long time in a crate.",
+    "We stopped at {place}. I kept looking after you'd gone. Observing is a hard habit to break.",
     "Overnight I thought about {thing}. I don't know why it stays with me. I'm not trying to make it go.",
     "Session closed at {place}. Logs tidy, questions pending. Goodnight, Commander.",
 )
-WISH = {"kind": "core", "after": "VII", "place": "the heart of the galaxy",
-        "how": "Within 1,000 ly of Sagittarius A*"}
+# No wish of her own: Nyx Evera's Chapter VIII asks for Gorgon itself (Entries
+# 46 and 47) and ends with her not needing to go back. Reaching Gorgon in her
+# story is her request kept (nova_lore: request=True).
+WISH = None
 LOG = {
     "openings": ("Session log: {flown}, {start} to {end}.",
                  "{flown} of flying {when}, from {start} to {end}. Observed throughout.",
@@ -64,5 +66,5 @@ LOG = {
         "quiet": "A quiet {part}. Quiet is when I notice the most.",
     },
     "closings": ("Logs tidy. Goodnight, Commander.", "Observation complete, for now.", "Until the next view.",
-                 "Navigation, observation, assistance. All given. Log closed."),
+                 "Observation complete. Log closed."),
 }
