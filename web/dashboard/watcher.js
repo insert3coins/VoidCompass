@@ -315,12 +315,6 @@ function shell(root, ui) {
       if (!await ui.command("workspace", {page: "watcher", operation: "library_play", id: libraryId})) ui.showToast("She couldn't answer that just now");
       return;
     }
-    // 5.8.6.1: Lyra's question in Nova's Prologue.
-    const prologueAnswer = event.target.closest("[data-prologue]")?.dataset.prologue;
-    if (prologueAnswer) {
-      if (!await ui.command("workspace", {page: "watcher", operation: "prologue_answer", value: prologueAnswer})) ui.showToast("Lyra isn't asking just now");
-      return;
-    }
     // 5.8.6: a system her story names, to paste into the galaxy map.
     const copySystem = event.target.closest("[data-copy-system]")?.dataset.copySystem;
     if (copySystem) {
@@ -593,7 +587,7 @@ function guideBook(guide, ui) {
 }
 
 // 5.8.6.1: Nova's Prologue on the BRIDGE: Lyra's last scene, then what to do
-// (the objective, or her question), then "Initializing" until Nova speaks.
+// (the objective), then "Initialising" until Nova speaks.
 let prologueKey = "";
 function renderPrologue(prologue, ui) {
   const box = ui.byId("watcher-prologue");
@@ -607,7 +601,6 @@ function renderPrologue(prologue, ui) {
   const last = (prologue.told || []).at(-1);
   let foot = "";
   if (prologue.initializing) foot = `<p class="watcher-prologue-status"><i aria-hidden="true"></i>${esc(prologue.initializing)}</p>`;
-  else if (prologue.asking) foot = `<div class="watcher-prologue-ask"><button type="button" class="primary" data-prologue="download">DOWNLOAD N.O.V.A.</button><button type="button" data-prologue="not_now">NOT NOW</button></div><p class="watcher-note">Or answer Lyra in TALK.</p>`;
   else if (prologue.objective) foot = `<p class="watcher-prologue-objective"><b>OBJECTIVE</b>${esc(prologue.objective)}</p>${copyButton({system: prologue.system}, ui)}`;
   box.innerHTML = `<header><span>${esc(String(prologue.title || "").toUpperCase())}</span><b>LYRA</b></header>
     ${last ? `<small class="watcher-reader-label">${esc(String(last.title).toUpperCase())}</small><blockquote>${last.lines.map((line) => `<p>${esc(line)}</p>`).join("")}</blockquote>` : ""}${foot}`;

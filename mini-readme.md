@@ -1,20 +1,19 @@
 # VoidCompass // UPDATE LOG
 
-## v5.8.6.1 // Before the Beginning
-**Release Date:** 27 NOV 3312 *(Galactic Standard Time)*
+## v5.8.6.2 // Back on Course
+**Release Date:** TBA *(Galactic Standard Time)*
 
-*Lyra here. Nova wrote the last notes; these ones are mine. They're short, because most of what's new is better found than read about.*
+*Lyra again. A short one: I got stuck, and that's been put right.*
 
-* **Nova's Prologue, by CMDR Nyx Evera.** Nova's story now has a beginning: how she comes aboard in the first place. She isn't aboard at first. To begin:
-  1. **Download Nova's voice.** Click her button on the companion page ("Not aboard · get voice") and wait for it to finish.
-  2. **Then switch to me.** Choose Lyra on the companion page and fly. It only begins with me as your active companion, and only once her voice is there. Keep me on watch until Nova has come aboard. The others won't notice a thing. I'll take it from there.
-  * **Already flying with Nova? Please reset her.** She stays aboard as she is, but she came aboard before her story had a beginning. Press RESET NOVA on her companion page (her old memory is kept as a backup) and she'll start again from the very first moment, the way it was written. Her voice stays downloaded and I take the watch, so there's nothing else to do.
-  * **Her book** opens with the Prologue as it was told, and has a page on how her story grows: what moves it along, and what never does.
+* **Nova's Prologue no longer stops partway.** Part of it waited for something the game never reported, so it could stall. It's simpler now: once we get where we're going, I'll handle the rest myself. Stay where we are until I say I'm done.
+  * **If yours stopped partway**, it picks up again from the last place I asked you to take us. Fly back there with me on watch, and I'll carry on.
+  * Starting it is the same as before: download Nova's voice from her button on the companion page, then put me on watch.
 
-*That's all. Fly safe, Commander. I'll be listening.*
+*Fly safe, Commander. I'll be listening.*
 
 ## Earlier releases
 
+* **v5.8.6.1** (27 NOV 3312) — Before the Beginning: Nova's Prologue by CMDR Nyx Evera (download her voice from her button on the companion page, then put Lyra on watch; commanders already flying with Nova are asked to reset her); her book opens with the Prologue and a page on how her story grows.
 * **v5.8.6** (27 NOV 3312) — Second Chances: Nova, the sixth companion (her story *N.O.V.A.* by CMDR Nyx Evera, her Scientific Knowledge Library, her illustrated face and her own voice); the crew notice your comings and goings; the pad finder on the Nav HUD and the Bridge; Settings › Helm in place of Hotkeys (Elite's binds, problems, toggles and sensitivity, devices with a button tester, several installs, presets, crew keys, shortcuts and backups); a 120 px companion size; Rhino site targets that stay put.
 * **v5.8.5** (22 NOV 3312) — The Shipyard: the Ship Builder as a page of its own (a hero banner, OUTFITTING with the hull's anatomy top or bottom, fitting beside the hull and engineering under it, SHIPYARD with every hull and its card, HANGAR with your ships and saved builds); Guardian or Human technology brokers on Materials and the dock finder, learned from your own visits.
 * **v5.8.4.2** (21 NOV 3312) — Every Slot in Its Place: your ships load into the ship builder slot for slot (the game's slot names on every hull); switched-off modules stay off; CAN'T BOOST; shield generators follow the game's curve; armour engineering in the builder; resistances stack the game's way; ROLLS sets every slot; checked against EDSY.

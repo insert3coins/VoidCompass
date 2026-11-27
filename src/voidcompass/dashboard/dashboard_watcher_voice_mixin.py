@@ -744,10 +744,6 @@ class DashboardWatcherVoiceMixin:
         original_text = text
         text = companions.addressed(text, companions.identity(self.config))
         mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
-        # 5.8.6.1: Lyra asked whether to download the program (Nova's Prologue).
-        prologue = self._prologue_talk(text) if hasattr(self, "_prologue_talk") else None
-        if prologue:
-            return prologue
         # 5.8.6: "Nova, copy the destination": where her story asked you to take her.
         story_place = self._story_place_copy(text, mind)
         if story_place:
@@ -1161,9 +1157,6 @@ class DashboardWatcherVoiceMixin:
         if operation == "prologue_voice":
             # 5.8.6.1: Nova's locked button fetches her voice.
             return hasattr(self, "_prologue_voice_download") and self._prologue_voice_download()
-        if operation == "prologue_answer":
-            # 5.8.6.1: DOWNLOAD / NOT NOW on Lyra's question.
-            return hasattr(self, "_prologue_answer") and self._prologue_answer(payload.get("value") == "download")
         if operation == "library_play":
             # 5.8.6: a question picked from Nova's library in her book.
             mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)

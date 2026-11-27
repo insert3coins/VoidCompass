@@ -2,10 +2,10 @@
 
 It's Lyra's alone. Nova starts locked; her voice can be fetched from her
 button in the companion picker, and once it's on disk, Lyra (on watch, in
-play) notices and finds the archive. The journal takes the commander to LFT
-1748 and the scan; a yes in TALK (or DOWNLOAD on Lyra's page) brings the
-copy aboard; Lyra says it's installed, and Nova takes the watch. The other
-companions never notice any of it, and nothing moves while Lyra is off watch.
+play) notices and finds the archive. Arriving at the installation in LFT 1748
+starts the rest: she connects, recovers and installs the software, a few
+seconds apart, and Nova takes the watch. The other companions never notice
+any of it, and nothing moves while Lyra is off watch.
 
 How far it has gone is kept per commander (config ``nova_prologue``). A
 commander who already had Nova aboard before the Prologue existed keeps her.
@@ -45,6 +45,9 @@ class DashboardPrologueMixin:
                 met = self._prologue_met_before(profile)
                 state = {**state, "state": "installed", "met_before": True} if met else {**state, "state": ""}
                 self._prologue_write(state)
+            state, moved = prologue.revised(state)
+            if moved:
+                self._prologue_write(state)
             self._prologue_sync_lock(state)
         return state
 
@@ -68,7 +71,7 @@ class DashboardPrologueMixin:
     def _prologue_restart(self):
         """RESET on Nova's page: she leaves the ship and her Prologue starts
         over. Her voice stays, so Lyra, on watch, notices it again."""
-        state = {"state": "", "restarted": round(time.time(), 1)}
+        state = {"state": "", "restarted": round(time.time(), 1), "revision": prologue.REVISION}
         self._prologue_write(state)
         self._prologue_sync_lock(state)
         if companions.identity(self.config) == "nova":
@@ -205,8 +208,25 @@ class DashboardPrologueMixin:
                 self._prologue_write(state)
                 self._schedule_html_dashboard_publish(immediate=True)
             return
+        # She's working: each scene follows the last once she's finished
+        # speaking and its pause has passed.
+        if stage in prologue.NEXT:
+            if not self._prologue_quiet(lyra):
+                self._prologue_hush = None
+                return
+            if getattr(self, "_prologue_hush", None) is None:
+                self._prologue_hush = now
+                return
+            following, pause = prologue.NEXT[stage]
+            if now - self._prologue_hush >= pause:
+                self._prologue_hush = None
+                self._prologue_scene(state, following, lyra, now)
+                state["state"] = following
+                self._prologue_write(state)
+                self._schedule_html_dashboard_publish(immediate=True)
+            return
         if stage == "installing" and self._prologue_quiet(lyra):
-            # Retrieved and installed, said: Nova takes the watch.
+            # Installation complete, said: Nova takes the watch.
             state.update(state="installed", on_watch=True)
             self._prologue_write(state)
             self._prologue_sync_lock(state)
@@ -229,7 +249,7 @@ class DashboardPrologueMixin:
 
     def _prologue_event(self, event, raw):
         state = self._prologue_state()
-        if state.get("state") not in {"found", "arrived"}:
+        if state.get("state") != "found":
             return
         lyra = self._prologue_lyra()
         if lyra is None:
@@ -245,46 +265,25 @@ class DashboardPrologueMixin:
         moved = prologue.step(state, event, raw, system)
         if not moved:
             return
-        for key in moved.split("+"):
-            self._prologue_scene(state, key, lyra)
-            state["state"] = key
+        self._prologue_hush = None
+        self._prologue_scene(state, moved, lyra)
+        state["state"] = moved
         self._prologue_write(state)
         self._schedule_html_dashboard_publish(immediate=True)
-
-    # -- the answer ---------------------------------------------------------------------
-    def _prologue_talk(self, text):
-        """"Download it" / "not now" in TALK while Lyra asks. None otherwise."""
-        if self._prologue_state().get("state") != "asked" or self._prologue_lyra() is None:
-            return None
-        said = prologue.answer(text)
-        if not said:
-            return None
-        self._prologue_answer(said == "yes")
-        return {"handled": True}
-
-    def _prologue_answer(self, download):
-        state = self._prologue_state()
-        lyra = self._prologue_lyra()
-        if state.get("state") != "asked" or lyra is None:
-            return False
-        if download:
-            # Retrieval, then installation: both hers, on her watch.
-            self._prologue_scene(state, "downloaded", lyra)
-            self._prologue_scene(state, "installed", lyra)
-            state["state"] = "installing"
-            state.pop("declined", None)
-        else:
-            lyra.crew_say(TELLER, "Understood.", heading=HEADING, topic="nova_prologue", wait=LINE_WAIT_S)
-            state["declined"] = round(time.time(), 1)
-        self._prologue_write(state)
-        self._schedule_html_dashboard_publish(immediate=True)
-        return True
 
     # -- the companion page -------------------------------------------------------------
     def _prologue_told(self, state):
+        """The scenes told, in order; Scene 4's two parts as one."""
         scenes = state.get("scenes") or {}
-        return [{"key": key, "title": prologue.TITLES[key], "lines": list(prologue.LINES[key]), "at": scenes[key]}
-                for key in prologue.ORDER if key in scenes]
+        told = []
+        for key in prologue.ORDER:
+            if key not in scenes:
+                continue
+            if told and told[-1]["title"] == prologue.TITLES[key]:
+                told[-1]["lines"] += list(prologue.LINES[key])
+                continue
+            told.append({"key": key, "title": prologue.TITLES[key], "lines": list(prologue.LINES[key]), "at": scenes[key]})
+        return told
 
     def _prologue_hello(self):
         """Whether Nova has said hello (Scene 5, her Entry 01, which ends the
@@ -311,8 +310,7 @@ class DashboardPrologueMixin:
             return None
         return {"title": prologue.TITLE, "state": stage, "told": self._prologue_told(state),
                 "objective": prologue.OBJECTIVES.get(stage, ""),
-                "system": prologue.SYSTEM if stage in {"found", "arrived"} else "",
-                "asking": stage == "asked", "declined": bool(state.get("declined"))}
+                "system": prologue.SYSTEM if stage == "found" else ""}
 
     def _prologue_chapter(self):
         """Nova's book opens with her Prologue, as Lyra told it."""
@@ -326,8 +324,8 @@ class DashboardPrologueMixin:
                  "title": row["title"], "place": None} for row in told]
         return {"numeral": "P", "title": prologue.TITLE.split(" · ", 1)[-1], "book": 1, "begun": True,
                 # It ends with her first words, Chapter I's opening entry.
-                "complete": len(rows) == len(prologue.ORDER) and bool(self._prologue_hello()), "told": rows,
-                "told_count": len(rows), "total": len(prologue.ORDER), "about": "", "account": "", "narrator": "LYRA",
+                "complete": "installing" in (state.get("scenes") or {}) and bool(self._prologue_hello()), "told": rows,
+                "told_count": len(rows), "total": len(dict.fromkeys(prologue.TITLES.values())), "about": "", "account": "", "narrator": "LYRA",
                 "prologue": True}
 
     def _prologue_lore(self, lore):

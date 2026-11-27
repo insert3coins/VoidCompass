@@ -1377,9 +1377,7 @@ class WatcherMind:
                 done = None
             finally:
                 self.talking_as = None
-        if isinstance(done, dict) and done.get("handled"):
-            pass  # answered by someone else's lines (Lyra, in Nova's Prologue)
-        elif isinstance(done, dict) and done.get("waiting"):
+        if isinstance(done, dict) and done.get("waiting"):
             self._uplink = {"said": asked, "at": self.clock(), "who": who}
             thought = self._utter("talk", f"talk:uplink:{count}", str(done.get("say") or ""), self.clock())
             thought["importance"] = 3
