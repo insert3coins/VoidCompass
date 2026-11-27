@@ -644,9 +644,10 @@ class HtmlOverlayStudioMixin:
             hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr in menu}
         if bool(self.config.get("overlay_hide_when_game_closed", True)):
             if getattr(self, "_game_process_running", None) is False:
-                hidden |= {spec.overlay_id for spec in OVERLAY_SPEC_BY_ATTR.values()}
+                hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in self.GAME_OFF_KEEP}
             elif getattr(self, "_game_closed", False) or getattr(self, "_menu_music", "") in {"MainMenu", "CQCMenu"}:
-                hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in self.GAME_CLOSED_KEEP}
+                keep = self.GAME_CLOSED_KEEP | self.GAME_OFF_KEEP
+                hidden |= {spec.overlay_id for attr, spec in OVERLAY_SPEC_BY_ATTR.items() if attr not in keep}
         # Overlay groups (5.8.1): what the groups that are on (and off) leave hidden.
         groups_hidden = getattr(self, "_overlay_groups_hidden", None)
         if callable(groups_hidden):
@@ -658,6 +659,8 @@ class HtmlOverlayStudioMixin:
         return HtmlOverlayServer.set_overrides(hidden=hidden)
 
     GAME_CLOSED_KEEP = frozenset({"music_player_hud"})
+    # 5.8.6.2: the companion keeps you company with Elite closed too.
+    GAME_OFF_KEEP = frozenset({"heartbeat_hud"})
 
     def _init_game_visibility(self):
         from voidcompass.core.elite_binds import game_running

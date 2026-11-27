@@ -2181,14 +2181,14 @@ function renderStudioVisibility(studio) {
   } else if (live.game_running === false) {
     if (options.overlay_hide_when_game_closed !== false) {
       label = "WAITING FOR ELITE";
-      detail = "Elite Dangerous is not running. All overlays are hidden and gameplay overlays will return when you load into the game.";
+      detail = "Elite Dangerous is not running. Overlays are hidden, except your companion, and gameplay overlays will return when you load into the game.";
     } else {
       label = "DESKTOP OVERLAYS ALLOWED";
       detail = "Elite Dangerous is not running. Turn on Hide when Elite is not running to keep overlays off your desktop.";
     }
   } else if (options.overlay_hide_when_game_closed !== false && (live.session_closed || live.main_menu)) {
     label = "WAITING FOR GAME LOAD";
-    detail = "Gameplay overlays are hidden until you load into the game. The music player can stay at the main menu.";
+    detail = "Gameplay overlays are hidden until you load into the game. Your companion stays, and the music player can stay at the main menu.";
   } else if (live.in_map && everyCount("hide_on_maps")) {
     label = "MAP HIDING ACTIVE";
     detail = "A map is open. Each overlay follows its own Hide on maps choice.";

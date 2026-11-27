@@ -9,6 +9,8 @@
   * **If yours stopped partway**, it picks up again from the last place I asked you to take us. Fly back there with me on watch, and I'll carry on.
   * Starting it is the same as before: download Nova's voice from her button on the companion page, then put me on watch.
 
+* **Your companion stays when Elite isn't running.** Hide when Elite is not running still clears the other overlays off your desktop, but whoever is on watch now stays on screen, before you launch, at the main menu and after you quit. We'd rather keep you company.
+
 *Fly safe, Commander. I'll be listening.*
 
 ## Earlier releases
