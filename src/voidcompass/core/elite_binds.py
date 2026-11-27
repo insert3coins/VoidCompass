@@ -13,7 +13,9 @@ folder or the running game. Elite names some devices by their USB id
 ("068E00F4") and others by a name ("SaitekX52", "GamePad");
 ControlSchemes\\DeviceMappings.xml says which hardware each name is.
 
-Nothing here writes to the game's files.
+Reading a file, the game's names for each control and which section it is in
+are Helm's (voidcompass.helm, 5.8.6): one reader for the whole app.
+Nothing here writes to the game's files; Helm's APPLY is the one writer.
 """
 from __future__ import annotations
 
@@ -24,6 +26,9 @@ from pathlib import Path
 import re
 import time
 import xml.etree.ElementTree as ET
+
+from voidcompass.helm import binds as bf
+from voidcompass.helm import catalog
 
 GROUPS = ("general", "ship", "srv", "onfoot")
 GROUP_LABELS = {"general": "General", "ship": "Ship", "srv": "SRV", "onfoot": "On foot"}
@@ -57,19 +62,23 @@ _GENERAL = re.compile(r"^(UI_|Cycle(Next|Previous)(Panel|Page)|Cam(Pitch|Yaw|Tra
 
 
 def group_of(action):
-    """Which of Elite's four control groups an action belongs to."""
+    """Which of Elite's four control groups an action belongs to: where the
+    game's own controls screen lists it (Helm's table), else a guess."""
     name = str(action or "")
-    if "Humanoid" in name:
-        return "onfoot"
-    if "Buggy" in name:
-        return "srv"
+    section = catalog.section_of(name)
+    if section in GROUPS:
+        return section
     if _GENERAL.match(name):
         return "general"
     return "ship"
 
 
 def action_label(action):
-    """"LandingGearToggle" -> "Landing gear toggle"; "ToggleCargoScoop_Buggy" -> "Toggle cargo scoop"."""
+    """The control as the game names it ("Landing Gear", "Cargo Scoop");
+    one the table hasn't met: "LandingGearToggle" -> "Landing gear toggle"."""
+    control = catalog.lookup(action)
+    if control.section != "other":
+        return control.name
     name = str(action or "")
     for suffix in ("_Buggy", "_Humanoid", "_Fighter", "_MultiCrew", "_Landing"):
         if name.endswith(suffix):
@@ -85,38 +94,22 @@ def action_label(action):
     return text[:1].upper() + text[1:]
 
 
-class Slot:
-    __slots__ = ("device", "key", "modifiers")
-
-    def __init__(self, device, key, modifiers=()):
-        self.device = str(device or "")
-        self.key = str(key or "")
-        self.modifiers = tuple((str(d or ""), str(k or "")) for d, k in modifiers)
-
-    def empty(self):
-        return self.device.casefold() in ("", NO_DEVICE) or not self.key
+# One slot of a control: Helm's (device, key, modifiers, hold).
+Slot = bf.Slot
 
 
 def parse_binds(text):
     """A .binds file -> {action: [Slot, ...]}: its Primary and Secondary
     buttons, and an axis Binding as a slot too. Bad XML raises ValueError."""
-    try:
-        root = ET.fromstring(text)
-    except ET.ParseError as error:
-        raise ValueError(f"not a valid bindings file ({error})") from None
+    parsed = bf.parse(text)
     actions = {}
-    for element in root:
-        slots = []
-        for tag in ("Primary", "Secondary", "Binding"):
-            node = element.find(tag)
-            if node is None:
-                continue
-            slot = Slot(node.get("Device"), node.get("Key"),
-                        [(m.get("Device"), m.get("Key")) for m in node.findall("Modifier")])
-            if not slot.empty():
-                slots.append(slot)
+    for tag in parsed.buttons:
+        slots = [slot for slot in parsed.slots(tag) if slot.assigned()]
         if slots:
-            actions.setdefault(element.tag, []).extend(slots)
+            actions[tag] = slots
+    for tag, axis in parsed.axes.items():
+        if axis.bound():
+            actions.setdefault(tag, []).append(Slot(axis.device, axis.key))
     return actions
 
 
@@ -154,8 +147,10 @@ def resolve_preset(name, folder, schemes):
     it), else the built-in one in the game's ControlSchemes. (path, built_in)
     or (None, False)."""
     if folder is not None and Path(folder).is_dir():
-        yours = [path for path in Path(folder).glob(f"{name}*.binds")
-                 if path.name == f"{name}.binds" or re.fullmatch(rf"{re.escape(name)}\.\d+\.\d+\.binds", path.name)]
+        # Only <name>.<major>.<minor>.binds counts: the game turns a plain
+        # <name>.binds into one the moment it's picked, and never reads it after.
+        yours = [path for path in Path(folder).glob("*.binds")
+                 if re.fullmatch(rf"{re.escape(name)}\.\d+\.\d+\.binds", path.name, re.I)]
         if yours:
             return max(yours, key=lambda path: (_version(path), path.stat().st_mtime)), False
     for directory in schemes or ():
@@ -395,7 +390,7 @@ class EliteBinds:
                 continue
             if path not in parsed:
                 try:
-                    parsed[path] = parse_binds(path.read_text(encoding="utf-8-sig", errors="ignore"))
+                    parsed[path] = parse_binds(path.read_bytes())
                 except (OSError, ValueError) as exc:
                     logging.warning("Couldn't read Elite's bindings %s: %s", path, exc)
                     parsed[path] = {}

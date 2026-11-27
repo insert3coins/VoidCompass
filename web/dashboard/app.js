@@ -48,6 +48,7 @@ import {handleTradingClick, handleTradingInput, handleTradingSubmit, renderTradi
 import {handleMiningClick, handleMiningInput, handleMiningSubmit, renderMining, resetMining} from "./mining.js";
 import {handleRhinoClick, handleRhinoInput, handleRhinoSubmit, renderRhino, resetRhino} from "./rhino.js";
 import {renderMaterials, resetMaterials} from "./materials.js";
+import {mountHelm, helmBusy} from "./helm.js";
 import {renderShipBuilderPage, resetShipBuilderPage} from "./ship-builder.js";
 import {handleThemeWorkshopClick, handleThemeWorkshopInput, themeSettings, themeWorkshopOpen, workshopTheme} from "./theme-workshop.js";
 import {groupChips, groupChipsFingerprint, handleOverlayGroupsClick, handleOverlayGroupsInput, handleOverlayGroupsSubmit,
@@ -211,6 +212,7 @@ const STRUCTURAL_BUTTON_SELECTOR = [
   ".wrapped-years button", ".wrapped-index button", ".wrapped-start", ".game-card",
   ".pe button", ".pc-show button", ".pc-hero-card", ".pc-timeline li button",
   ".companion-switch button", ".talk-prompt", ".talk-send", ".talk-mic", ".talk-link",
+  ".bf-slot", ".bf-link", ".bf-tab", ".bf-chip", ".bf-pick",
 ].join(",");
 
 function decorateCockpitButtons(root = document) {
@@ -310,6 +312,15 @@ const WORKSHOP_UI = {
   byId, escapeHtml, credits, showToast, command, apiUrl: (path) => apiUrl(path),
   numeric: (value, digits = 0) => numeric(value, digits).replace(/^-(?=0(?:[.,]0+)?$)/, ""),
   workspaceCard: (...args) => workspaceCard(...args), workspaceTable: (...args) => workspaceTable(...args),
+};
+// Settings › Helm (5.8.6) draws Void Compass's own shortcuts with Settings' own
+// pieces (they were Settings › Hotkeys): the same rows, saves and live readout.
+const HELM_UI = {
+  ...WORKSHOP_UI,
+  shortcuts: (data) => settingsSectionBody("hotkeys", data),
+  shortcutsBusy: () => Boolean(hotkeyCaptureAction || settingsPendingSaves.size),
+  startControllerLive: () => startControllerLive(),
+  applyHotkeyFilter: () => applyHotkeyFilter(),
 };
 const duration = (seconds) => {
   const total = Math.max(0, Math.round(number(seconds)));
@@ -2834,7 +2845,9 @@ const SETTINGS_SECTIONS = [
   {id: "journal", title: "Journal & files", heading: "Journal & files", category: "FLIGHT RECORDS", detail: "Connect your flight journals and screenshots. Every discovery begins with a good record."},
   {id: "appearance", title: "Appearance", heading: "Make yourself at home", category: "PRESENTATION", detail: "Choose your palette, find a comfortable text size and make the deck your own."},
   {id: "flight", title: "Flight & exploration", heading: "Flight & exploration", category: "FIELD PREFERENCES", detail: "Tune the helpers that travel with you, from fuel warnings to your next expedition."},
-  {id: "hotkeys", title: "Hotkeys", heading: "A shortcut to your cockpit", category: "COMMAND INPUT", detail: "Keep your hands on the controls. These shortcuts work while Elite Dangerous has focus."},
+  // 5.8.6: Helm took over Hotkeys: Elite's own controls and Void Compass's
+  // shortcuts, edited, checked and backed up.
+  {id: "controls", title: "Helm", heading: "Take the helm", category: "CONTROLS", detail: "Elite's controls on every device and Void Compass's own shortcuts: checked, edited, and your control files backed up before anything is written."},
   {id: "voice", title: "Voice", heading: "Say the word", category: "VOICE CONTROL", detail: "Talk to your companion by voice, and let it work the ship: maps, gear, lights, pips and more, with Elite's own keys."},
   {id: "galnet", title: "Galnet", heading: "A signal from the Bubble", category: "NEWS RELAY", detail: "Choose how often the news arrives and how headlines move through your deck."},
   {id: "integrations", title: "Integrations", heading: "Connections you choose", category: "EXTERNAL SERVICES", detail: "Manage community services, sharing and your local API. Each connection has its own controls."},
@@ -2854,6 +2867,7 @@ function settingsIcon(id) {
     appearance: '<path d="M3 6h18M3 12h18M3 18h18"/><path d="M7 3v6M16 9v6M10 15v6" stroke-width="3"/>',
     flight: '<path d="m12 2 9 18-9-4-9 4zM12 2v14"/>',
     hotkeys: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M5 9h2m3 0h2m3 0h2M5 13h2m3 0h2m3 0h4M7 16h10"/>',
+    controls: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/>',
     galnet: '<path d="M12 5v15M7 20h10M8 8a6 6 0 0 0 0 8m8-8a6 6 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/><circle cx="12" cy="10" r="2"/>',
     integrations: '<rect x="8" y="8" width="8" height="8"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6M5 5l3 3m8 8 3 3M5 19l3-3m8-8 3-3"/>',
     diagnostics: '<path d="M2 12h5l3-8 4 16 3-8h5"/>',
@@ -2872,7 +2886,8 @@ let hotkeyFilter = (() => {
 
 // Settings › Hotkeys' filter: all, bound, clashes or free (the rows stay in the page, for its search).
 function applyHotkeyFilter() {
-  const panel = document.querySelector('[data-settings-panel="hotkeys"]');
+  // Settings › Helm › SHORTCUTS (5.8.6).
+  const panel = document.querySelector(".bf-shortcuts");
   if (!panel) return;
   panel.querySelectorAll(".hotkey-row").forEach((row) => {
     const shown = hotkeyFilter === "all" || (hotkeyFilter === "clashes" ? row.dataset.hotkeyClash === "1"
@@ -3061,7 +3076,6 @@ async function saveVoiceCommand(root, operation = "save") {
 const SETTINGS_GROUP_NOTES = {
   "TALK BY VOICE": "Hold your talk key, speak, let go: it carries out a command or answers from your ship’s systems.",
   "SHIP COMMANDS": "It presses Elite's own keys, from your bindings, when you ask. Status.json tells it what's done already.",
-  "TO BIND IN ELITE": "Actions with only a pad or stick button, by the preset they're in: it can't press these yet.",
   "WHAT YOU CAN SAY": "A few of the ways to say each. Typed or spoken, please and thank you included.",
   INPUT: "What Void Compass listens to, and the bindings Elite already uses.",
   OVERLAYS: "Show or hide each overlay, wherever you are.",
@@ -3204,13 +3218,13 @@ function settingsSectionBody(id, data) {
     const names = chosen && !mics.includes(chosen) ? [...mics, chosen] : mics;
     const choice = (key, selected, options, disabled = false) => `<div class="voice-choices" role="group">${options.map(([id, title, detail]) => `<button type="button" data-voice-choice="${key}" data-value="${escapeHtml(id)}" aria-pressed="${String(selected) === String(id)}"${disabled ? " disabled" : ""}><b>${escapeHtml(title)}</b><small>${escapeHtml(detail || "")}</small></button>`).join("")}</div>`;
     const models = listen.models || [];
-    const keyNote = !listen.hotkey ? "Set a talk key in Hotkeys → your companion."
-      : listen.hotkeys_on === false ? "Enable system-wide hotkeys in Hotkeys." : "Use your keyboard shortcut or controller talk button.";
+    const keyNote = !listen.hotkey ? "Set a talk key in Helm › Shortcuts › your companion."
+      : listen.hotkeys_on === false ? "Turn on system-wide hotkeys in Helm › Shortcuts." : "Use your keyboard shortcut or controller talk button.";
     const hearing = settingGroup("TALK BY VOICE",
       settingSwitch({key: "watcher_listen_enabled", label: "Talk to your companion", detail: "Speak a command or ask a question. Release the key to send it.", checked: listen.enabled})
       + `<div class="input-cards voice-setup-grid"><section class="input-card" data-search="recognition model whisper fast accuracy speed download"><header><b>1 · RECOGNITION</b><span>LOCAL TO THIS PC</span></header>${choice("watcher_listen_model", listen.model || "accurate", [["fast", "Fast · recommended", "Base English · 148 MB. Quick commands; may miss unusual names."], ["accurate", "Accuracy", "Small English · 488 MB. Better with names; more time to recognise."]], listen.downloading)}<div class="setting-row voice-hearing" id="voice-hearing" data-search="hearing download whisper speech model"><span class="setting-copy"><b>${escapeHtml(models.find((item) => item.id === listen.model)?.name || "Speech model")}</b><small id="voice-hearing-state">${listen.installed ? "Downloaded." : "Download this model to use it."}</small><small id="voice-latency">Recognition warms in the background while voice is on.</small></span><span class="setting-control voice-actions"><button type="button" id="voice-download"${listen.installed || listen.downloading ? " hidden" : ""}>DOWNLOAD · ${numeric(listen.download_mb)} MB</button><button type="button" id="voice-cancel"${listen.downloading ? "" : " hidden"}>CANCEL</button><button type="button" class="danger-action" id="voice-remove"${models.some((item) => item.installed) || listen.installed ? "" : " hidden"}>REMOVE MODELS</button></span><div class="voice-progress" id="voice-progress" hidden><i></i><span></span></div></div>${settingFlag()}</section>
       <section class="input-card" data-search="${settingSearchText("microphone input device", names.join(" "))}"><header><b>2 · MICROPHONE</b><span>CHOOSE AN INPUT</span></header>${choice("watcher_listen_mic", chosen, [["", "Windows default", "Follows Windows Sound settings."], ...names.map((name) => [name, name, mics.includes(name) ? "Available" : "Not connected"])])}${settingFlag()}</section>
-      <section class="input-card" data-search="talk key hold tap hotkey control"><header><b>3 · TALK CONTROL</b><span>${escapeHtml(listen.hotkey || "NO KEY SET")}</span></header>${choice("watcher_listen_mode", listen.mode === "tap" ? "tap" : "hold", [["hold", "Hold to talk", "Hold, speak, release for the quickest reply."], ["tap", "Tap to talk", "Tap to start; tap again to send."]])}<div class="voice-key"><kbd>${escapeHtml(listen.hotkey || "NONE")}</kbd><button type="button" data-settings-goto="hotkeys">CHANGE IN HOTKEYS</button><p>${escapeHtml(keyNote)}</p></div>${settingFlag()}</section></div>`
+      <section class="input-card" data-search="talk key hold tap hotkey control"><header><b>3 · TALK CONTROL</b><span>${escapeHtml(listen.hotkey || "NO KEY SET")}</span></header>${choice("watcher_listen_mode", listen.mode === "tap" ? "tap" : "hold", [["hold", "Hold to talk", "Hold, speak, release for the quickest reply."], ["tap", "Tap to talk", "Tap to start; tap again to send."]])}<div class="voice-key"><kbd>${escapeHtml(listen.hotkey || "NONE")}</kbd><button type="button" data-settings-goto="controls" data-helm-tab="shortcuts">CHANGE IN HELM</button><p>${escapeHtml(keyNote)}</p></div>${settingFlag()}</section></div>`
       + `<div class="setting-row voice-test" data-search="test microphone mic level hear it back"><span class="setting-copy"><b>Check your microphone</b><small id="voice-test-note">Say something for a few seconds, then hear it back.</small></span><span class="setting-control"><span class="voice-meter" id="voice-meter" aria-hidden="true"><i></i></span><button type="button" id="voice-test"${listen.enabled && listen.installed ? "" : " disabled"}>TEST MIC</button><button type="button" id="voice-play"${listen.has_test ? "" : " hidden"}>HEAR IT BACK</button></span></div>`
       + settingNote("Replies aloud also need your companion’s voice switched on (its page, SETUP), and its display enabled in Overlay Studio.")
       + settingNote("Your overlay groups answer to their names: “show the Rhino group”, “hide the exploring group”, “switch to the combat group”.")
@@ -3220,8 +3234,7 @@ function settingsSectionBody(id, data) {
       settingSwitch({key: "watcher_ship_enabled", label: "Allow Elite key commands", detail: "Maps, panels, docking, gear, pips and custom key sequences. App controls and conversation remain available when this is off.", checked: ship.enabled !== false})
       + `<div class="voice-ship-state"><span class="${ship.running ? "on" : ""}"><b>ELITE</b>${ship.running ? "RUNNING" : "NOT RUNNING"}</span><span class="on"><b>READY</b>${numeric(ship.ready)} OF ${numeric(ship.total)}</span><span class="${missing.length ? "warn" : "on"}"><b>KEYS MISSING</b>${numeric(missing.length)}</span></div>`
       + (ship.error ? settingNote(ship.error) : "")
-      + (missing.length ? settingNote(`Presets needing keyboard bindings: ${[...new Set(missing.map((row) => row.preset).filter(Boolean))].join("; ")}.`) : "")
-      + settingNote("In Elite → Options → Controls, add a keyboard key to any missing action; a secondary binding is fine. Pad or stick buttons alone cannot be pressed by voice. Elite must be in front.")
+      + `<div class="setting-row" data-search="${settingSearchText("missing keys helm assign keyboard bindings crew keys")}"><span class="setting-copy"><b>${missing.length ? `${numeric(missing.length)} action${missing.length === 1 ? "" : "s"} need a keyboard key` : "Every action has a key"}</b><small>Pad or stick buttons alone can't be pressed by voice, and Elite must be in front. Helm's CREW KEYS gives the missing ones free, safe keys (you check them, then APPLY).</small></span><span class="setting-control"><button type="button" data-page="settings" data-settings-section="controls" data-helm-tab="crew">${missing.length ? "ASSIGN IN HELM" : "OPEN HELM"}</button></span></div>`
       + settingNote("Panels reopen on Elite’s remembered tab. Use ‘next tab’, ‘menu down’, ‘select’ or ‘go back’, or edit the command’s sequence to suit your layout."));
     const allRows = (ship.groups || []).flatMap((group) => group.rows || []);
     const custom = (row) => (row.editors?.length ? row.editors : row.default_sequence?.length ? [row] : []).some((editor) => JSON.stringify(editor.sequence || []) !== JSON.stringify(editor.default_sequence || []));
@@ -3242,6 +3255,10 @@ function settingsSectionBody(id, data) {
       }).join(""));
     }).join("");
     return hearing + commands + settingGroup("SEQUENCE RECORDER", `<section id="sequence-recorder" class="sequence-recorder">${sequenceRecorderContent()}</section>`) + toolbar + catalogue;
+  }
+  if (id === "controls") {
+    // Helm draws itself (helm.js) and refreshes on its own; Settings' redraws leave it be.
+    return `<div id="helm-workspace" class="helm-host" data-morph-keep data-search="${settingSearchText("helm hotkeys shortcuts keyboard controller buttons elite bindings keybinds binds controls presets crew keys backup restore conflicts joystick hotas pad")}"></div>`;
   }
   if (id === "hotkeys") {
     // Settings › Hotkeys, redone for 5.7.3: what Void Compass listens to (keyboard,
@@ -3378,7 +3395,7 @@ function streamChatSettings(value, stream) {
     : "No crew yet: everyone who chats while it's on is remembered, with their points and rank.";
   return `${settingSwitch({key: "stream_chat_enabled", label: "Stream chat", detail: "Your Twitch chat talks to your companion. Viewers type !where, !ship, !route, !session, !rigs, !crew or !ask a question, and the companion on watch answers in its own voice and on the Stream Chat overlay. It only reads chat: nothing is ever posted, and no Twitch account or sign-in is needed.", checked: value.stream_chat_enabled})}`
     + settingText({key: "stream_chat_channel", id: "setting-stream-channel", label: "Twitch channel", detail: "Yours, as in twitch.tv/yourname (the address works too).", value: value.stream_chat_channel, placeholder: "yourname", status: streamChatStatus(stream, value)})
-    + settingSwitch({key: "stream_chat_voice", label: "Say the answers", detail: "Your companion speaks its answer when a viewer uses a command, naming who asked (filtered), and never what they typed; ordinary chat and unknown commands get nothing. Welcomes, thanks and naming votes are shown, not said. Off: the overlay only. Replies wait while you're in danger, being interdicted or docking; the mute key (Settings › Hotkeys) or a moderator's !quiet silences them.", checked: value.stream_chat_voice !== false})
+    + settingSwitch({key: "stream_chat_voice", label: "Say the answers", detail: "Your companion speaks its answer when a viewer uses a command, naming who asked (filtered), and never what they typed; ordinary chat and unknown commands get nothing. Welcomes, thanks and naming votes are shown, not said. Off: the overlay only. Replies wait while you're in danger, being interdicted or docking; the mute key (Settings › Helm › Shortcuts) or a moderator's !quiet silences them.", checked: value.stream_chat_voice !== false})
     + settingSwitch({key: "stream_chat_welcomes", label: "Welcome the crew", detail: "Newcomers welcomed, regulars welcomed back by name (\"fourth stream running\"), and raids, subs, gifts and bits thanked, on the overlay.", checked: value.stream_chat_welcomes !== false})
     + settingSwitch({key: "stream_chat_naming", label: "Chat names your first discoveries", detail: "Be first to an Earth-like, water or ammonia world (or a terraformable one) and chat suggests names with !name, then votes. The winner is shown on the overlay and kept with the world.", checked: value.stream_chat_naming !== false})
     + settingSelect({key: "stream_chat_where", label: "Where it says you are", detail: "Against stream sniping: what !where, !route and !ask give away.", value: value.stream_chat_where || "region",
@@ -3496,6 +3513,7 @@ function renderSettingsWorkspace(data) {
   }
   paintSequenceRecorder();
   if (!sequenceUi.timer) sequenceLive();
+  mountHelm(HELM_UI);
 }
 
 // Brings an element in line with a freshly built copy, touching only what
@@ -3512,6 +3530,8 @@ function morphNode(current, next) {
     return;
   }
   if (current.nodeType !== Node.ELEMENT_NODE) return;
+  // Helm's host keeps what it drew (it refreshes itself).
+  if (current.hasAttribute("data-morph-keep") && next.hasAttribute?.("data-morph-keep")) return;
   for (const {name} of [...current.attributes]) {
     if (!next.hasAttribute(name) && name !== "class") current.removeAttribute(name);
   }
@@ -3595,7 +3615,8 @@ function applySettingsView() {
     let panelMatches = 0;
     for (const row of panel.querySelectorAll("[data-search]")) {
       const hit = !words.length || words.every((word) => row.dataset.search.includes(word));
-      row.hidden = !hit;
+      // Helm's host holds rows of its own: it's never hidden for its keywords alone.
+      row.hidden = !hit && !row.hasAttribute("data-morph-keep");
       if (hit) panelMatches += 1;
     }
     for (const group of panel.querySelectorAll(".settings-group")) {
@@ -3730,7 +3751,7 @@ async function saveSettingsHotkeys(rows, message) {
 function settingsCanRerender() {
   const root = byId("settings-workspace");
   if (!root) return false;
-  if (hotkeyCaptureAction || settingsPendingSaves.size) return false;
+  if (hotkeyCaptureAction || settingsPendingSaves.size || helmBusy()) return false;
   if (themeWorkshopOpen()) return false;
   const focused = document.activeElement;
   return !(focused && root.contains(focused) && focused.matches("input, select, textarea, button"));
@@ -4995,7 +5016,7 @@ document.addEventListener("change", (event) => {
 
 document.addEventListener("change", async (event) => {
   const target = event.target;
-  if (!target.closest?.("#settings-workspace")) return;
+  if (!target.closest?.("#settings-workspace, [data-settings-host]")) return;
   if (target.matches("[data-sequence-choice]")) {
     await sequenceControl("sequence_choose", {index: Number(target.dataset.sequenceChoice), action: target.value});
     return;

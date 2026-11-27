@@ -2435,7 +2435,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
                     lock.release()
         return {"rows": rows, "total": sum(_integer(row.get("value")) for row in rows)}
 
-    def _html_settings_workspace(self):
+    def _html_hotkey_rows(self):
+        """Void Compass's own shortcuts (Helm › Shortcuts since 5.8.6)."""
         hotkeys = [
             {
                 "action": action, "key": key, "label": label.replace("The Watcher", companions.name(self.config)) if action.startswith("watcher_") else (companions.name(self.config) if attr == "heartbeat_hud" else label),
@@ -2448,6 +2449,22 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         ]
         # A to Z, so a shortcut is easy to find ("The Watcher" files under W).
         hotkeys.sort(key=lambda row: row["label"].casefold().removeprefix("the "))
+        return hotkeys
+
+    def _html_shortcuts(self):
+        """Helm's SHORTCUTS tab: the shortcuts, their controller buttons and their switches."""
+        controllers = getattr(self, "_html_controller_settings", None)
+        return {
+            "hotkeys": self._html_hotkey_rows(),
+            "controllers": controllers() if callable(controllers) else {},
+            "values": {"overlay_hotkeys_enabled": bool(self.config.get("overlay_hotkeys_enabled", True)),
+                       "controller_hotkeys_enabled": self.config.get("controller_hotkeys_enabled", True) is not False,
+                       "elite_game_folder": _text(self.config.get("elite_game_folder"), 400)},
+            "last_save": dict(getattr(self, "_html_settings_last_save", None) or {"id": 0, "ok": True, "detail": ""}),
+        }
+
+    def _html_settings_workspace(self):
+        hotkeys = self._html_hotkey_rows()
         try:
             health = self._adaptive_health_snapshot()
         except Exception:
@@ -3222,7 +3239,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         operation = _text(payload.get("operation"), 60).casefold()
         # 5.7.7: Crew Orders is the companion page's ORDERS tab, not a page of its
         # own, but its buttons still send commands as "orders".
-        if page not in _HTML_WORKSPACE_PAGES and page != "orders":
+        # 5.8.6: Settings › Helm's buttons send theirs as "helm".
+        if page not in _HTML_WORKSPACE_PAGES and page not in ("orders", "helm"):
             return False
         changed = False
 
@@ -3500,6 +3518,10 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             if changed:
                 self.update_ground_target_ui()
 
+        elif page == "helm":
+            done = self._html_helm_operation(operation, payload)
+            self._schedule_html_dashboard_publish(immediate=True)
+            return done
         elif page in ("materials", "ship-builder"):
             done = self._html_materials_operation(operation, payload)
             self._schedule_html_dashboard_publish(immediate=True)

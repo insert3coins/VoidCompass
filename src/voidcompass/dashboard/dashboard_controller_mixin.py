@@ -1,7 +1,7 @@
 """Controller buttons as shortcuts, and Elite's own bindings (5.7.3), for
 MainDashboard.
 
-Each shortcut in Settings › Hotkeys can have a controller button (or a
+Each shortcut in Helm › Shortcuts (Settings › Hotkeys until 5.8.6) can have a controller button (or a
 combination) beside its keyboard shortcut; ControllerHub reads the
 controllers and calls the same handler a hotkey does. "SET" learns
 the next press in Void Compass itself (not the web page: WebView2 only sees a
@@ -128,7 +128,7 @@ class DashboardControllerMixin:
                 "error": hub.error}
 
     def _handle_controller_command(self, operation, payload):
-        """Settings › Hotkeys' controller controls; None when not one of them."""
+        """The shortcuts' controller controls (Helm › Shortcuts); None when not one of them."""
         if operation == "controller_toggle":
             self.config["controller_hotkeys_enabled"] = bool(payload.get("value"))
             self._persist_config()

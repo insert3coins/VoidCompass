@@ -522,6 +522,26 @@ class DashboardShipControlMixin:
         elif callable(getattr(self, "add_event_feed_entry", None)):
             self.add_event_feed_entry("SYSTEM", f"The Watcher: {line}", severity="INFO")
 
+    def _ship_wanted_actions(self):
+        """Every Elite action the crew's ship commands press (enabled ones, their
+        sequences included): {action: [what you say, ...]}. Helm's CREW KEYS."""
+        wanted = {}
+        for command in voice_commands.catalogue(self.config.get("watcher_ship_commands")):
+            if hasattr(command, "native") or not getattr(command, "enabled", True):
+                continue
+            for _key, where, op, _default in watcher_ship.sequence_options(command):
+                try:
+                    steps = self._ship_macro_steps(command, where, op)
+                    actions = elite_macros.actions_in(steps) if steps else (command.action(where, op),)
+                except ValueError:
+                    continue
+                for action in actions:
+                    if action:
+                        says = wanted.setdefault(action, [])
+                        if command.example not in says:
+                            says.append(command.example)
+        return wanted
+
     # -- Settings › Voice ---------------------------------------------------------------------
     def _html_ship_controls(self):
         """What it can do in Elite, the key each needs, and which have none."""

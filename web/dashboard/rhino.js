@@ -149,7 +149,7 @@ function keysPanel(data) {
     ${group("DEPOSIT", button(data, "deposit_mark", "MARK DEPOSIT", "rhino_deposit_mark", {}, "primary"), "one")}
     ${group("PLAN", `${button(data, "trace", data.tracing ? "CLOSE TRACE" : "TRACE EDGE", "rhino_trace", {}, data.tracing ? "live" : "")}${button(data, "circle", "PLANNING CIRCLE", "rhino_circle")}${plan ? button(data, "trace_forget", "FORGET PLAN") : ""}`)}
     ${danger ? `<div class="rh-keys rh-keys-danger">${danger}</div>` : ""}
-    <p class="rh-dim">The keys work in the game too (Settings › Hotkeys › Rhino). Rigs drop ${whole(data.settings?.drop_m)} m behind the cockpit and want ${whole(data.settings?.spacing_m)} m between them.</p>`, {cls: "rh-keys-panel"});
+    <p class="rh-dim">The keys work in the game too (Settings › Helm › Shortcuts › Rhino). Rigs drop ${whole(data.settings?.drop_m)} m behind the cockpit and want ${whole(data.settings?.spacing_m)} m between them.</p>`, {cls: "rh-keys-panel"});
 }
 
 // The site you're at: its name to type over, and a name you give stays as

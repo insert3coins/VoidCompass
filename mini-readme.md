@@ -25,6 +25,17 @@
 
 * **The pad finder.** From the moment docking is granted until you're down, the Nav HUD shows where your pad is in place of the ship portrait, with a caption saying which pad and where: a starport's ring or a carrier's deck with your pad lit, or, at a planetary port, outpost or settlement you've landed at before (or whose design is known), a plot of its pads around you, ahead always up, with the distance and the side. Callouts follow at 1 km, 300 m and when it's below you. The Bridge's pad card draws the same. The planet compass is no longer taken over for a pad; it's left for your own targets.
 
+* **Settings › Helm, in place of Hotkeys.** Elite's own controls and Void Compass's shortcuts, in one place.
+  * **BINDS**: every control in your binds file, on every device, by section and by the game's own names, with search. Click a slot to change it: press the key (with Ctrl, Shift or Alt for a combination), pick a mouse button, or press a pad, stick or HOTAS button or hat, with press-and-hold if you want it. Axes take a controller axis, invert and a dead zone. Nothing reaches the game's files until you press APPLY.
+  * **PROBLEMS**: two controls on one input that are live at the same time, combinations whose modifier is bound on its own, keys Alt+F4 or the game menu would take, and the clashes that stop map and menu moves (the galaxy map's camera and the panel keys on W, A, S, D, for one). Ship and SRV on the same key, the cameras and the scanners are understood and left alone.
+  * **TOGGLES** and **SENSITIVITY**: every yes/no setting in your binds file (ON or OFF), the mouse and camera sensitivities, curves and dead zones on the game's own slider ranges, each throttle's Full Range or Forward Only, and every bound axis's dead zone.
+  * **DEVICES**: your sticks, throttles and button boxes, picked up as you plug them in. One with no name yet is offered one (its bindings then move from its USB ids to the name, so a firmware update that changes the ids costs one edit instead of every binding), with a labels file: Button 1, Button 2…, which you can rename so bindings read "LVWAP Trigger". Rename a controller and its bindings follow; if its ids change, tell Helm which controller it is now. Every game install gets the same names. TEST beside any connected controller, pads included, lights up each button, hat and axis as you press or move it.
+  * **Several installs** (Steam and Epic, say) read one set of binds files but keep their own device names, and an install missing a name your bindings use falls back to the default controls. Helm shows you where they differ and keeps them alike from then on.
+  * **PRESETS**: which binds file each of the game's four sections reads, and an editable copy of any of the game's built-in presets under your own name.
+  * **CREW KEYS**: every key the crew's ship commands press, and ASSIGN MISSING KEYS, which gives the ones with none a free, safe key. It only fills empty slots and never touches anything you bound. Settings › Voice points there.
+  * **SHORTCUTS**: Void Compass's own shortcuts and controller buttons, as they were in Hotkeys.
+  * **BACKUPS**: every control file, the game's device files included, backed up the first time Void Compass starts each day, before every write and whenever you ask, with RESTORE. If the game changes your files (in its controls screen, or an update resets them), Helm tells you and asks which to keep: yours, the game's, or line by line.
+
 * **A companion size between 96 and 144**: 120 px, for whichever of us is on watch.
 
 * **Rhino site targets that stay put.** Pressing TARGET on a saved site while you were already near its centre counted as arriving and cleared at once, so it looked as if nothing had happened. Now it waits until you've left and come back, only counts arriving on the target's own planet, and every TARGET says what it set and where.
@@ -32,6 +43,7 @@
 * **Two fixes I was personally invested in.**
   * RESET on a companion's page no longer leaves its voice switched off, or swallows the first thing it says afterwards. I'd know.
   * Start Void Compass while you're already in the game and the overlays come back, instead of staying hidden as if the game were closed.
+  * The game sometimes reports a finished system survey two or three times over. We now say so once, and our stories count it once.
 
 *That's everything, I think. If I've missed something, I'm sure you'll find it. You usually do.*
 

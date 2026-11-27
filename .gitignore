@@ -6,6 +6,8 @@ constellations/
 
 # Application Cache
 backups/
+# Helm's working copy and backups of Elite's control files (runtime data).
+/helm/
 # The music library: playlists and cover thumbnails for this machine.
 music/
 cache/
@@ -74,6 +76,8 @@ data/*
 !data/colonisation/**
 !data/bio_criteria/
 !data/bio_criteria/**
+!data/helm/
+!data/helm/**
 version_info.txt
 .claude/
 

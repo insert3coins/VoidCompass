@@ -742,10 +742,10 @@ export function renderWatcher(data = {}, ui) {
   ui.byId("watcher-last-event").textContent = eventName.replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase();
   const captionChanged = panelText(ui);
   if ((!companionPoll || captionChanged) && !companionAsking) { clearTimeout(companionPoll); companionPoll = 0; companionLiveLoop(ui); }
-  ui.byId("watcher-hotkey").textContent = data.hotkey ? `or ${data.hotkey} in game` : "Bind a key in Settings › Hotkeys to poke it in game";
+  ui.byId("watcher-hotkey").textContent = data.hotkey ? `or ${data.hotkey} in game` : "Bind a key in Settings › Helm › Shortcuts to poke it in game";
   ui.byId("watcher-poke").disabled = !data.enabled || Boolean(COMPANIONS[identity]?.overlay_only);
   ui.byId("watcher-poke").textContent = identity !== "watcher" ? `CALL ${selectedName.toUpperCase()}` : "POKE";
-  if (identity !== "watcher") ui.byId("watcher-hotkey").textContent = data.hotkey ? `or ${data.hotkey} in game` : "Set a companion key in Settings › Hotkeys";
+  if (identity !== "watcher") ui.byId("watcher-hotkey").textContent = data.hotkey ? `or ${data.hotkey} in game` : "Set a companion key in Settings › Helm › Shortcuts";
   ui.byId("watcher-character").innerHTML = [
     identity !== "watcher" ? ["ROLE", COMPANIONS[identity]?.role || "Companion"] : ["NATURE", NATURES[data.nature] || data.nature || "—"],
     ["THOUGHTS", FREQUENCIES[data.frequency] || data.frequency || "—"],
@@ -849,7 +849,7 @@ function renderDeeper(deeper, lore, ui) {
       <div class="watcher-answers">${question.answers.map((answer, index) => `<button type="button" class="watcher-answer" data-watcher-answer="${esc(answer.key)}">
         <b>${esc(answer.label)}</b>${keys[index] ? `<kbd>${esc(keys[index])}</kbd>` : ""}</button>`).join("")}</div>`
     : `<header><span>NOTHING ASKED</span><b></b></header>
-      <p class="watcher-note">Now and then it asks you something, in the cockpit and here. It remembers what you say. Bind its answer keys in Settings › Hotkeys to answer without leaving the game.</p>`);
+      <p class="watcher-note">Now and then it asks you something, in the cockpit and here. It remembers what you say. Bind its answer keys in Settings › Helm › Shortcuts to answer without leaving the game.</p>`);
 
   const feeling = deeper.feeling || {};
   const trust = Math.max(0, Math.min(100, Number(feeling.trust_value) || 0));

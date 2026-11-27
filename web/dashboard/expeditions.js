@@ -347,7 +347,7 @@ function placesView(row, data, esc, ui) {
   const shown = places.filter((place) => placeFilter === "all" || place.kind === placeFilter);
   const tools = `<div class="ex-actions">${button("MARK WHERE I AM", "mark_here", {}, esc, "primary")}${button(addingPlace ? "CANCEL" : "+ ADD A PLACE", "place_form", {}, esc)}
       ${button("SAVE AS A FILE", "save_file", {"expedition-id": row.id}, esc)}${button("OPEN THE FOLDER", "open_folder", {}, esc)}</div>
-    <p class="ex-dim">MARK WHERE I AM is a hotkey too (Settings › Hotkeys › Expedition: mark this place). On a planet it keeps the exact spot, and GUIDE ME points the planet compass back to it. Screenshots taken at a place are added to it.</p>`;
+    <p class="ex-dim">MARK WHERE I AM is a hotkey too (Settings › Helm › Shortcuts › Expedition: mark this place). On a planet it keeps the exact spot, and GUIDE ME points the planet compass back to it. Screenshots taken at a place are added to it.</p>`;
   const form = addingPlace ? `<form class="ex-form ex-place-form" data-ex-form="add_place" data-expedition-id="${esc(row.id)}">
       <label><span>SYSTEM</span><input name="system" maxlength="120" placeholder="${esc(data.here || "Where it is")}" value="${esc(field("add_place", "system"))}"></label>
       <label><span>BODY</span><input name="body" maxlength="160" placeholder="A planet or moon, if it's on one" value="${esc(field("add_place", "body"))}"></label>

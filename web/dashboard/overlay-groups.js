@@ -60,7 +60,7 @@ export function renderOverlayGroups(studio) {
   const room = data.groups.length < data.max;
   const markup = `<header><span>OVERLAY GROUPS</span><b>${data.groups.length} OF ${data.max}</b></header>
     <div class="og-body">
-      <p class="og-hint">Groups of overlays for whatever you're doing. Switch one from here, from the top of PANELS in the header, by its hotkey (Settings › Hotkeys › Controls: Group 1 to ${data.max}, by its place here) or the Local API.</p>
+      <p class="og-hint">Groups of overlays for whatever you're doing. Switch one from here, from the top of PANELS in the header, by its hotkey (Settings › Helm › Shortcuts › Controls: Group 1 to ${data.max}, by its place here) or the Local API.</p>
       ${data.groups.length ? `<ul class="og-list">${rows}</ul>` : `<p class="og-empty">No groups yet. Make one for the Rhino, say, with the Rig Tracker and the Rhino Map, set to come on by itself in the Rhino.</p>`}
       ${editing ? editor(studio, data) : room ? `<button type="button" class="og-new" data-og-op="new">+ NEW GROUP</button>` : ""}
     </div>`;

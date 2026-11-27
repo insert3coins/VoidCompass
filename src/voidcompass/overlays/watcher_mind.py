@@ -1558,6 +1558,8 @@ class WatcherMind:
         """One journal event. Returns a new thought, or None. Every event
         also teaches it a little about how you play (5.5.4)."""
         raw = raw if isinstance(raw, dict) else {}
+        if self._repeated_event(event, raw):
+            return None
         with self.lock:
             milestone = watcher_habits.observe(self.memory, event, raw)
             old_name = watcher_name.observe(self.memory, event, raw)
@@ -1572,6 +1574,24 @@ class WatcherMind:
         if milestone and self._session_start is not None and int((thought or {}).get("importance") or 0) < 2:
             thought = self.consider("habit_milestone", watcher_habits.milestone_fields(*milestone), force=True) or thought
         return thought
+
+    def _repeated_event(self, event, raw):
+        """A copy the game wrote of the event just before (FSSAllBodiesFound
+        three times in one second for one system, seen 30 Jan 2026): ignored,
+        so it's neither remarked on nor counted again. Asked once per event
+        however many minds in the chain ask."""
+        cached = getattr(self, "_repeat_check", None)
+        if cached is not None and cached[0] is raw:
+            return cached[1]
+        verdict = False
+        if event in {"FSDJump", "CarrierJump", "Location"}:
+            self._last_all_found = None
+        elif event == "FSSAllBodiesFound":
+            key = str(raw.get("SystemAddress") or raw.get("SystemName") or "")
+            verdict = bool(key) and key == getattr(self, "_last_all_found", None)
+            self._last_all_found = key
+        self._repeat_check = (raw, verdict)
+        return verdict
 
     def _event_echo(self, event, raw):
         """Identity-specific story echoes attached to otherwise shared telemetry."""

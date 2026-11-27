@@ -194,6 +194,23 @@ class XInputPads:
             found[slot] = down
         return found
 
+    def axes(self):
+        """{slot: {"LX", "LY", "RX", "RY": -1..1, "LT", "RT": 0..1}} for each pad connected (Helm's tester)."""
+        found = {}
+        if self.dll is None:
+            return found
+        for slot in range(4):
+            state = self.State()
+            if self.dll.XInputGetState(slot, self.ctypes.byref(state)) != 0:
+                continue
+            pad = state.Gamepad
+
+            def stick(value):
+                return max(-1.0, min(1.0, value / 32767.0))
+            found[slot] = {"LX": stick(pad.sThumbLX), "LY": stick(pad.sThumbLY), "RX": stick(pad.sThumbRX),
+                           "RY": stick(pad.sThumbRY), "LT": pad.bLeftTrigger / 255.0, "RT": pad.bRightTrigger / 255.0}
+        return found
+
 
 class WinmmJoysticks:
     """Windows' winmm joystick service: sticks, throttles, button boxes,
@@ -241,6 +258,35 @@ class WinmmJoysticks:
                 continue
             name = _registry_name(caps.szRegKey, index) or caps.szPname or f"Controller {index + 1}"
             found.append((index, _ident(caps.wMid, caps.wPid), name, min(int(caps.wNumButtons), 32)))
+        return found
+
+    def shape(self, index):
+        """(axes, hats) one device reports, for its default labels (Helm's naming)."""
+        caps = self.Caps()
+        if self.winmm.joyGetDevCapsW(index, self.ctypes.byref(caps), self.ctypes.sizeof(caps)) != 0:
+            return 0, 0
+        return int(caps.wNumAxes), 1 if caps.wCaps & 0x10 else 0   # JOYCAPS_HASPOV
+
+    def axes(self, index):
+        """{"X": -1..1, "Y", and Z, R, U, V where the device has them} (Helm's tester)."""
+        caps = self.Caps()
+        if self.winmm.joyGetDevCapsW(index, self.ctypes.byref(caps), self.ctypes.sizeof(caps)) != 0:
+            return {}
+        info = self.Info()
+        info.dwSize = self.ctypes.sizeof(info)
+        info.dwFlags = 0xFF   # JOY_RETURNALL
+        if self.winmm.joyGetPosEx(index, self.ctypes.byref(info)) != 0:
+            return {}
+
+        def scale(value, low, high):
+            return 0.0 if high <= low else max(-1.0, min(1.0, (value - low) / (high - low) * 2.0 - 1.0))
+        found = {"X": scale(info.dwXpos, caps.wXmin, caps.wXmax), "Y": scale(info.dwYpos, caps.wYmin, caps.wYmax)}
+        for flag, name, value, low, high in ((0x1, "Z", info.dwZpos, caps.wZmin, caps.wZmax),
+                                             (0x2, "R", info.dwRpos, caps.wRmin, caps.wRmax),
+                                             (0x4, "U", info.dwUpos, caps.wUmin, caps.wUmax),
+                                             (0x8, "V", info.dwVpos, caps.wVmin, caps.wVmax)):
+            if caps.wCaps & flag:
+                found[name] = scale(value, low, high)
         return found
 
     def state(self, index):
@@ -335,7 +381,12 @@ class ControllerHub:
                 if any(word in row[2].casefold() for word in _XINPUT_WORDS):
                     continue   # XInput reads it
                 winmm.append(row)
-                found.append({"ident": row[1], "name": row[2], "kind": "joystick", "buttons": row[3]})
+                try:
+                    axes, hats = joysticks.shape(row[0]) if hasattr(joysticks, "shape") else (0, 0)
+                except Exception:
+                    axes, hats = 0, 0
+                found.append({"ident": row[1], "name": row[2], "kind": "joystick", "buttons": row[3],
+                              "axes": axes, "hats": hats})
         except Exception as exc:
             self.error = f"winmm: {exc}"
         with self._lock:
@@ -369,6 +420,33 @@ class ControllerHub:
                      if mask & (1 << (button - 1))}
             down |= {f"hat:{ident}:{direction}" for direction in hat_directions(hat)}
         return down
+
+    def live(self):
+        """Everything held and every axis now, per controller (Helm's button tester):
+        {"pads": [{slot, down, axes}], "joysticks": [{ident, buttons, down, hats, axes}]}."""
+        pads, joysticks = self._backends()
+        out = {"pads": [], "joysticks": []}
+        try:
+            held = pads.pressed() if pads else {}
+            moved = pads.axes() if pads and hasattr(pads, "axes") else {}
+            out["pads"] = [{"slot": slot, "down": sorted(held[slot]), "axes": moved.get(slot, {})} for slot in sorted(held)]
+        except Exception as exc:
+            self.error = f"XInput: {exc}"
+        with self._lock:
+            winmm = list(self._winmm)
+        for index, ident, _name, buttons in winmm:
+            try:
+                state = joysticks.state(index) if joysticks else None
+                axes = joysticks.axes(index) if joysticks and hasattr(joysticks, "axes") else {}
+            except Exception:
+                state, axes = None, {}
+            if state is None:
+                continue
+            mask, hat = state
+            out["joysticks"].append({"ident": ident, "buttons": buttons,
+                                     "down": [n for n in range(1, min(buttons or 32, 32) + 1) if mask & (1 << (n - 1))],
+                                     "hats": sorted(hat_directions(hat)), "axes": axes})
+        return out
 
     def is_down(self, spec):
         """A binding held now (both buttons, for a combination)."""

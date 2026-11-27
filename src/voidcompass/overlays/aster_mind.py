@@ -421,6 +421,8 @@ class AsterMind(watcher_mind.WatcherMind):
 
     def observe(self, event, raw=None):
         raw = raw if isinstance(raw, dict) else {}
+        if self._repeated_event(event, raw):
+            return None
         previous_name = watcher_name.record(self.memory).get("known")
         marks = self.memory.setdefault("aster_marks", {})
         found = companion_story.signals(event, raw)

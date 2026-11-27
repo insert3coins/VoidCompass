@@ -115,6 +115,7 @@ from voidcompass.dashboard.dashboard_hud_pages_mixin import DashboardHudPagesMix
 from voidcompass.dashboard.dashboard_watcher_voice_mixin import DashboardWatcherVoiceMixin
 from voidcompass.dashboard.dashboard_watcher_listen_mixin import DashboardWatcherListenMixin
 from voidcompass.dashboard.dashboard_controller_mixin import DashboardControllerMixin
+from voidcompass.dashboard.dashboard_helm_mixin import DashboardHelmMixin
 from voidcompass.dashboard.dashboard_ship_control_mixin import DashboardShipControlMixin
 from voidcompass.dashboard.dashboard_home_mixin import DashboardHomeMixin
 from voidcompass.dashboard.dashboard_api_mixin import DashboardApiMixin
@@ -330,6 +331,7 @@ class MainDashboard(
     DashboardWatcherVoiceMixin,
     DashboardWatcherListenMixin,
     DashboardControllerMixin,
+    DashboardHelmMixin,
     DashboardShipControlMixin,
     DashboardHomeMixin,
     DashboardApiMixin,
@@ -3255,6 +3257,8 @@ class MainDashboard(
         self._tick_hud_pages()
         self._tick_rig_ready()
         self._retire_watcher_models()
+        # Helm (5.8.6): the day's silent backup of Elite's control files.
+        self._helm_start()
 
     def _retire_watcher_models(self):
         if getattr(self, "_watcher_models_cleanup_started", False):

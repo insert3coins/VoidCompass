@@ -1,0 +1,237 @@
+/* Settings › Helm (helm.js). Colours are theme tokens. */
+
+#helm-workspace { container-type: inline-size; display: grid; align-content: start; gap: 12px; min-width: 0; }
+#helm-workspace .bf-main { display: grid; gap: 12px; min-width: 0; }
+:is(#helm-workspace, #helm-dialogs) button { cursor: pointer; }
+:is(#helm-workspace, #helm-dialogs) :is(.bf-main, .bf-dialog) :is(input:not([type="checkbox"]):not([type="range"]), select) {
+  min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--border); background: var(--input); color: var(--text);
+  font: 12px "Segoe UI", sans-serif; outline: none;
+}
+:is(#helm-workspace, #helm-dialogs) :is(input, select):focus { border-color: var(--accent); }
+:is(#helm-workspace, #helm-dialogs) .bf-main button:not(.bf-tab):not(.bf-chip):not(.bf-slot):not(.bf-link):not(.bf-pick),
+:is(#helm-workspace, #helm-dialogs) .bf-dialog button:not(.bf-chip):not(.bf-pick) {
+  min-height: 28px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent);
+  font: 700 9.5px Consolas, monospace; letter-spacing: .1em;
+}
+:is(#helm-workspace, #helm-dialogs) button.primary { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--text); border-color: var(--accent); }
+:is(#helm-workspace, #helm-dialogs) button.ghost { border-color: var(--border) !important; background: transparent !important; color: var(--muted) !important; }
+:is(#helm-workspace, #helm-dialogs) button.ghost:hover:not(:disabled) { color: var(--text) !important; border-color: var(--accent) !important; }
+:is(#helm-workspace, #helm-dialogs) button.danger:hover:not(:disabled) { color: var(--red) !important; border-color: var(--red) !important; }
+:is(#helm-workspace, #helm-dialogs) button:disabled { opacity: .4; cursor: default; }
+:is(#helm-workspace, #helm-dialogs) h4 { margin: 0; color: var(--accent); font: 700 10px Consolas, monospace; letter-spacing: .16em; }
+:is(#helm-workspace, #helm-dialogs) h4 b { margin-left: 6px; color: var(--muted); font-weight: 400; }
+.bf-dim { margin: 0; color: var(--dim); font: 11.5px/1.5 "Segoe UI", sans-serif; }
+.bf-dim.warn, .bf-info.warn { color: var(--yellow); }
+.bf-empty { margin: 0; padding: 14px; color: var(--muted); font: 12px "Segoe UI", sans-serif; }
+.bf-info { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif; }
+.bf-info b { color: var(--text); }
+.bf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bf-field { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.bf-check { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font: 12px "Segoe UI", sans-serif; cursor: pointer; }
+.bf-card { display: grid; gap: 10px; min-width: 0; padding: 14px 16px; border: 1px solid var(--border-soft); background: var(--panel); }
+
+/* The banners, the APPLY bar and its notice. */
+.bf-banner { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-left: 3px solid var(--accent); background: var(--panel); }
+.bf-banner > b { grid-column: 1; color: var(--accent); font: 700 10.5px Consolas, monospace; letter-spacing: .14em; }
+.bf-banner > span { grid-column: 1; color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif; }
+.bf-banner > button { grid-column: 2; grid-row: 1 / span 2; }
+.bf-banner.warn { border-color: color-mix(in srgb, var(--yellow) 50%, var(--border)); border-left-color: var(--yellow); }
+.bf-banner.warn > b { color: var(--yellow); }
+.bf-check ul, .bf-banner ul { grid-column: 1 / -1; margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.bf-banner li { display: grid; gap: 2px; padding: 6px 10px; border: 1px solid var(--border-soft); background: var(--inset); }
+.bf-banner li b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.bf-banner li span, .bf-banner li small { color: var(--muted); font: 11.5px "Segoe UI", sans-serif; }
+.bf-banner li em { color: var(--yellow); font: italic 11.5px "Segoe UI", sans-serif; }
+.bf-banner .bf-actions { grid-column: 1 / -1; }
+.bf-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 10px 14px;
+  border: 1px solid var(--border-soft); background: var(--panel); }
+.bf-bar.pending { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); box-shadow: inset 3px 0 0 var(--accent); }
+.bf-bar-state { display: grid; gap: 2px; min-width: 0; }
+.bf-bar-state b { color: var(--text); font: 700 10.5px Consolas, monospace; letter-spacing: .12em; }
+.bf-bar.pending .bf-bar-state b { color: var(--accent); }
+.bf-bar-state small { color: var(--muted); font: 11.5px "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.bf-bar-actions { display: flex; gap: 8px; }
+.bf-notice { margin: 0; padding: 8px 12px; border-left: 2px solid var(--accent); background: var(--panel); color: var(--text); font: 12px/1.5 "Segoe UI", sans-serif; }
+.bf-notice.success { border-left-color: var(--green); }
+.bf-notice.warn { border-left-color: var(--yellow); color: var(--yellow); }
+
+/* Tabs, chips and the toolbar. */
+.bf-tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.bf-tab { padding: 10px 18px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted);
+  font: 700 12px Consolas, monospace; letter-spacing: .16em; }
+.bf-tab.on { color: var(--accent); border-bottom-color: var(--accent); background: linear-gradient(0deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent); }
+.bf-tab:hover { color: var(--text); }
+.bf-tab b, .bf-chip b { margin-left: 6px; padding: 0 5px; border: 1px solid var(--border-soft); font-weight: 400; font-size: 9px; color: var(--muted); }
+:is(.bf-tab, .bf-chip) b.warn { border-color: color-mix(in srgb, var(--yellow) 55%, var(--border)); color: var(--yellow); }
+.bf-body { display: grid; gap: 12px; min-width: 0; }
+.bf-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.bf-toolbar select { max-width: 320px; }
+.bf-chips { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border-soft); }
+.bf-chip { padding: 6px 11px; border: 0; border-right: 1px solid var(--border-soft); background: transparent; color: var(--muted);
+  font: 700 9.5px Consolas, monospace; letter-spacing: .1em; }
+.bf-chip:last-child { border-right: 0; }
+.bf-chip.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.bf-search input { width: 240px; }
+
+/* The grid of controls. */
+.bf-grid { display: grid; min-width: 0; border: 1px solid var(--border-soft); background: var(--panel); }
+.bf-row { display: grid; grid-template-columns: minmax(200px, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); align-items: stretch; gap: 1px;
+  border-bottom: 1px solid var(--border-soft); }
+.bf-row.bf-axis { grid-template-columns: minmax(200px, 1.3fr) minmax(0, 2fr); }
+.bf-head { position: sticky; top: 0; z-index: 1; background: var(--panel-raised, var(--panel)); }
+.bf-head span { padding: 8px 12px; color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .16em; }
+.bf-group { padding: 12px 12px 6px; border-bottom: 1px solid var(--border-soft); color: var(--accent); font: 700 9px Consolas, monospace; letter-spacing: .16em;
+  background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.bf-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 7px 12px; min-width: 0; }
+.bf-name b { color: var(--text); font: 600 12.5px "Segoe UI", sans-serif; }
+.bf-name small { flex-basis: 100%; color: var(--dim); font: 10px Consolas, monospace; overflow-wrap: anywhere; }
+.bf-crew-tag { padding: 0 5px; border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); color: var(--accent); font: normal 700 8px Consolas, monospace; letter-spacing: .1em; }
+.bf-slot { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 40px; padding: 6px 12px; border: 0;
+  background: var(--inset); color: var(--text); text-align: left; font: 12px "Segoe UI", sans-serif; }
+.bf-slot b { font-weight: 600; overflow-wrap: anywhere; }
+.bf-slot small { color: var(--muted); font-size: 11px; }
+.bf-slot i { padding: 0 4px; border: 1px solid var(--border-soft); color: var(--muted); font: normal 700 8px Consolas, monospace; letter-spacing: .08em; }
+.bf-slot.empty b, .bf-slot.none { color: var(--dim); }
+.bf-slot.none { display: flex; align-items: center; padding: 6px 12px; background: var(--inset); }
+.bf-slot:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 12%, var(--inset)); box-shadow: inset 0 0 0 1px var(--accent); }
+.bf-slot:disabled { cursor: default; }
+.bf-slot.clash { box-shadow: inset 3px 0 0 var(--yellow); }
+.bf-slot.clash .bf-flag { border-color: var(--yellow); color: var(--yellow); }
+.bf-slot.shadow { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--yellow) 45%, transparent); }
+.bf-slot.bad { box-shadow: inset 3px 0 0 var(--red); }
+.bf-slot.bad .bf-flag { border-color: var(--red); color: var(--red); }
+.bf-slot-wide i:last-child { margin-left: auto; }
+@container (max-width: 760px) {
+  .bf-row, .bf-row.bf-axis { grid-template-columns: minmax(0, 1fr); }
+  .bf-head { display: none; }
+}
+
+/* Lists: problems, crew, backups, places. */
+.bf-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.bf-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 7px 10px; border: 1px solid var(--border-soft); background: var(--inset); }
+.bf-list li.bad { border-left: 3px solid var(--red); }
+.bf-list li b { color: var(--text); font: 600 12px "Segoe UI", sans-serif; }
+.bf-list li span, .bf-list li small { color: var(--muted); font: 11.5px/1.45 "Segoe UI", sans-serif; }
+.bf-list li em { margin-left: auto; color: var(--green); font: normal 700 9px Consolas, monospace; }
+.bf-list li em.bad { color: var(--red); }
+.bf-list li > button:not(.bf-link) { margin-left: auto; }
+.bf-link { padding: 0; border: 0; background: none; color: var(--accent); font: 600 12px "Segoe UI", sans-serif; text-align: left; text-transform: none; letter-spacing: normal; }
+.bf-link:hover { text-decoration: underline; }
+.bf-link:not([data-bf]) { color: var(--text); cursor: default; text-decoration: none; }
+
+.bf-preset { display: grid; grid-template-columns: 90px minmax(180px, 320px) minmax(0, 1fr); align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border-soft); }
+.bf-preset span { color: var(--text); font: 600 12.5px "Segoe UI", sans-serif; }
+.bf-preset small { color: var(--muted); font: 11.5px "Segoe UI", sans-serif; }
+.bf-preset small.bad { color: var(--red); }
+.bf-copy-form { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.bf-copy-sections { display: inline-flex; flex-wrap: wrap; gap: 6px 12px; }
+
+.bf-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.bf-tile { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--inset); }
+.bf-tile span { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .14em; }
+.bf-tile b { color: var(--text); font: 600 18px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.bf-tile.ready b { color: var(--green); }
+.bf-tile:is(.device, .missing) b { color: var(--yellow); }
+.bf-tile.odd b { color: var(--red); }
+.bf-crew { display: grid; border: 1px solid var(--border-soft); background: var(--panel); }
+.bf-crew-row { display: grid; grid-template-columns: minmax(200px, 1.2fr) minmax(140px, 1fr) 120px; grid-template-areas: "name key state" "says says says";
+  align-items: center; gap: 2px 12px; padding: 4px 0 8px; border-bottom: 1px solid var(--border-soft); }
+.bf-crew-row .bf-name { grid-area: name; }
+.bf-crew-key { grid-area: key; color: var(--text); font: 12px "Segoe UI", sans-serif; }
+.bf-crew-key small { color: var(--muted); }
+.bf-crew-row em { grid-area: state; justify-self: end; margin-right: 12px; color: var(--muted); font: normal 700 9px Consolas, monospace; letter-spacing: .1em; }
+.bf-crew-row.ready em { color: var(--green); }
+.bf-crew-row:is(.missing, .device) em { color: var(--yellow); }
+.bf-crew-row.odd em { color: var(--red); }
+.bf-says { grid-area: says; padding: 0 12px; color: var(--dim); font: italic 11px "Segoe UI", sans-serif; }
+
+.bf-backups { display: grid; border: 1px solid var(--border-soft); background: var(--panel); }
+.bf-backup { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 4px 16px; padding: 8px 12px; border-bottom: 1px solid var(--border-soft); }
+.bf-backup > span:first-child { display: grid; gap: 2px; }
+.bf-backup b { color: var(--text); font: 600 12.5px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; }
+.bf-backup small { color: var(--muted); font: 11px "Segoe UI", sans-serif; }
+.bf-backup.first b, .bf-backup.user b { color: var(--accent); }
+
+.bf-shortcuts { min-width: 0; }
+
+/* The dialogs: one at a time, over the page. */
+.bf-dialog { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--bg) 72%, transparent); }
+.bf-dialog-box { display: grid; gap: 12px; width: min(640px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); background: var(--panel); box-shadow: 0 18px 60px rgb(0 0 0 / .5); }
+.bf-dialog-box header { display: grid; gap: 4px; }
+.bf-dialog-box header small { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.bf-dialog-box h3 { margin: 0; color: var(--text); font: 600 17px "Bahnschrift SemiCondensed", "Segoe UI", sans-serif; }
+.bf-dialog-box p { margin: 0; color: var(--muted); font: 12px/1.5 "Segoe UI", sans-serif; }
+.bf-dialog-box footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; border-top: 1px solid var(--border-soft); }
+.bf-dialog-box footer .danger { margin-right: auto; }
+.bf-capture { display: grid; place-items: center; min-height: 70px; padding: 10px; border: 1px dashed var(--border); background: var(--inset);
+  color: var(--muted); font: 12.5px "Segoe UI", sans-serif; text-align: center; outline: none; cursor: text; }
+.bf-capture:focus { border-color: var(--accent); color: var(--text); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 25%, transparent); }
+.bf-capture.live { border-style: solid; color: var(--accent); }
+.bf-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.bf-pick { padding: 6px 10px; border: 1px solid var(--border-soft); background: var(--inset); color: var(--muted); font: 600 11.5px "Segoe UI", sans-serif; }
+.bf-pick.on { border-color: var(--accent); color: var(--accent); }
+.bf-pick:hover { color: var(--text); }
+.bf-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--inset); }
+.bf-chosen span { color: var(--dim); font: 700 9px Consolas, monospace; letter-spacing: .14em; }
+.bf-chosen b { color: var(--accent); font: 600 14px "Segoe UI", sans-serif; }
+.bf-chosen button { margin-left: auto; }
+.bf-warn { color: var(--yellow) !important; }
+.bf-range { display: grid; grid-template-columns: auto 40px minmax(0, 1fr); }
+.bf-range b { color: var(--text); font: 600 12px Consolas, monospace; }
+.bf-range input { accent-color: var(--accent); }
+
+/* Toggles, sensitivity, devices, merges. */
+.bf-settings { display: grid; min-width: 0; }
+.bf-setting { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(220px, 420px); align-items: center; gap: 8px 16px;
+  padding: 6px 12px; border-bottom: 1px solid var(--border-soft); }
+.bf-onoff { display: inline-flex; justify-self: start; border: 1px solid var(--border-soft); }
+.bf-onoff .bf-chip { min-width: 64px; }
+.bf-number { display: flex; align-items: center; gap: 10px; }
+.bf-number input[type="range"] { flex: 1 1 auto; accent-color: var(--accent); }
+:is(#helm-workspace, #helm-dialogs) .bf-number-box { width: 90px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.bf-zone { min-width: 40px; color: var(--text); font: 600 12px Consolas, monospace; }
+.bf-devices { display: grid; border: 1px solid var(--border-soft); background: var(--panel); }
+.bf-device { display: grid; grid-template-columns: minmax(220px, 1.4fr) 130px minmax(160px, 1fr) auto; align-items: center; gap: 6px 16px;
+  padding: 8px 12px; border-bottom: 1px solid var(--border-soft); }
+.bf-device.away { opacity: .7; }
+.bf-name-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 280px); align-items: center; gap: 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--border-soft); }
+.bf-dialog-box.bf-wide { width: min(920px, 100%); }
+.bf-labels { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 14px; }
+.bf-labels .bf-field { display: grid; grid-template-columns: 70px minmax(0, 1fr); }
+:is(#helm-workspace, #helm-dialogs) .bf-labels input { width: 100%; }
+.bf-merge { display: grid; max-height: 52vh; overflow: auto; border: 1px solid var(--border-soft); }
+.bf-merge-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px 12px;
+  padding: 6px 10px; border-bottom: 1px solid var(--border-soft); }
+.bf-merge-side { align-items: flex-start; padding: 4px 6px; border: 1px solid transparent; font-size: 11.5px; overflow-wrap: anywhere; }
+.bf-merge-side.on { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); color: var(--text); }
+.bf-merge-side small { color: var(--dim); font: 700 8.5px Consolas, monospace; letter-spacing: .1em; }
+.bf-banner .bf-picks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+@container (max-width: 760px) {
+  .bf-setting, .bf-device, .bf-name-row, .bf-merge-row { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* DEVICES' button tester: what's pressed lights up. */
+.bf-tester { display: grid; gap: 10px; padding: 10px 12px 14px; border-bottom: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--accent) 4%, var(--inset)); }
+.bf-keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.bf-key { display: flex; align-items: center; justify-content: center; min-height: 34px; padding: 4px 6px; text-align: center;
+  border: 1px solid var(--border-soft); background: var(--panel); color: var(--muted); font: 600 11px "Segoe UI", sans-serif;
+  overflow-wrap: anywhere; transition: background-color .06s, color .06s, border-color .06s; }
+.bf-key.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 32%, var(--panel)); color: var(--text);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 40%, transparent); }
+.bf-hat { display: grid; grid-template-columns: repeat(3, 40px); grid-template-areas: ". up ." "left . right" ". down ."; gap: 4px; }
+.bf-hat .bf-key { min-height: 30px; font-size: 13px; }
+.bf-hat [data-live="h-Up"] { grid-area: up; }
+.bf-hat [data-live="h-Down"] { grid-area: down; }
+.bf-hat [data-live="h-Left"] { grid-area: left; }
+.bf-hat [data-live="h-Right"] { grid-area: right; }
+.bf-axes { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; }
+.bf-axis { display: grid; grid-template-columns: 28px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
+.bf-axis b { color: var(--text); font: 700 10px Consolas, monospace; }
+.bf-axis i { position: relative; height: 8px; border: 1px solid var(--border-soft); background: var(--panel); }
+.bf-axis em { position: absolute; top: 0; bottom: 0; background: var(--accent); }
+.bf-axis small { color: var(--muted); font: 10px Consolas, monospace; text-align: right; }
