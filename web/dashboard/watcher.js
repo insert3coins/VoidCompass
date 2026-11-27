@@ -187,6 +187,7 @@ function shell(root, ui) {
       ${talkPanel()}
     </div>
     <aside class="watcher-bridge-side">
+      <section class="watcher-card watcher-prologue" id="watcher-prologue" aria-live="polite" hidden></section>
       <section class="watcher-card watcher-now-story" aria-label="Its story, now">
         <header><span>ITS STORY</span><b id="watcher-now-count"></b></header>
         <div id="watcher-now-story"></div>
@@ -314,6 +315,12 @@ function shell(root, ui) {
       if (!await ui.command("workspace", {page: "watcher", operation: "library_play", id: libraryId})) ui.showToast("She couldn't answer that just now");
       return;
     }
+    // 5.8.6.1: Lyra's question in Nova's Prologue.
+    const prologueAnswer = event.target.closest("[data-prologue]")?.dataset.prologue;
+    if (prologueAnswer) {
+      if (!await ui.command("workspace", {page: "watcher", operation: "prologue_answer", value: prologueAnswer})) ui.showToast("Lyra isn't asking just now");
+      return;
+    }
     // 5.8.6: a system her story names, to paste into the galaxy map.
     const copySystem = event.target.closest("[data-copy-system]")?.dataset.copySystem;
     if (copySystem) {
@@ -335,6 +342,14 @@ function shell(root, ui) {
   });
   const canvas = root.querySelector("#watcher-orb");
   root.querySelectorAll("button[data-companion]").forEach((button) => button.addEventListener("click", async () => {
+    if (button.classList.contains("not-aboard")) {
+      if (button.dataset.voice === "ready") ui.showToast(`${COMPANIONS[button.dataset.companion]?.name || "She"} isn't aboard yet`);
+      else if (button.dataset.voice !== "downloading") {
+        ui.showToast(await ui.command("workspace", {page: "watcher", operation: "prologue_voice"})
+          ? "Downloading her voice" : "Finish or cancel any voice download first");
+      }
+      return;
+    }
     ui.byId("companion-choice-status").textContent = "Switching companion…";
     if (!(await ui.command("workspace", {page: "watcher", operation: "companion_identity", value: button.dataset.companion}))) ui.showToast("Finish or cancel any voice download before changing companion.");
   }));
@@ -456,7 +471,7 @@ function renderReader(ui) {
     : "";
   const passages = chapter.told.map((row) => `<li><p>${ui.escapeHtml(row.text)}</p>${copyButton(row.place, ui)}<time>${ui.escapeHtml(ago(row.at))}</time></li>`).join("");
   reader.innerHTML = `<header><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><h3>${ui.escapeHtml(chapter.title)}</h3><em>${chapterStatus(chapter, ui)}</em></header>
-    ${account}${passages ? `<small class="watcher-reader-label">${chapter.complete ? "AS IT TOLD YOU" : "SO FAR"}</small><ol class="watcher-lore">${passages}</ol>` : ""}`;
+    ${account}${passages ? `<small class="watcher-reader-label">${chapter.narrator ? `AS ${ui.escapeHtml(chapter.narrator)} TOLD IT` : chapter.complete ? "AS IT TOLD YOU" : "SO FAR"}</small><ol class="watcher-lore">${passages}</ol>` : ""}`;
   reader.scrollTop = 0;
 }
 
@@ -567,11 +582,43 @@ function renderLore(lore, ui) {
   }).join("");
 }
 
+// 5.8.6.1: how Nova's story grows (Nyx Evera's words), above her book.
+function guideBook(guide, ui) {
+  if (!guide) return "";
+  return `<details class="watcher-book watcher-guide">
+      <summary><span>HOW HER STORY GROWS</span><b>${ui.escapeHtml(String(guide.title).toUpperCase())}</b></summary>
+      <article><p>${ui.escapeHtml(guide.text)}</p><ul>${(guide.activities || []).map((row) => `<li>${ui.escapeHtml(row)}</li>`).join("")}</ul>
+        <p class="watcher-note">${ui.escapeHtml(guide.note || "")}</p></article>
+    </details>`;
+}
+
+// 5.8.6.1: Nova's Prologue on the BRIDGE: Lyra's last scene, then what to do
+// (the objective, or her question), then "Initializing" until Nova speaks.
+let prologueKey = "";
+function renderPrologue(prologue, ui) {
+  const box = ui.byId("watcher-prologue");
+  if (!box) return;
+  const key = JSON.stringify(prologue || null);
+  if (key === prologueKey) return;
+  prologueKey = key;
+  box.hidden = !prologue;
+  if (!prologue) { box.innerHTML = ""; return; }
+  const esc = ui.escapeHtml;
+  const last = (prologue.told || []).at(-1);
+  let foot = "";
+  if (prologue.initializing) foot = `<p class="watcher-prologue-status"><i aria-hidden="true"></i>${esc(prologue.initializing)}</p>`;
+  else if (prologue.asking) foot = `<div class="watcher-prologue-ask"><button type="button" class="primary" data-prologue="download">DOWNLOAD N.O.V.A.</button><button type="button" data-prologue="not_now">NOT NOW</button></div><p class="watcher-note">Or answer Lyra in TALK.</p>`;
+  else if (prologue.objective) foot = `<p class="watcher-prologue-objective"><b>OBJECTIVE</b>${esc(prologue.objective)}</p>${copyButton({system: prologue.system}, ui)}`;
+  box.innerHTML = `<header><span>${esc(String(prologue.title || "").toUpperCase())}</span><b>LYRA</b></header>
+    ${last ? `<small class="watcher-reader-label">${esc(String(last.title).toUpperCase())}</small><blockquote>${last.lines.map((line) => `<p>${esc(line)}</p>`).join("")}</blockquote>` : ""}${foot}`;
+}
+
 // Aster, Axiom and Meridian (5.7.4): one renderer for the shared story
 // engine. Unopened chapters say how they open; echoes say what stirs them.
 function renderCrewLore(lore, ui) {
   const echoes = Array.isArray(lore.echoes) ? lore.echoes : [];
-  const key = JSON.stringify([lore.identity, lore.told, lore.next, echoes.map((row) => [row.topic, row.count])]);
+  const key = JSON.stringify([lore.identity, lore.told, lore.next, echoes.map((row) => [row.topic, row.count]),
+    (lore.chapters || []).filter((chapter) => chapter.prologue).map((chapter) => chapter.told_count), Boolean(lore.guide)]);
   if (lastLoreKey === key) return;
   lastLoreKey = key;
   loreChapters = lore.chapters || [];
@@ -586,7 +633,7 @@ function renderCrewLore(lore, ui) {
       : `<div class="watcher-chapter locked"${tip}><span class="watcher-chapter-n">${ui.escapeHtml(chapter.numeral)}</span><b>· · ·</b></div>`;
   }).join("");
   renderReader(ui);
-  if (!lore.told) ui.byId("watcher-reader").innerHTML = `<p class="watcher-reader-empty">${ui.escapeHtml(lore.empty_note || "")}</p>`;
+  if (!lore.told && !loreChapters.some((chapter) => chapter.begun)) ui.byId("watcher-reader").innerHTML = `<p class="watcher-reader-empty">${ui.escapeHtml(lore.empty_note || "")}</p>`;
   const next = lore.next;
   const span = (hours) => { const value = Number(hours || 0); return value >= 1.5 ? `${Math.ceil(value)} hours` : `${Math.max(1, Math.ceil(value * 60))} minutes`; };
   let note = lore.complete_note || "";
@@ -610,7 +657,7 @@ function renderCrewLore(lore, ui) {
   const current = loreChapters.filter((chapter) => chapter.begun).at(-1);
   ui.byId("watcher-now-story").innerHTML = `${current ? `<p class="watcher-now-chapter"><span>${ui.escapeHtml(current.numeral)}</span><b>${ui.escapeHtml(current.title)}</b><em>${chapterStatus(current, ui)}</em></p><p class="watcher-now-passage">${ui.escapeHtml(current.told.at(-1)?.text || "")}</p>` : ""}<p class="watcher-note">${ui.escapeHtml(note)}</p>`;
   const books = Array.isArray(lore.books) ? lore.books : [];
-  ui.byId("watcher-books").innerHTML = books.map((book) => `<details class="watcher-book">
+  ui.byId("watcher-books").innerHTML = guideBook(lore.guide, ui) + books.map((book) => `<details class="watcher-book">
       <summary><span>READ THE WHOLE STORY</span><b>${ui.escapeHtml(String(book.title).toUpperCase())}</b></summary>
       <article>${book.chapters.map((chapter) => `<h4><span>${ui.escapeHtml(chapter.numeral)}</span>${ui.escapeHtml(chapter.title)}</h4>
         ${String(chapter.account).split("\n\n").map((para) => `<p>${ui.escapeHtml(para)}</p>`).join("")}`).join("")}</article>
@@ -677,6 +724,24 @@ export function renderWatcher(data = {}, ui) {
   root.querySelector(".aster-officer-mark b").textContent = (COMPANIONS[identity]?.role || "Companion").toUpperCase();
   root.querySelector(".aster-signal-line > span").textContent = selectedName.toUpperCase();
   root.querySelectorAll("button[data-companion]").forEach((button) => { button.setAttribute("aria-pressed", String(button.dataset.companion === identity)); button.disabled = ["starting", "engine", "unpacking", "model"].includes(data.voice?.download?.stage); });
+  // 5.8.6.1: who isn't aboard yet; their button fetches their voice.
+  const locked = new Set(data.locked_companions || []);
+  root.querySelectorAll("button[data-companion]").forEach((button) => {
+    const id = button.dataset.companion;
+    const away = locked.has(id);
+    const voice = data.locked_voice?.[id] || {};
+    const fetching = ["starting", "engine", "unpacking", "model"].includes(voice.stage);
+    const share = voice.total ? Math.min(99, Math.floor(100 * (Number(voice.done) || 0) / voice.total)) : 0;
+    button.classList.toggle("not-aboard", away);
+    button.dataset.voice = !away ? "" : voice.voice ? "ready" : fetching ? "downloading" : "missing";
+    if (away) button.disabled = false;
+    button.title = !away ? COMPANIONS[id]?.description || ""
+      : voice.voice ? "Not aboard yet. Her voice is downloaded."
+      : fetching ? "Downloading her voice…" : "Not aboard yet. Click to download her voice.";
+    const role = button.querySelector("small");
+    if (role) role.textContent = !away ? COMPANIONS[id]?.role || ""
+      : voice.voice ? "Not aboard" : fetching ? `Voice ${share}%` : "Not aboard · get voice";
+  });
   ui.byId("companion-choice-status").textContent = `${selectedName} is on watch.`;
   // Each persona's own commentary choice (5.7.4).
   const humour = data.settings?.companion_humour;
@@ -785,6 +850,7 @@ export function renderWatcher(data = {}, ui) {
     : `<li class="empty">Nothing yet. It's been quiet.</li>`;
 
   renderLore(data.lore || {}, ui);
+  renderPrologue(data.prologue || null, ui);
   renderLibrary(data.library || null, ui);
   renderCrew(data.crew || {}, ui);
   renderDeeper(data.deeper || {}, data.lore || {}, ui);

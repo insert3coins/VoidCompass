@@ -560,6 +560,8 @@ PROFILE_BOOL_SETTINGS = (
 PROFILE_VALUE_SETTINGS = (
     # 5.7.8: lines from the crew you've muted, as their folded text.
     "muted_lines",
+    # 5.8.6.1: how far Nova's Prologue has gone (nova_prologue.py).
+    "nova_prologue",
     # 5.7.8: the value left in a system worth a word before you jump (0: never).
     "leave_behind_cr",
     "explore_nearby_radius",
@@ -1864,6 +1866,7 @@ def load_config():
         'canonn_reports': True,
         'leave_behind_cr': 2000000,
         'muted_lines': [],
+        'nova_prologue': {},
         'explore_nearby_radius': 25,
         'orders_kind_exobiology': True,
         'orders_kind_exploration': True,

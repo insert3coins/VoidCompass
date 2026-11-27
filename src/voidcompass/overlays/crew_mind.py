@@ -20,7 +20,8 @@ STORY_QUESTION = re.compile(r"\b(?:what'?s next|what is next|what next|what now|
 ROUTE_WORDS = re.compile(r"\b(?:system|jump|jumps|waypoint|star|route|destination|stop)\b", re.I)
 # Said while she's still observing, before she's introduced herself: replies
 # to the commander, words relayed from outside, and her introduction.
-QUIET_TOPICS = frozenset({"talk", "relay", "aster_lore"})
+# Said even while Nova observes (Lyra's Prologue lines go out on her watch).
+QUIET_TOPICS = frozenset({"talk", "relay", "aster_lore", "nova_prologue"})
 
 _NUMERALS = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII")
 

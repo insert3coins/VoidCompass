@@ -48,7 +48,7 @@ def addressed(text, active):
         if not match:
             return None
         found, rest = _identity(match["name"]), match["rest"].strip()
-    if found == active or found not in companions.IDENTITIES or not rest:
+    if found == active or found not in companions.IDENTITIES or not companions.aboard(found) or not rest:
         return None
     return found, rest
 

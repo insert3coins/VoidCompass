@@ -90,6 +90,11 @@ class DashboardOrdersMixin:
                     self._banter_tick()
                 except Exception:
                     logging.debug("Crew banter tick skipped", exc_info=True)
+            if hasattr(self, "_prologue_tick"):
+                try:
+                    self._prologue_tick()
+                except Exception:
+                    logging.debug("Nova's Prologue tick skipped", exc_info=True)
             if not getattr(self, "_closing", False):
                 self._orders_schedule()
 

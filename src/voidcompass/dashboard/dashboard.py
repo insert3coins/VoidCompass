@@ -124,6 +124,7 @@ from voidcompass.dashboard.dashboard_bgs_mixin import DashboardBgsMixin
 from voidcompass.dashboard.dashboard_trading_mixin import DashboardTradingMixin
 from voidcompass.dashboard.dashboard_orders_mixin import DashboardOrdersMixin
 from voidcompass.dashboard.dashboard_banter_mixin import DashboardBanterMixin
+from voidcompass.dashboard.dashboard_prologue_mixin import DashboardPrologueMixin
 from voidcompass.dashboard.dashboard_games_mixin import DashboardGamesMixin
 from voidcompass.dashboard.html_dashboard import HtmlDashboardMixin
 from voidcompass.core.field_state import (
@@ -340,6 +341,7 @@ class MainDashboard(
     DashboardTradingMixin,
     DashboardOrdersMixin,
     DashboardBanterMixin,
+    DashboardPrologueMixin,
     DashboardGamesMixin,
     DashboardCoreMixin,
     DashboardDBMixin,
@@ -1635,6 +1637,11 @@ class MainDashboard(
             from voidcompass.core.companions import name
             feed("SYSTEM", f"{name(self.config)} has forgotten everything" + (f" (its old memory is kept in {os.path.basename(backup)})" if backup else ""),
                  severity="INFO")
+        # 5.8.6.1: Nova reset leaves the ship; her Prologue starts over with Lyra.
+        if hasattr(self, "_prologue_restart"):
+            from voidcompass.core.companions import identity
+            if identity(self.config) == "nova":
+                self._prologue_restart()
         return True
 
     def _crew_snapshot(self, fresh=False):
@@ -8689,6 +8696,8 @@ class MainDashboard(
         self._orders_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
         # Crew banter: the crew talking to each other at the moments that matter (5.7.7).
         self._banter_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
+        # Nova's Prologue: the installation in LFT 1748 and its scan (5.8.6.1).
+        self._prologue_observe(ev, raw if isinstance(raw, dict) else d, startup_replay=startup_replay)
         if ev == "CodexEntry" and isinstance(raw, dict) and is_green_giant_codex(raw):
             self._note_green_giant_codex(raw)
         if getattr(self, "codex_index", None) and ev == "CodexEntry" and isinstance(raw, dict):

@@ -17,6 +17,8 @@ PROFILES = {
               "story": True},
 }
 IDENTITIES = tuple(PROFILES)
+# 5.8.6.1: companions not aboard yet (Nova, until her Prologue's download); the deck keeps it.
+LOCKED = set()
 NEW_IDENTITIES = ("axiom", "meridian", "lyra", "nova", "parallax", "rivet")
 NAMES = {key: row["name"] for key, row in PROFILES.items()}
 DISPLAY_SIZES = dict.fromkeys(IDENTITIES, (54, 72, 96, 120, 144, 192, 256))
@@ -30,6 +32,10 @@ def aliases(selected):
     if selected == "watcher":
         return {}
     return {key: value.replace("aster_", selected + "_", 1) for key, value in ASTER_KEYS.items()}
+
+
+def aboard(selected):
+    return selected not in LOCKED
 
 
 def pending_story(config):

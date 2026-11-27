@@ -976,7 +976,12 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
             "log": log,
             "hotkey": _text(self.config.get("overlay_hotkey_watcher_poke"), 40),
             # Its long story and the echoes heard (5.5.3.5).
-            "lore": _companion_lore_page(self.config, memory, sessions, hours),
+            "lore": self._prologue_lore(_companion_lore_page(self.config, memory, sessions, hours))
+            if hasattr(self, "_prologue_lore") else _companion_lore_page(self.config, memory, sessions, hours),
+            # 5.8.6.1: Nova's Prologue on the BRIDGE while it's under way, and who isn't aboard yet.
+            "prologue": self._prologue_page() if hasattr(self, "_prologue_page") else None,
+            "locked_companions": sorted(companions.LOCKED),
+            "locked_voice": self._prologue_locked_view() if hasattr(self, "_prologue_locked_view") else {},
             # 5.8.6: Nova's Scientific Knowledge Library, only once her story has opened it.
             "library": mind.library_page() if callable(getattr(mind, "library_page", None)) else None,
             # 5.7.4: how each of the crew came aboard, from each one's memory.
@@ -1098,6 +1103,8 @@ class HtmlDashboardMixin(HtmlSystemMapMixin, HtmlExploreWorkspaceMixin, HtmlOver
         memory = mind.memory
         label = companions.name(self.config)
         lore = _companion_lore_page(self.config, memory, int(memory.get("sessions") or 0), float(memory.get("hours") or 0))
+        if hasattr(self, "_prologue_lore"):
+            lore = self._prologue_lore(lore)
         deeper = self._html_watcher_deeper(mind)
         esc = html_module.escape
         parts = [f"<h1>{esc(label)}</h1><p class='sub'>{esc(str(self.config.get('active_commander_name') or ''))} · "

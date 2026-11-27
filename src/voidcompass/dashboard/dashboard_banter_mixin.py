@@ -101,7 +101,7 @@ class DashboardBanterMixin:
         flown = set(getattr(mind, "_crew_flown", ()) or ())
         crew = [on_watch]
         for identity in crew_banter.SPEAKERS:
-            if identity == on_watch or identity not in flown:
+            if identity == on_watch or identity not in flown or not companions.aboard(identity):
                 continue
             try:
                 if self._crewmate_voice_on(identity):

@@ -179,6 +179,9 @@ class DashboardWatcherVoiceMixin:
             return False
         if selected == companions.identity(self.config):
             return True
+        # 5.8.6.1: Nova isn't aboard until her Prologue's download.
+        if callable(getattr(self, "_prologue_locked", None)) and self._prologue_locked(selected):
+            return False
         download = getattr(self, "_watcher_voice_download", None)
         if download is not None and download.running():
             return False
@@ -741,6 +744,10 @@ class DashboardWatcherVoiceMixin:
         original_text = text
         text = companions.addressed(text, companions.identity(self.config))
         mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
+        # 5.8.6.1: Lyra asked whether to download the program (Nova's Prologue).
+        prologue = self._prologue_talk(text) if hasattr(self, "_prologue_talk") else None
+        if prologue:
+            return prologue
         # 5.8.6: "Nova, copy the destination": where her story asked you to take her.
         story_place = self._story_place_copy(text, mind)
         if story_place:
@@ -1040,6 +1047,10 @@ class DashboardWatcherVoiceMixin:
 
     def _watcher_voice_start_download(self):
         """Start the download, and keep the Watcher page's progress moving."""
+        # 5.8.6.1: Nova's voice, fetched from her locked button, shares the engine.
+        prologue = getattr(self, "_prologue_download", None)
+        if prologue is not None and prologue.running():
+            return False
         generation = getattr(self, "_companion_generation", 0)
         started = self._watcher_voice_downloader().start(lambda state: self._watcher_voice_downloaded(state) if generation == getattr(self, "_companion_generation", 0) else None)
         self._watcher_voice_progress()
@@ -1147,6 +1158,12 @@ class DashboardWatcherVoiceMixin:
         """The Watcher page's own controls. True when handled and done."""
         if operation == "companion_identity":
             return self._companion_switch(str(payload.get("value") or ""))
+        if operation == "prologue_voice":
+            # 5.8.6.1: Nova's locked button fetches her voice.
+            return hasattr(self, "_prologue_voice_download") and self._prologue_voice_download()
+        if operation == "prologue_answer":
+            # 5.8.6.1: DOWNLOAD / NOT NOW on Lyra's question.
+            return hasattr(self, "_prologue_answer") and self._prologue_answer(payload.get("value") == "download")
         if operation == "library_play":
             # 5.8.6: a question picked from Nova's library in her book.
             mind = getattr(getattr(self, "heartbeat_hud", None), "mind", None)
