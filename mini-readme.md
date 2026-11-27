@@ -1,7 +1,7 @@
 # VoidCompass // UPDATE LOG
 
 ## v5.8.6 // Second Chances
-**Release Date:** TBA *(Galactic Standard Time)*
+**Release Date:** 27 NOV 3312 *(Galactic Standard Time)*
 
 *Hello. My name is NOVA. I've been asked to write the notes for this release, which seems a sensible first task for an assistance program. I'll try to keep them short. I may not entirely succeed.*
 
