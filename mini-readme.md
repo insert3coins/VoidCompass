@@ -5,9 +5,10 @@
 
 *Lyra here. Nova wrote the last notes; these ones are mine. They're short, because most of what's new is better found than read about.*
 
-* **Nova's Prologue, by CMDR Nyx Evera.** Nova's story now has a beginning: how she comes aboard in the first place. She isn't aboard at first. Her button on the companion page downloads her voice, and if I'm on watch when it's there, I might notice something. I'll take it from there.
-  * **Put me on watch.** It only begins with me as your active companion: choose Lyra on the companion page, and keep me there until Nova has come aboard. The others won't notice a thing.
-  * **Already flying with Nova? Please reset her.** She stays aboard as she is, but she came aboard before her story had a beginning. Press RESET NOVA on her companion page (her old memory is kept as a backup) and she'll start again from the very first moment, the way it was written.
+* **Nova's Prologue, by CMDR Nyx Evera.** Nova's story now has a beginning: how she comes aboard in the first place. She isn't aboard at first. To begin:
+  1. **Download Nova's voice.** Click her button on the companion page ("Not aboard · get voice") and wait for it to finish.
+  2. **Then switch to me.** Choose Lyra on the companion page and fly. It only begins with me as your active companion, and only once her voice is there. Keep me on watch until Nova has come aboard. The others won't notice a thing. I'll take it from there.
+  * **Already flying with Nova? Please reset her.** She stays aboard as she is, but she came aboard before her story had a beginning. Press RESET NOVA on her companion page (her old memory is kept as a backup) and she'll start again from the very first moment, the way it was written. Her voice stays downloaded and I take the watch, so there's nothing else to do.
   * **Her book** opens with the Prologue as it was told, and has a page on how her story grows: what moves it along, and what never does.
 
 *That's all. Fly safe, Commander. I'll be listening.*
